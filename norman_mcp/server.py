@@ -855,6 +855,54 @@ async def send_invoice(
         
     return api._make_request("POST", send_url, json_data=send_data)
 
+@mcp.tool()
+async def send_invoice_overdue_reminder(
+    ctx: Context,
+    invoice_id: str,
+    subject: str,
+    body: str,
+    additional_emails: Optional[List[str]] = None,
+    is_send_to_company: bool = False,
+    custom_client_email: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Send an overdue payment reminder for an invoice via email.
+    
+    Args:
+        invoice_id: ID of the invoice to send reminder for
+        subject: Email subject line
+        body: Email body content
+        additional_emails: List of additional email addresses to send to
+        is_send_to_company: Whether to send the copy to the company email (Owner)
+        custom_client_email: Custom email address for the client (By default the email address of the client is used if it is set)
+        
+    Returns:
+        Response from the send overdue reminder request
+    """
+    api = ctx.request_context.lifespan_context["api"]
+    company_id = api.company_id
+    
+    if not company_id:
+        return {"error": "No company available. Please authenticate first."}
+    
+    send_url = urljoin(
+        config.api_base_url,
+        f"api/v1/companies/{company_id}/invoices/{invoice_id}/send-on-overdue/"
+    )
+    
+    send_data = {
+        "subject": subject,
+        "body": body,
+        "isSendToCompany": is_send_to_company
+    }
+    
+    if additional_emails:
+        send_data["additionalEmails"] = additional_emails if additional_emails else []
+    if custom_client_email:
+        send_data["customClientEmail"] = custom_client_email
+        
+    return api._make_request("POST", send_url, json_data=send_data)
+
 @mcp.tool() 
 async def link_transaction(
     ctx: Context,
