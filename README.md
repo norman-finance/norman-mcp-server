@@ -99,6 +99,20 @@ If you've installed from source or are running in a local development environmen
 
 ## Usage
 
+### Use Case Examples with Claude Desktop
+
+Here are some examples of how to use Norman Finance MCP with Claude Desktop:
+
+#### 1. Creating Transactions Using Gmail Receipts
+<img width="300" alt="cloudflare_receipt_example" src="https://github.com/user-attachments/assets/2380724b-7a79-45a4-93bd-ddc13a175525" />
+
+#### 2. Managing Overdue Invoices
+
+<img width="300" alt="overdue_reminder_1" src="https://github.com/user-attachments/assets/d59ed22a-5e75-46f6-ad82-db2f637cf7a2" />
+<img width="300" alt="overdue_reminder_2" src="https://github.com/user-attachments/assets/26cfb8e9-4725-48a9-b413-077dfb5902e7" />
+
+
+
 ### With Claude or Other MCP-Compatible LLMs
 
 1. Start the MCP server:
