@@ -1315,41 +1315,41 @@ async def create_attachment(
                 "file": file
             }
             
-            data = {}
-            if transactions:
-                data["transactions"] = transactions
-            if attachment_type:
-                data["attachment_type"] = attachment_type
-            if amount is not None:
-                data["amount"] = amount
-            if amount_exchanged is not None:
-                data["amount_exchanged"] = amount_exchanged
-            if attachment_number:
-                data["attachment_number"] = attachment_number
-            if brand_name:
-                data["brand_name"] = brand_name
-            if currency:
-                data["currency"] = currency
-            if currency_exchanged:
-                data["currency_exchanged"] = currency_exchanged
-            if description:
-                data["description"] = description
-            if supplier_country:
-                data["supplier_country"] = supplier_country
-            if value_date:
-                data["value_date"] = value_date
-            if vat_sum_amount is not None:
-                data["vat_sum_amount"] = vat_sum_amount
-            if vat_sum_amount_exchanged is not None:
-                data["vat_sum_amount_exchanged"] = vat_sum_amount_exchanged
-            if vat_rate is not None:
-                data["vat_rate"] = vat_rate
-            if sale_type:
-                data["sale_type"] = sale_type
-            if additional_metadata:
-                data["additional_metadata"] = additional_metadata
-                
-            return api._make_request("POST", attachments_url, json_data=data, files=files)
+        data = {}
+        if transactions:
+            data["transactions"] = transactions
+        if attachment_type:
+            data["attachment_type"] = attachment_type
+        if amount is not None:
+            data["amount"] = amount
+        if amount_exchanged is not None:
+            data["amount_exchanged"] = amount_exchanged
+        if attachment_number:
+            data["attachment_number"] = attachment_number
+        if brand_name:
+            data["brand_name"] = brand_name
+        if currency:
+            data["currency"] = currency
+        if currency_exchanged:
+            data["currency_exchanged"] = currency_exchanged
+        if description:
+            data["description"] = description
+        if supplier_country:
+            data["supplier_country"] = supplier_country
+        if value_date:
+            data["value_date"] = value_date
+        if vat_sum_amount is not None:
+            data["vat_sum_amount"] = vat_sum_amount
+        if vat_sum_amount_exchanged is not None:
+            data["vat_sum_amount_exchanged"] = vat_sum_amount_exchanged
+        if vat_rate is not None:
+            data["vat_rate"] = vat_rate
+        if sale_type:
+            data["sale_type"] = sale_type
+        if additional_metadata:
+            data["additional_metadata"] = additional_metadata
+            
+        return api._make_request("POST", attachments_url, json_data=data, files=files)
     except FileNotFoundError:
         return {"error": f"File not found: {file_path}"}
     except Exception as e:
