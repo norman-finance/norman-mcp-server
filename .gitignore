@@ -1,0 +1,51 @@
+# Environment variables and credentials
+.env
+*.env
+.venv
+env/
+venv/
+dev-env/
+ENV/
+env.bak/
+venv.bak/
+
+# Python build artifacts
+*.py[cod]
+*$py.class
+__pycache__/
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing and development
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.coverage
+.coverage.*
+.cache
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store 
