@@ -36,7 +36,7 @@ Before using this MCP server, you need to:
 
 ## Installation
 
-### Installing via Smithery
+### Via Smithery
 To install Norman Finance MCP server for Claude Desktop or any other clients automatically via [Smithery](https://smithery.ai/server/@norman-finance/norman-mcp-server):
 
 ```bash
