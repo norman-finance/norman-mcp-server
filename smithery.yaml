@@ -1,0 +1,47 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - email
+      - password
+    properties:
+      email:
+        type: string
+        description: Norman Finance account email
+      password:
+        type: string
+        description: Norman Finance account password
+      environment:
+        type: string
+        default: production
+        description: API environment
+      timeout:
+        type: number
+        default: 200
+        description: API request timeout in seconds
+      debug:
+        type: boolean
+        default: false
+        description: Enable debug logging
+  commandFunction:
+    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
+    |-
+    (config) => {
+      const args = [];
+      if (config.email) args.push('--email', config.email);
+      if (config.password) args.push('--password', config.password);
+      if (config.environment) args.push('--environment', config.environment);
+      if (config.timeout !== undefined) args.push('--timeout', config.timeout.toString());
+      if (config.debug) args.push('--debug');
+      return { command: 'python', args: ['-m', 'norman_mcp', ...args] };
+    }
+  exampleConfig:
+    email: user@example.com
+    password: secretpassword
+    environment: production
+    timeout: 200
+    debug: false
