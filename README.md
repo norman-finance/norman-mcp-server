@@ -1,4 +1,5 @@
 # [Norman Finance](http://norman.finance?utm_source=mcp_server) MCP Server
+[![smithery badge](https://smithery.ai/badge/@norman-finance/norman-mcp-server)](https://smithery.ai/server/@norman-finance/norman-mcp-server)
 
 A Model Context Protocol (MCP) server that allows Large Language Models (LLMs) to interact with the basic Norman Finance API implementation. This server provides access to accounting, invoices, companies, clients, taxes, and more through a standardized protocol.
 
@@ -35,12 +36,12 @@ Before using this MCP server, you need to:
 
 ## Installation
 
-### Via Smithery
+### Installing via Smithery
 
-To install Norman Finance MCP server for Claude Desktop or any other clients automatically via [Smithery](https://smithery.ai/server/@norman-finance/norman-mcp-server):
+To install Norman Finance MCP Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@norman-finance/norman-mcp-server):
 
 ```bash
-npx -y @smithery/cli@latest install @norman-finance/norman-mcp-server --client <client>
+npx -y @smithery/cli install @norman-finance/norman-mcp-server --client claude
 ```
 
 ### From PyPI (Recommended)
