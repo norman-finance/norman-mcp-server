@@ -20,6 +20,6 @@ startCommand:
         NORMAN_EMAIL: config.normanEmail,
         NORMAN_PASSWORD: config.normanPassword,
         NORMAN_ENVIRONMENT: 'production',
-        NORMAN_API_TIMEOUT: '100'
+        NORMAN_API_TIMEOUT: '200'
       }
     }) 

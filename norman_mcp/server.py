@@ -1,14 +1,16 @@
 import os
 import logging
+import re
 from typing import Any, Dict, List, Optional, Union
 import requests
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from mcp.server.fastmcp import FastMCP, Context
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 import tempfile
+import pathlib
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -17,13 +19,85 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+# Security utilities
+def validate_input(input_str: Optional[str]) -> Optional[str]:
+    """Validate and sanitize input strings to prevent injection attacks."""
+    if input_str is None:
+        return None
+        
+    # Remove any suspicious patterns that might indicate injection attempts
+    # This prevents SQL injection, command injection, etc.
+    dangerous_patterns = [
+        r'--|;|\/\*|\*\/|@@|@|char|nchar|varchar|nvarchar|alter|begin|cast|create|cursor|declare|delete|drop|end|exec|execute|fetch|insert|kill|open|select|sys|sysobjects|syscolumns|table|update',
+        r'<script|javascript:|onclick|onload|onerror|onmouseover|alert\(|confirm\(|prompt\(|eval\(|setTimeout\(|setInterval\(',
+    ]
+    
+    sanitized = input_str
+    for pattern in dangerous_patterns:
+        if re.search(pattern, sanitized, re.IGNORECASE):
+            logger.warning(f"Potential injection attack detected in input: {input_str}")
+            # Replace potential injection patterns with empty string
+            sanitized = re.sub(pattern, '', sanitized, flags=re.IGNORECASE)
+    
+    return sanitized
+
+def validate_file_path(file_path: str) -> bool:
+    """Validate a file path to prevent path traversal attacks."""
+    if not file_path:
+        return False
+        
+    # Check for path traversal attempts
+    normalized_path = os.path.normpath(file_path)
+    if '..' in normalized_path or normalized_path.startswith('/') or ':' in normalized_path:
+        logger.warning(f"Potential path traversal attack detected: {file_path}")
+        return False
+    
+    # Validate file extension for uploads (only allow safe extensions)
+    if any(file_path.lower().endswith(ext) for ext in ['.pdf', '.jpg', '.jpeg', '.png', '.txt', '.csv', '.xlsx']):
+        return True
+    
+    logger.warning(f"Unsupported file extension in: {file_path}")
+    return False
+
+def validate_url(url: str) -> bool:
+    """Validate URL to prevent SSRF attacks."""
+    if not url:
+        return False
+        
+    try:
+        parsed = urlparse(url)
+        # Only allow http and https schemes
+        if parsed.scheme not in ('http', 'https'):
+            return False
+            
+        # Block localhost and internal IP addresses
+        if parsed.hostname in ('localhost', '127.0.0.1', '0.0.0.0', '::1'):
+            return False
+            
+        # Block private IP ranges
+        ip = parsed.hostname
+        private_ip_patterns = [
+            r'^10\.',
+            r'^172\.(1[6-9]|2[0-9]|3[0-1])\.',
+            r'^192\.168\.',
+            r'^169\.254\.'
+        ]
+        
+        for pattern in private_ip_patterns:
+            if re.match(pattern, ip):
+                return False
+                
+        return True
+    except:
+        return False
+
 # Environment configuration
 class Config:
     """Configuration for the Norman MCP server."""
     NORMAN_EMAIL = os.getenv("NORMAN_EMAIL", "")
     NORMAN_PASSWORD = os.getenv("NORMAN_PASSWORD", "")
     NORMAN_ENVIRONMENT = os.getenv("NORMAN_ENVIRONMENT", "production")
-    NORMAN_API_TIMEOUT = int(os.getenv("NORMAN_API_TIMEOUT", "100"))
+    NORMAN_API_TIMEOUT = int(os.getenv("NORMAN_API_TIMEOUT", "200"))
     
     @property
     def api_base_url(self) -> str:
@@ -116,13 +190,53 @@ class NormanAPI:
     def _make_request(self, method: str, url: str, params: Optional[Dict[str, Any]] = None, 
                      json_data: Optional[Dict[str, Any]] = None, 
                      files: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Make a request to the Norman Finance API."""
+        """Make a request to the Norman Finance API with security controls."""
         if not self.access_token:
             self.authenticate()
-            
+        
+        # Validate URL to prevent SSRF attacks
+        if not validate_url(url):
+            logger.error(f"Invalid or potentially dangerous URL: {url}")
+            raise ValueError(f"Invalid or potentially dangerous URL: {url}")
+        
+        # Set secure headers
         headers = {
-            "Authorization": f"Bearer {self.access_token}"
+            "Authorization": f"Bearer {self.access_token}",
+            "User-Agent": "NormanMCPServer/0.1.0",
+            "X-Requested-With": "XMLHttpRequest",
+            # Security headers
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "DENY"
         }
+        
+        # Sanitize parameters to prevent injection
+        if params:
+            sanitized_params = {}
+            for key, value in params.items():
+                if isinstance(value, str):
+                    sanitized_params[key] = validate_input(value)
+                else:
+                    sanitized_params[key] = value
+            params = sanitized_params
+        
+        # Sanitize JSON data to prevent injection
+        if json_data:
+            sanitized_json = {}
+            for key, value in json_data.items():
+                if isinstance(value, str):
+                    sanitized_json[key] = validate_input(value)
+                elif isinstance(value, dict):
+                    # Simple one-level deep sanitization for nested dicts
+                    sanitized_nested = {}
+                    for k, v in value.items():
+                        if isinstance(v, str):
+                            sanitized_nested[k] = validate_input(v)
+                        else:
+                            sanitized_nested[k] = v
+                    sanitized_json[key] = sanitized_nested
+                else:
+                    sanitized_json[key] = value
+            json_data = sanitized_json
         
         try:
             response = requests.request(
@@ -135,22 +249,52 @@ class NormanAPI:
                 timeout=config.NORMAN_API_TIMEOUT
             )
             response.raise_for_status()
-            return response.json() if response.content else {}
+            
+            # Attempt to parse JSON response, but handle non-JSON responses gracefully
+            try:
+                if response.content:
+                    return response.json()
+                return {}
+            except ValueError:
+                # Not JSON, return content as string if it's not binary
+                if response.headers.get('content-type', '').startswith('text/'):
+                    return {"content": response.text}
+                # For binary content, return success message
+                return {"success": True, "message": "Request successful"}
+                
         except requests.exceptions.HTTPError as e:
             # Handle token expiration
             if e.response.status_code == 401:
                 logger.info("Token expired, refreshing...")
                 self.authenticate()
-                # Retry the request
+                # Retry the request once
                 return self._make_request(method, url, params, json_data, files)
+            elif e.response.status_code == 403:
+                logger.error("Access forbidden. Check your account permissions.")
+                return {"error": "Access forbidden. Check your account permissions.", "status_code": 403}
+            elif e.response.status_code == 404:
+                logger.error(f"Resource not found: {url}")
+                return {"error": "Resource not found", "status_code": 404}
+            elif e.response.status_code == 429:
+                logger.error("Rate limit exceeded. Please try again later.")
+                return {"error": "Rate limit exceeded. Please try again later.", "status_code": 429}
             else:
                 logger.error(f"HTTP error: {str(e)}")
                 if hasattr(e, 'response') and e.response is not None:
                     logger.error(f"Response: {e.response.text}")
-                raise
-        except Exception as e:
+                return {"error": f"Request failed: {str(e)}", "status_code": e.response.status_code}
+        except requests.exceptions.ConnectionError:
+            logger.error(f"Connection error when accessing {url}")
+            return {"error": "Connection error. Please check your network connection."}
+        except requests.exceptions.Timeout:
+            logger.error(f"Request timed out when accessing {url}")
+            return {"error": "Request timed out. Please try again later."}
+        except requests.exceptions.RequestException as e:
             logger.error(f"Error making request to {url}: {str(e)}")
-            raise
+            return {"error": f"Request failed: {str(e)}"}
+        except Exception as e:
+            logger.error(f"Unexpected error making request to {url}: {str(e)}")
+            return {"error": f"Unexpected error: {str(e)}"}
 
 # Server context manager for startup/shutdown
 @asynccontextmanager
@@ -1357,6 +1501,10 @@ async def upload_bulk_attachments(
     
     if not company_id:
         return {"error": "No company available. Please authenticate first."}
+    
+    # Validate cashflow_type
+    if cashflow_type and cashflow_type not in ["INCOME", "EXPENSE"]:
+        return {"error": "cashflow_type must be either 'INCOME' or 'EXPENSE'"}
         
     upload_url = urljoin(
         config.api_base_url,
@@ -1365,7 +1513,25 @@ async def upload_bulk_attachments(
     
     try:
         files = []
+        valid_paths = []
+        
+        # Validate all file paths before proceeding
         for path in file_paths:
+            if not validate_file_path(path):
+                logger.warning(f"Invalid or unsafe file path: {path}")
+                continue
+                
+            if not os.path.exists(path):
+                logger.warning(f"File not found: {path}")
+                continue
+                
+            valid_paths.append(path)
+            
+        if not valid_paths:
+            return {"error": "No valid files found for upload"}
+            
+        # Open and prepare valid files
+        for path in valid_paths:
             with open(path, "rb") as f:
                 files.append(("files", f))
                 
@@ -1376,9 +1542,11 @@ async def upload_bulk_attachments(
         return api._make_request("POST", upload_url, json_data=data, files=files)
     except FileNotFoundError as e:
         return {"error": f"File not found: {str(e)}"}
+    except PermissionError as e:
+        return {"error": f"Permission denied when accessing file: {str(e)}"}
     except Exception as e:
+        logger.error(f"Error uploading files: {str(e)}")
         return {"error": f"Error uploading files: {str(e)}"}
-
 
 @mcp.tool()
 async def list_attachments(
@@ -1478,6 +1646,28 @@ async def create_attachment(
     
     if not company_id:
         return {"error": "No company available. Please authenticate first."}
+    
+    # Validate file path
+    if not validate_file_path(file_path):
+        return {"error": "Invalid or unsafe file path"}
+        
+    # Validate attachment_type    
+    if attachment_type and attachment_type not in ["invoice", "receipt", "contract", "other"]:
+        return {"error": "attachment_type must be one of: invoice, receipt, contract, other"}
+    
+    # Validate supplier_country
+    if supplier_country and supplier_country not in ["DE", "INSIDE_EU", "OUTSIDE_EU"]:
+        return {"error": "supplier_country must be one of: DE, INSIDE_EU, OUTSIDE_EU"}
+        
+    # Validate sale_type
+    if sale_type and sale_type not in ["GOODS", "SERVICES"]:
+        return {"error": "sale_type must be one of: GOODS, SERVICES"}
+        
+    # Sanitize text inputs
+    if description:
+        description = validate_input(description)
+    if brand_name:
+        brand_name = validate_input(brand_name)
         
     attachments_url = urljoin(
         config.api_base_url,
@@ -1485,6 +1675,13 @@ async def create_attachment(
     )
     
     try:
+        # Check if file exists and is readable
+        if not os.path.exists(file_path):
+            return {"error": f"File not found: {file_path}"}
+            
+        if not os.access(file_path, os.R_OK):
+            return {"error": f"Permission denied when accessing file: {file_path}"}
+            
         with open(file_path, "rb") as file:
             files = {
                 "file": file
@@ -1492,7 +1689,8 @@ async def create_attachment(
             
         data = {}
         if transactions:
-            data["transactions"] = transactions
+            # Validate each transaction ID
+            data["transactions"] = [tx for tx in transactions if validate_input(tx)]
         if attachment_type:
             data["attachment_type"] = attachment_type
         if amount is not None:
@@ -1500,7 +1698,7 @@ async def create_attachment(
         if amount_exchanged is not None:
             data["amount_exchanged"] = amount_exchanged
         if attachment_number:
-            data["attachment_number"] = attachment_number
+            data["attachment_number"] = validate_input(attachment_number)
         if brand_name:
             data["brand_name"] = brand_name
         if currency:
@@ -1522,12 +1720,22 @@ async def create_attachment(
         if sale_type:
             data["sale_type"] = sale_type
         if additional_metadata:
-            data["additional_metadata"] = additional_metadata
+            # Sanitize the metadata
+            sanitized_metadata = {}
+            for key, value in additional_metadata.items():
+                if isinstance(value, str):
+                    sanitized_metadata[validate_input(key)] = validate_input(value)
+                else:
+                    sanitized_metadata[validate_input(key)] = value
+            data["additional_metadata"] = sanitized_metadata
             
         return api._make_request("POST", attachments_url, json_data=data, files=files)
     except FileNotFoundError:
         return {"error": f"File not found: {file_path}"}
+    except PermissionError:
+        return {"error": f"Permission denied when accessing file: {file_path}"}
     except Exception as e:
+        logger.error(f"Error uploading file: {str(e)}")
         return {"error": f"Error uploading file: {str(e)}"}
 
 @mcp.tool()
@@ -1678,33 +1886,62 @@ async def generate_finanzamt_preview(
     """
     api = ctx.request_context.lifespan_context["api"]
     
+    # Validate report_id
+    if not report_id or not isinstance(report_id, str) or not report_id.strip():
+        return {"error": "Invalid report ID"}
+    
+    # Sanitize report_id
+    report_id = validate_input(report_id)
+    if not report_id:
+        return {"error": "Invalid report ID"}
+    
     preview_url = urljoin(
         config.api_base_url,
         f"api/v1/taxes/reports/{report_id}/generate-preview/"
     )
 
-    response = requests.post(
-        preview_url,
-        headers={"Authorization": f"Bearer {api.access_token}"},
-        timeout=config.NORMAN_API_TIMEOUT
-    )
-
-    # The response contains raw PDF bytes
-    if isinstance(response.content, bytes):
-        # Save PDF to temporary file
-        temp_dir = tempfile.gettempdir()
-        temp_filename = f"tax_report_preview_{report_id}.pdf"
-        pdf_path = os.path.join(temp_dir, temp_filename)
+    try:
+        response = requests.post(
+            preview_url,
+            headers={"Authorization": f"Bearer {api.access_token}"},
+            timeout=config.NORMAN_API_TIMEOUT
+        )
+        response.raise_for_status()
         
-        with open(pdf_path, 'wb') as f:
-            f.write(response.content)
+        # The response contains raw PDF bytes
+        if isinstance(response.content, bytes) and len(response.content) > 0:
+            # Create a secure temporary directory and file
+            temp_dir = tempfile.mkdtemp(prefix="norman_tax_")
             
-        return {
-            "file": pdf_path,
-            "content_type": "application/pdf"
-        }
-    else:
-        return {"error": "Preview generation failed or invalid response format"}
+            # Use safe filename generation
+            safe_report_id = re.sub(r'[^a-zA-Z0-9_-]', '', report_id)  # Remove any unsafe chars
+            temp_filename = f"tax_report_preview_{safe_report_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
+            pdf_path = os.path.join(temp_dir, temp_filename)
+            
+            # Set proper permissions - only allow owner to read/write
+            with open(pdf_path, 'wb') as f:
+                f.write(response.content)
+                
+            try:
+                os.chmod(pdf_path, 0o600)  # Read/write for owner only
+            except Exception as e:
+                logger.warning(f"Could not set file permissions: {str(e)}")
+            
+            return {
+                "file": pdf_path,
+                "content_type": "application/pdf",
+                "message": "Tax report preview generated successfully. Please review before submitting."
+            }
+        else:
+            return {"error": "Preview generation failed or invalid response format"}
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to generate tax report preview: {str(e)}")
+        if hasattr(e, 'response') and e.response is not None:
+            logger.error(f"Response: {e.response.text}")
+        return {"error": f"Failed to generate tax report preview: {str(e)}"}
+    except Exception as e:
+        logger.error(f"Error generating tax report preview: {str(e)}")
+        return {"error": f"Error generating tax report preview: {str(e)}"}
 
 @mcp.tool()
 async def submit_tax_report(

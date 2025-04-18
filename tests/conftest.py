@@ -12,7 +12,7 @@ def mock_env_vars():
         "NORMAN_EMAIL": "test@example.com",
         "NORMAN_PASSWORD": "test-password",
         "NORMAN_ENVIRONMENT": "production",
-        "NORMAN_API_TIMEOUT": "30"
+        "NORMAN_API_TIMEOUT": "200"
     }):
         yield
 

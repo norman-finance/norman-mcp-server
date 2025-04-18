@@ -108,7 +108,7 @@ Create a `.env` file with:
 NORMAN_EMAIL=your-email@example.com
 NORMAN_PASSWORD=your-password
 NORMAN_ENVIRONMENT=production  # or "sandbox" for the development environment
-NORMAN_API_TIMEOUT=100  # Request timeout in seconds
+NORMAN_API_TIMEOUT=200  # Request timeout in seconds
 ```
 
 ### Command Line Arguments
