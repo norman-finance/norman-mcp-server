@@ -1,26 +1,22 @@
 startCommand:
   type: stdio
   configSchema:
-    type: "object"
+    type: object
     required:
       - normanEmail
       - normanPassword
     properties:
       normanEmail:
-        type: "string"
-        description: "Norman Finance account email"
+        type: string
+        description: Norman Finance account email
       normanPassword:
-        type: "string"
-        description: "Norman Finance account password"
+        type: string
+        description: Norman Finance account password
       normanEnvironment:
-        type: "string"
+        type: string
         enum: ["production", "sandbox"]
-        default: "production"
+        default: production
         description: "API environment (production or sandbox)"
-      normanApiTimeout:
-        type: "number"
-        default: 100
-        description: "API request timeout in seconds"
   commandFunction: |
     (config) => ({
       command: 'python',
@@ -29,6 +25,6 @@ startCommand:
         NORMAN_EMAIL: config.normanEmail,
         NORMAN_PASSWORD: config.normanPassword,
         NORMAN_ENVIRONMENT: config.normanEnvironment || 'production',
-        NORMAN_API_TIMEOUT: config.normanApiTimeout ? String(config.normanApiTimeout) : '100'
+        NORMAN_API_TIMEOUT: '100'
       }
     }) 
