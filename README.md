@@ -1,5 +1,4 @@
 # [Norman Finance](http://norman.finance?utm_source=mcp_server) MCP Server
-[![smithery badge](https://smithery.ai/badge/@norman-finance/norman-mcp-server)](https://smithery.ai/server/@norman-finance/norman-mcp-server)
 
 A Model Context Protocol (MCP) server that allows Large Language Models (LLMs) to interact with the basic Norman Finance API implementation. This server provides access to accounting, invoices, companies, clients, taxes, and more through a standardized protocol.
 
