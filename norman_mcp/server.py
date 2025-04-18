@@ -165,8 +165,21 @@ async def lifespan(ctx: FastMCP):
     
     # Cleanup - nothing needed for now
 
-# Create the MCP server
-mcp = FastMCP("Norman Finance API", lifespan=lifespan)
+# Create the MCP server with guardrails
+mcp = FastMCP(
+    "Norman Finance API", 
+    lifespan=lifespan,
+    guardrails={
+        "block_indirect_prompt_injections_in_tool_output": True,
+        "block_looping_tool_calls": True,
+        "block_moderated_content_in_tool_output": True,
+        "block_pii_in_tool_output": False,  # Set to false because we need to handle financial data with PII
+        "block_secrets_in_messages": True,
+        "prevent_empty_user_messages": True, 
+        "prevent_prompt_injections_in_user_input": True,
+        "prevent_urls_in_agent_output": True,
+    }
+)
 
 # Define resources
 @mcp.resource("company://current")
@@ -494,7 +507,7 @@ async def search_transactions(
         status: Status of the transaction (UNVERIFIED, VERIFIED)
         cashflow_type: Cashflow type of the transaction (INCOME, EXPENSE)
     Returns:
-        List of matching transactions
+        List of matching transactions with sensitive data removed
     """
     api = ctx.request_context.lifespan_context["api"]
     company_id = api.company_id
