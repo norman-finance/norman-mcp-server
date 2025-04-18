@@ -294,38 +294,3 @@ mcp dev norman_mcp/server.py
 ```
 
 This will start the server and open the MCP Inspector in your browser, allowing you to test resources and tools interactively.
-
-## Deployment on Smithery.ai
-
-You can deploy this MCP server on [Smithery.ai](https://smithery.ai) to make it accessible via WebSockets without needing local installation.
-
-### Deployment Steps
-
-1. Fork or clone this repository to your own GitHub account.
-
-2. Add your repository to Smithery.ai:
-   - Go to [Smithery.ai](https://smithery.ai)
-   - Sign in with your GitHub account
-   - Add your forked/cloned repository
-
-3. Configure deployment:
-   - Access the Deployments tab in your repository settings
-   - Choose the appropriate configuration options
-
-### Configuration Requirements
-
-The repository includes the two required files for Smithery deployment:
-
-1. **Dockerfile** - Defines the server build process
-2. **smithery.yaml** - Defines the server startup configuration
-
-The smithery.yaml file requires the following configuration parameters:
-
-- `normanEmail` (required): Your Norman Finance account email
-- `normanPassword` (required): Your Norman Finance account password
-- `normanEnvironment` (optional): API environment - "production" (default) or "sandbox"
-- `normanApiTimeout` (optional): API request timeout in seconds (default: 30)
-
-### Testing Your Deployment
-
-After deployment, you can test your server using the built-in MCP playground provided by Smithery.ai, or configure it to work with Claude or other MCP-compatible LLMs.
