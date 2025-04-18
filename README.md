@@ -26,7 +26,6 @@ Here are some examples of how to use Norman Finance MCP with Claude Desktop:
 <img width="300" alt="overdue_reminder_1" src="https://github.com/user-attachments/assets/d59ed22a-5e75-46f6-ad82-db2f637cf7a2" />
 <img width="300" alt="overdue_reminder_2" src="https://github.com/user-attachments/assets/26cfb8e9-4725-48a9-b413-077dfb5902e7" />
 
-
 ## Prerequisites
 
 Before using this MCP server, you need to:
@@ -37,6 +36,7 @@ Before using this MCP server, you need to:
 ## Installation
 
 ### Via Smithery
+
 To install Norman Finance MCP server for Claude Desktop or any other clients automatically via [Smithery](https://smithery.ai/server/@norman-finance/norman-mcp-server):
 
 ```bash
@@ -55,6 +55,44 @@ pip install norman-mcp-server
 git clone https://github.com/norman-finance/norman-mcp-server.git
 cd norman-mcp-server
 pip install -e .
+```
+
+### Run with Claude Desktop
+
+To use the Norman Finance MCP server with Claude Desktop, add it to your Claude Desktop configuration:
+
+```json
+{
+  "mcpServers": {
+    "norman-mcp-server": {
+      "command": "norman-mcp",
+      "args": [],
+      "env": {
+        "NORMAN_EMAIL": "your-email@example.com",
+        "NORMAN_PASSWORD": "your-password",
+        "NORMAN_ENVIRONMENT": "production"
+      }
+    }
+  }
+}
+```
+
+If you've installed from source or are running in a local development environment, you should point to the Python module directory directly:
+
+```json
+{
+  "mcpServers": {
+    "norman-mcp-server": {
+      "command": "python",
+      "args": ["-m", "norman_mcp"],
+      "env": {
+        "NORMAN_EMAIL": "your-email@example.com",
+        "NORMAN_PASSWORD": "your-password",
+        "NORMAN_ENVIRONMENT": "production"
+      }
+    }
+  }
+}
 ```
 
 ## Configuration
@@ -79,44 +117,6 @@ Alternatively, you can provide the credentials through command line arguments:
 
 ```bash
 norman-mcp --email your-email@example.com --password your-password --environment production
-```
-
-### Configuring with Claude
-
-To use the Norman Finance MCP server with Claude, add it to your Claude configuration:
-
-```json
-{
-  "mcpServers": {
-    "norman": {
-      "command": "norman-mcp",
-      "args": [],
-      "env": {
-        "NORMAN_EMAIL": "your-email@example.com",
-        "NORMAN_PASSWORD": "your-password",
-        "NORMAN_ENVIRONMENT": "production"
-      }
-    }
-  }
-}
-```
-
-If you've installed from source or are running in a local development environment, you should point to the Python module directory directly:
-
-```json
-{
-  "mcpServers": {
-    "norman": {
-      "command": "python",
-      "args": ["-m", "norman_mcp"],
-      "env": {
-        "NORMAN_EMAIL": "your-email@example.com",
-        "NORMAN_PASSWORD": "your-password",
-        "NORMAN_ENVIRONMENT": "production"
-      }
-    }
-  }
-}
 ```
 
 ## Usage
