@@ -17,5 +17,8 @@ RUN pip install --no-cache-dir .
 # Copy the actual code
 COPY norman_mcp ./norman_mcp
 
-# Run the application
-CMD ["norman-mcp"] 
+# Expose the working directory to ensure Smithery can access files
+RUN chmod -R 755 /app
+
+# Run the application via entrypoint
+ENTRYPOINT ["norman-mcp"] 
