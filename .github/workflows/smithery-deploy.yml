@@ -1,0 +1,43 @@
+name: Deploy to Smithery.ai
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install Smithery CLI
+        run: |
+          npm install -g @smithery/cli
+      
+      - name: Login to Smithery
+        run: |
+          echo "${{ secrets.SMITHERY_TOKEN }}" | smithery login --token-stdin
+        
+      - name: Deploy to Smithery
+        run: |
+          smithery deploy
+        env:
+          SMITHERY_TOKEN: ${{ secrets.SMITHERY_TOKEN }} 

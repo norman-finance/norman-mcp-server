@@ -1,0 +1,34 @@
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required:
+      - normanEmail
+      - normanPassword
+    properties:
+      normanEmail:
+        type: string
+        description: "Norman Finance account email"
+      normanPassword:
+        type: string
+        description: "Norman Finance account password"
+      normanEnvironment:
+        type: string
+        enum: ["production", "sandbox"]
+        default: "production"
+        description: "API environment (production or sandbox)"
+      normanApiTimeout:
+        type: integer
+        default: 30
+        description: "API request timeout in seconds"
+  commandFunction: |
+    (config) => ({
+      command: 'norman-mcp',
+      args: [],
+      env: {
+        NORMAN_EMAIL: config.normanEmail,
+        NORMAN_PASSWORD: config.normanPassword,
+        NORMAN_ENVIRONMENT: config.normanEnvironment || 'production',
+        NORMAN_API_TIMEOUT: config.normanApiTimeout ? String(config.normanApiTimeout) : '30'
+      }
+    }) 
