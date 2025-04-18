@@ -19,12 +19,12 @@ startCommand:
         description: "API environment (production or sandbox)"
       normanApiTimeout:
         type: "number"
-        default: 30
+        default: 100
         description: "API request timeout in seconds"
   commandFunction: |
     (config) => ({
-      command: 'norman-mcp',
-      args: [],
+      command: 'python',
+      args: ['-m', 'norman_mcp'],
       env: {
         NORMAN_EMAIL: config.normanEmail,
         NORMAN_PASSWORD: config.normanPassword,
