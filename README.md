@@ -7,10 +7,23 @@ A Model Context Protocol (MCP) server that allows Large Language Models (LLMs) t
 - 🔐 **Authentication**: Securely authenticate with the Norman Finance API
 - 💼 **Company Management**: View and update company details
 - 📊 **Accounting**: Access and manage transactions
-- 📝 **(e-)Invoicing**: Create, view, send, and manage complaint invoices
+- 📝 **(e-)Invoicing**: Create, view, send, and manage compliant invoices. For example, create a recurring invoice based on the contract data
 - 👥 **Client Management**: Create and manage clients
-- 💰 **Taxes**: View tax information and reports, generate official Finanzamt PDF previews
+- 💰 **Taxes**: View tax information and reports, generate official Finanzamt PDF previews and file taxes
 - 📄 **Documents**: Upload and manage attachments
+
+### Use Case Examples with Claude Desktop
+
+Here are some examples of how to use Norman Finance MCP with Claude Desktop:
+
+#### 1. Creating Transactions Using Gmail Receipts
+<img width="300" alt="cloudflare_receipt_example" src="https://github.com/user-attachments/assets/2380724b-7a79-45a4-93bd-ddc13a175525" />
+
+#### 2. Managing Overdue Invoices
+
+<img width="300" alt="overdue_reminder_1" src="https://github.com/user-attachments/assets/d59ed22a-5e75-46f6-ad82-db2f637cf7a2" />
+<img width="300" alt="overdue_reminder_2" src="https://github.com/user-attachments/assets/26cfb8e9-4725-48a9-b413-077dfb5902e7" />
+
 
 ## Prerequisites
 
@@ -99,20 +112,6 @@ If you've installed from source or are running in a local development environmen
 
 ## Usage
 
-### Use Case Examples with Claude Desktop
-
-Here are some examples of how to use Norman Finance MCP with Claude Desktop:
-
-#### 1. Creating Transactions Using Gmail Receipts
-<img width="300" alt="cloudflare_receipt_example" src="https://github.com/user-attachments/assets/2380724b-7a79-45a4-93bd-ddc13a175525" />
-
-#### 2. Managing Overdue Invoices
-
-<img width="300" alt="overdue_reminder_1" src="https://github.com/user-attachments/assets/d59ed22a-5e75-46f6-ad82-db2f637cf7a2" />
-<img width="300" alt="overdue_reminder_2" src="https://github.com/user-attachments/assets/26cfb8e9-4725-48a9-b413-077dfb5902e7" />
-
-
-
 ### With Claude or Other MCP-Compatible LLMs
 
 1. Start the MCP server:
@@ -174,6 +173,7 @@ The MCP server provides the following tools for Norman Finance API interaction:
 ### Invoice Management
 
 - `create_invoice(client_id, items, etc.)` - Create a new invoice
+- `create_recurring_invoice(client_id, items, etc.)` - Create a new recurring invoice
 - `get_invoice(invoice_id)` - Get details about a specific invoice
 - `send_invoice(invoice_id, subject, body, etc.)` - Send an invoice via email
 - `link_transaction(invoice_id, transaction_id)` - Link a transaction to an invoice
@@ -201,6 +201,7 @@ The MCP server provides the following tools for Norman Finance API interaction:
 - `get_tax_report(report_id)` - Retrieve a specific tax report
 - `validate_tax_number(tax_number, region_code)` - Validate a tax number for a specific region
 - `generate_finanzamt_preview(report_id)` - Generate a test Finanzamt preview for a tax report
+- `submit_tax_report(report_id)` - Submit a tax report to the Finanzamt
 - `list_tax_states()` - Get list of available tax states
 - `list_tax_settings()` - Get list of tax settings for the current company
 - `update_tax_setting(setting_id, tax_type, vat_type, etc.)` - Update a tax setting
