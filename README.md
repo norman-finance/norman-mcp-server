@@ -2,8 +2,6 @@
 
 A Model Context Protocol (MCP) server that allows Large Language Models (LLMs) to interact with the basic Norman Finance API implementation. This server provides access to accounting, invoices, companies, clients, taxes, and more through a standardized protocol.
 
-The server can be run locally, deployed via Docker, or hosted on [Smithery.ai](https://smithery.ai) for WebSocket access without local installation.
-
 ## Features
 
 - 🔐 **Authentication**: Securely authenticate with the Norman Finance API
@@ -19,6 +17,7 @@ The server can be run locally, deployed via Docker, or hosted on [Smithery.ai](h
 Here are some examples of how to use Norman Finance MCP with Claude Desktop:
 
 #### 1. Creating Transactions Using Gmail Receipts
+
 <img width="300" alt="cloudflare_receipt_example" src="https://github.com/user-attachments/assets/2380724b-7a79-45a4-93bd-ddc13a175525" />
 
 #### 2. Managing Overdue Invoices
