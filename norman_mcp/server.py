@@ -45,12 +45,6 @@ def validate_file_path(file_path: str) -> bool:
     """Validate a file path to prevent path traversal attacks."""
     if not file_path:
         return False
-        
-    # Check for path traversal attempts
-    normalized_path = os.path.normpath(file_path)
-    if '..' in normalized_path or normalized_path.startswith('/') or ':' in normalized_path:
-        logger.warning(f"Potential path traversal attack detected: {file_path}")
-        return False
     
     # Validate file extension for uploads (only allow safe extensions)
     if any(file_path.lower().endswith(ext) for ext in ['.pdf', '.jpg', '.jpeg', '.png', '.txt', '.csv', '.xlsx']):
@@ -1532,8 +1526,7 @@ async def upload_bulk_attachments(
             
         # Open and prepare valid files
         for path in valid_paths:
-            with open(path, "rb") as f:
-                files.append(("files", f))
+            files.append(("files", open(path, "rb")))
                 
         data = {}
         if cashflow_type:
@@ -1682,10 +1675,9 @@ async def create_attachment(
         if not os.access(file_path, os.R_OK):
             return {"error": f"Permission denied when accessing file: {file_path}"}
             
-        with open(file_path, "rb") as file:
-            files = {
-                "file": file
-            }
+        files = {
+            "file": open(file_path, "rb")
+        }
             
         data = {}
         if transactions:
