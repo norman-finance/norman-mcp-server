@@ -2,6 +2,8 @@
 
 A Model Context Protocol (MCP) server that allows Large Language Models (LLMs) to interact with the basic Norman Finance API implementation. This server provides access to accounting, invoices, companies, clients, taxes, and more through a standardized protocol.
 
+The server can be run locally, deployed via Docker, or hosted on [Smithery.ai](https://smithery.ai) for WebSocket access without local installation.
+
 ## Features
 
 - 🔐 **Authentication**: Securely authenticate with the Norman Finance API
@@ -33,6 +35,13 @@ Before using this MCP server, you need to:
 2. Have your email and password ready for authentication
 
 ## Installation
+
+### Installing via Smithery
+To install Norman Finance MCP server for Claude Desktop or any other clients automatically via [Smithery](https://smithery.ai/server/@norman-finance/norman-mcp-server):
+
+```bash
+npx -y @smithery/cli@latest install @norman-finance/norman-mcp-server --client <client>
+```
 
 ### From PyPI (Recommended)
 
