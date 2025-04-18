@@ -34,4 +34,4 @@ RUN ln -sf /app/norman_mcp/cli.py /usr/local/bin/norman-mcp && \
 RUN chmod -R 755 /app
 
 # Run the application via Python module as a more reliable approach
-CMD ["python", "-m", "norman_mcp"] 
+CMD ["python", "-m", "norman_mcp"]
