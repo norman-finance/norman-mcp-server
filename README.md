@@ -34,30 +34,32 @@ Before using this MCP server, you need to:
 
 ## Installation
 
-### From PyPI (Recommended)
+### Using Claude Desktop with the Norman MCP Server (via PyPI)
 
-```bash
-pip install norman-mcp-server
-```
+To run the Norman Finance MCP server with Claude Desktop, follow these steps:
 
-### From Source
+#### 1. Install uv
 
-```bash
-git clone https://github.com/norman-finance/norman-mcp-server.git
-cd norman-mcp-server
-pip install -e .
-```
+Follow the instructions here: [Installing uv](https://docs.astral.sh/uv/getting-started/installation/)
 
-### Run with Claude Desktop
+#### 2. Download and Configure Claude Desktop
 
-To use the Norman Finance MCP server with Claude Desktop, add it to your Claude Desktop configuration:
+1. Download [Claude Desktop](https://claude.ai/download).
+
+2. Launch Claude and navigate to: Settings > Developer > Edit Config.
+
+3. Update your `claude_desktop_config.json` file with the following configuration:
 
 ```json
 {
   "mcpServers": {
     "norman-mcp-server": {
-      "command": "norman-mcp",
-      "args": [],
+      "command": "<home_path>/.local/bin/uvx",
+      "args": [
+        "--from",
+        "norman-mcp-server@latest",
+        "norman-mcp"
+      ],
       "env": {
         "NORMAN_EMAIL": "your-email@example.com",
         "NORMAN_PASSWORD": "your-password",
@@ -68,13 +70,23 @@ To use the Norman Finance MCP server with Claude Desktop, add it to your Claude 
 }
 ```
 
-If you've installed from source or are running in a local development environment, you should point to the Python module directory directly:
+### Installing from Source
+
+If you prefer to run the MCP server from source:
+
+```bash
+git clone https://github.com/norman-finance/norman-mcp-server.git
+cd norman-mcp-server
+pip install -e .
+```
+
+Then update your claude_desktop_config.json file to point to the Python module directly:
 
 ```json
 {
   "mcpServers": {
     "norman-mcp-server": {
-      "command": "python",
+      "command": "<path_to_your_python>/python",
       "args": ["-m", "norman_mcp"],
       "env": {
         "NORMAN_EMAIL": "your-email@example.com",
