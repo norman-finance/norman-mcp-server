@@ -690,12 +690,12 @@ async def create_transaction(
     ctx: Context,
     amount: float,
     description: str,
+    cashflow_type: str,  # "INCOME" or "EXPENSE"
+    supplier_country: str, # DE, INSIDE_EU, OUTSIDE_EU
     category_id: Optional[str] = None,
-    cashflow_type: Optional[str] = None,  # "INCOME" or "EXPENSE"
     vat_rate: Optional[int] = None,
     sale_type: Optional[str] = None,
     date: Optional[str] = None,
-    supplier_country: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Create a new manual transaction.
