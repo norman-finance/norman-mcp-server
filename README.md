@@ -2,6 +2,10 @@
 
 A Model Context Protocol (MCP) server that allows Large Language Models (LLMs) to interact with the basic Norman Finance API implementation. This server provides access to accounting, invoices, companies, clients, taxes, and more through a standardized protocol.
 
+<a href="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server/badge" alt="Norman Finance Server MCP server" />
+</a>
+
 ## Features
 
 - 🔐 **Authentication**: Securely authenticate with the Norman Finance API
