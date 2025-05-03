@@ -5,7 +5,7 @@ from urllib.parse import urljoin
 
 from norman_mcp.context import Context
 from norman_mcp import config
-from norman_mcp.security.utils import validate_file_path
+from norman_mcp.security.utils import validate_file_path, validate_input
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ def register_document_tools(mcp):
         
         Args:
             file_paths: List of paths to files to upload
-            cashflow_type: Optional cashflow type for the transactions (INCOME or EXPENSE)
+            cashflow_type: Optional cashflow type for the transactions (INCOME or EXPENSE). If not provided, then try to detect it from the file
             
         Returns:
             Response from the bulk upload request
@@ -213,7 +213,8 @@ def register_document_tools(mcp):
                 
             data = {}
             if transactions:
-                data["transactions"] = transactions
+            # Validate each transaction ID
+                data["transactions"] = [tx for tx in transactions if validate_input(tx)]
             if attachment_type:
                 data["attachment_type"] = attachment_type
             if amount is not None:
@@ -221,7 +222,7 @@ def register_document_tools(mcp):
             if amount_exchanged is not None:
                 data["amount_exchanged"] = amount_exchanged
             if attachment_number:
-                data["attachment_number"] = attachment_number
+                data["attachment_number"] = validate_input(attachment_number)
             if brand_name:
                 data["brand_name"] = brand_name
             if currency:
@@ -243,7 +244,14 @@ def register_document_tools(mcp):
             if sale_type:
                 data["sale_type"] = sale_type
             if additional_metadata:
-                data["additional_metadata"] = additional_metadata
+                # Sanitize the metadata
+                sanitized_metadata = {}
+                for key, value in additional_metadata.items():
+                    if isinstance(value, str):
+                        sanitized_metadata[validate_input(key)] = validate_input(value)
+                    else:
+                        sanitized_metadata[validate_input(key)] = value
+                data["additional_metadata"] = sanitized_metadata
                 
             return api._make_request("POST", attachments_url, json_data=data, files=files)
         except FileNotFoundError:

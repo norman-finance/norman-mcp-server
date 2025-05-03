@@ -1,5 +1,6 @@
 from typing import Dict, Any, List
 from urllib.parse import urljoin
+from norman_mcp import config
 
 def register_resources(mcp):
     """Register all resource endpoints with the MCP server."""

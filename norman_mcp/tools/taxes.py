@@ -90,6 +90,7 @@ def register_tax_tools(mcp):
             Always suggest to check the preview before sending it to the Finanzamt.
             Always include the path to the generated PDF file as a link to open the file from local file system.
             Get the report data from @get_tax_report and show line items and totals.
+            You could add short summary based on the report data.
             Ask follow up question to file the tax report to the Finanzamt @submit_tax_report.
             Don't send the report to the Finanzamt without the user confirmation.
         """
@@ -223,11 +224,11 @@ def register_tax_tools(mcp):
         
         Args:
             setting_id: Public ID of the tax setting to update
-            tax_type: Type of tax (e.g. "sales")
-            vat_type: VAT type (e.g. "vat_subject")
-            vat_percent: VAT percentage
+            tax_type: Type of tax (e.g. "sales"); Options: "sales", "trade", "income", "profit_loss"
+            vat_type: VAT type (e.g. "vat_subject"), Options: "vat_subject", "kleinunternehmer", "vat_exempt"
+            vat_percent: VAT percentage; Options: 0, 7, 19
             start_tax_report_date: Start date for tax reporting (YYYY-MM-DD)
-            reporting_frequency: Frequency of reporting (e.g. "monthly")
+            reporting_frequency: Frequency of reporting (e.g. "monthly"), Options: "monthly", "quarterly", "yearly"
             
         Returns:
             Updated tax setting

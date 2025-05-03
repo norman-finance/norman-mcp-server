@@ -114,42 +114,6 @@ def register_prompts(mcp):
         )
 
     @mcp.prompt()
-    def create_recurring_invoice_prompt(
-        client_id: str,
-        items: List[Dict[str, Any]],
-        frequency_type: str = "monthly"
-    ) -> str:
-        """
-        Create a prompt for setting up a recurring invoice.
-        
-        Args:
-            client_id: ID of the client
-            items: List of invoice items
-            frequency_type: How often to generate invoices ("weekly", "monthly")
-            
-        Returns:
-            A formatted prompt for creating a recurring invoice
-        """
-        total_amount = sum(item.get("total", 0) for item in items)
-        
-        return (
-            f"I'll help you set up a recurring invoice for client {client_id} "
-            f"with a total amount of {total_amount} EUR, to be generated {frequency_type}.\n\n"
-            f"Please specify:\n"
-            f"1. When should the first invoice be generated? (YYYY-MM-DD)\n"
-            f"2. How many times should this invoice recur? (Or until what date?)\n"
-            f"3. How many days after generation should each invoice be due?\n"
-            f"4. Should the invoices be automatically sent to the client?\n"
-            f"5. Do you want to set up automatic payment reminders for overdue invoices?\n\n"
-            f"You can also customize:\n"
-            f"- Invoice language (en/de)\n"
-            f"- Payment terms\n"
-            f"- Additional notes\n"
-            f"- Bank details for payment\n"
-            f"- Invoice design (color scheme, font)"
-        )
-
-    @mcp.prompt()
     def tax_report_prompt(report_id: str) -> List[base.Message]:
         """
         Create a prompt for handling a tax report.

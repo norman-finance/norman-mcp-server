@@ -15,7 +15,12 @@ def register_client_tools(mcp):
     async def list_clients(
         ctx: Context
     ) -> Dict[str, Any]:
-        """Get a list of all clients."""
+        """
+        Get a list of all clients for the company.
+        
+        Returns:
+            List of clients with their details
+        """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -34,7 +39,15 @@ def register_client_tools(mcp):
         ctx: Context,
         client_id: str
     ) -> Dict[str, Any]:
-        """Get detailed information about a specific client."""
+        """
+        Get detailed information about a specific client.
+        
+        Args:
+            client_id: ID of the client to retrieve
+            
+        Returns:
+            Detailed client information
+        """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -61,7 +74,23 @@ def register_client_tools(mcp):
         city: Optional[str] = None,
         phone: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Create a new client."""
+        """
+        Create a new client.
+        
+        Args:
+            name: Client name or business name
+            client_type: Type of client (defaults to "business"), Options: "business", "private"
+            address: Client physical address
+            zip_code: Client postal/zip code
+            email: Client email address
+            country: Client country code (e.g. "DE")
+            vat_number: Client VAT number
+            city: Client city
+            phone: Client phone number
+            
+        Returns:
+            Newly created client record
+        """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -78,26 +107,24 @@ def register_client_tools(mcp):
         
         client_data = {
             "name": name,
-            "clientType": client_type,
-            "company": company_id
+            "clientType": client_type
         }
-        
-        # Add optional fields if provided
+    
+        if email:
+            client_data["email"] = email
+        if phone:
+            client_data["phone"] = phone
+        if vat_number:
+            client_data["vatNumber"] = vat_number
         if address:
             client_data["address"] = address
         if zip_code:
             client_data["zipCode"] = zip_code
-        if email:
-            client_data["email"] = email
         if country:
             client_data["country"] = country
-        if vat_number:
-            client_data["vatNumber"] = vat_number
         if city:
             client_data["city"] = city
-        if phone:
-            client_data["phoneNumber"] = phone
-        
+            
         return api._make_request("POST", clients_url, json_data=client_data)
 
     @mcp.tool()
@@ -114,7 +141,24 @@ def register_client_tools(mcp):
         city: Optional[str] = None,
         phone: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Update an existing client."""
+        """
+        Update an existing client.
+        
+        Args:
+            client_id: ID of the client to update
+            name: Updated client name
+            client_type: Updated client type ("business" or "private")
+            address: Updated client physical address
+            zip_code: Updated client postal/zip code
+            email: Updated client email address
+            country: Updated client country code (e.g. "DE")
+            vat_number: Updated client VAT number
+            city: Updated client city
+            phone: Updated client phone number
+            
+        Returns:
+            Updated client record
+        """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -138,20 +182,20 @@ def register_client_tools(mcp):
             update_data["name"] = name
         if client_type:
             update_data["clientType"] = client_type
+        if email:
+            update_data["email"] = email
+        if phone:
+            update_data["phone"] = phone
+        if vat_number:
+            update_data["vatNumber"] = vat_number
         if address:
             update_data["address"] = address
         if zip_code:
             update_data["zipCode"] = zip_code
-        if email:
-            update_data["email"] = email
         if country:
             update_data["country"] = country
-        if vat_number:
-            update_data["vatNumber"] = vat_number
         if city:
             update_data["city"] = city
-        if phone:
-            update_data["phoneNumber"] = phone
         
         # If no fields provided, return current data
         if not update_data:
@@ -164,7 +208,15 @@ def register_client_tools(mcp):
         ctx: Context,
         client_id: str
     ) -> Dict[str, Any]:
-        """Delete a client."""
+        """
+        Delete a client.
+        
+        Args:
+            client_id: ID of the client to delete
+            
+        Returns:
+            Confirmation of deletion
+        """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         

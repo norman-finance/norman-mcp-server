@@ -1,6 +1,13 @@
 from typing import Dict, Any, Optional, List
 from urllib.parse import urljoin
 from datetime import datetime, timedelta
+import logging
+import requests
+
+from norman_mcp.context import Context
+from norman_mcp import config
+
+logger = logging.getLogger(__name__)
 
 def register_invoice_tools(mcp):
     """Register all invoice-related tools with the MCP server."""
@@ -32,7 +39,53 @@ def register_invoice_tools(mcp):
         service_end_date: Optional[str] = None,
         delivery_date: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Create a new invoice."""
+        """
+        Create a new invoice. Ask for additional information if needed, for example:
+        - If the client is not found, ask for the client details and create a new client if necessary.
+        - If pyament reminder should be sent, ask for the reminder settings.
+        - If the invoice type is GOODS, ask for the delivery date.
+        - If the invoice type is SERVICES, ask for the service start and end dates.
+        - If the invoice should be sent to the client, ask for the email data.
+        
+        Args:
+            client_id: ID of the client for the invoice
+            items: List of invoice items, each containing name, quantity, rate, vatRate and total. 
+                Example: [{"name": "Software Development", "quantity": 3, "rate": 30000, "vatRate": 19, "total": 1071}] // VAT rates might be 0, 7, 19. By default it's 19. Rate and total are in cents.
+            invoice_number: Optional invoice number (will be auto-generated if not provided)
+            issued: Issue date in YYYY-MM-DD format
+            due_to: Due date in YYYY-MM-DD format
+            currency: Invoice currency (EUR, USD), by default it's EUR
+            payment_terms: Payment terms text
+            notes: Additional notes
+            language: Invoice language (en, de)
+            invoice_type: Type of invoice (SERVICES, GOODS)
+            is_vat_included: Whether prices include VAT
+            bank_name: Name of the bank (gets from company details if exists)
+            iban: IBAN for payments (gets from company details if exists)
+            bic: BIC/SWIFT code (gets from company details if exists)
+            create_qr: Whether to create payment QR code (only if BIC and IBAN provided)
+            color_schema: Invoice style color (hex code)
+            font: Invoice font (e.g. "Plus Jakarta Sans", "Inter")
+            is_to_send: Whether to send invoice automatically to client
+            mailing_data: Email data if is_to_send is True. Example: {
+                "emailSubject": "Invoice No.{invoice_number} for {client_name}",
+                "emailBody": "Dear {client_name},...",
+                "customClientEmail": "client@example.com" // email to send the invoice to, if not provided, it will be sent to the client email address
+            }
+            settings_on_overdue: Configuration for overdue notifications. Example: {
+                "isToAutosendNotification": true, // whether to send notification automatically
+                "customEmailSubject": "Reminder: Invoice {invoice_number} is overdue", // custom email subject
+                "customEmailBody": "Dear {client_name},...", // custom email body
+                "notifyAfterDays": [1, 3], // days to notify after the due date
+                "notifyInParticularDays": [] // days to notify in particular dates [2025-05-23", "2025-05-24"]
+            }
+            service_start_date: Service period start date (YYYY-MM-DD) by default it's today, should be provided if invoice_type is SERVICES
+            service_end_date: Service period end date (YYYY-MM-DD) by default it's one month from today, should be provided if invoice_type is SERVICES
+            delivery_date: Delivery date for goods (YYYY-MM-DD) by default it's today, should be provided if invoice_type is GOODS
+
+        Returns:
+            Information about the created invoice and always include the generated invoice pdf url from reportUrl field
+        """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -128,7 +181,55 @@ def register_invoice_tools(mcp):
         service_end_date: Optional[str] = None,
         delivery_date: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Create a recurring invoice."""
+        """
+        Create a recurring invoice that will automatically generate new invoices based on specified frequency.
+        Useful for contracts or services that bill on a regular basis.
+        Always ask for reccurring configuration, for example:
+            - How often to generate invoices (weekly, monthly)
+            - Number of units for frequency (e.g. 1 for monthly = every month, 2 = every 2 months)
+            - Start date
+            - End date
+            - End invoice count (optional)
+            
+        Ask for additional information if needed, for example:
+            - If the client is not found, ask for the client details and create a new client if necessary.
+            - If the invoice number is not provided, ask for it.
+            - If the due date is not provided, ask for it.
+            - If the payment terms are not provided, ask for it.
+            - If the bank details are not provided, ask for it.
+
+        Args:
+            client_id: ID of the client for the invoice
+            items: List of invoice items, each containing name, quantity, rate, vatRate and total
+            frequency_type: How often to generate invoices ("weekly", "monthly")
+            frequency_unit: Number of units for frequency (e.g. 1 for monthly = every month, 2 = every 2 months)
+            starts_from_date: Date to start generating invoices from (YYYY-MM-DD)
+            ends_on_date: Optional end date for recurring invoices (YYYY-MM-DD). Either ends_on_date or ends_on_invoice_count should be provided.
+            ends_on_invoice_count: Optional number of invoices to generate before stopping. Either ends_on_date or ends_on_invoice_count should be provided.
+            invoice_number: Base invoice number (will be auto-generated if not provided)
+            issued: Issue date in YYYY-MM-DD format
+            due_to: Due date in YYYY-MM-DD format
+            currency: Invoice currency (EUR, USD), by default it's EUR
+            payment_terms: Payment terms text
+            notes: Additional notes
+            language: Invoice language (en, de)
+            invoice_type: Type of invoice (SERVICES, GOODS)
+            is_vat_included: Whether prices include VAT
+            bank_name: Name of the bank
+            iban: IBAN for payments
+            bic: BIC/SWIFT code
+            create_qr: Whether to create payment QR code
+            color_schema: Invoice style color (hex code)
+            font: Invoice font (e.g. "Plus Jakarta Sans", "Inter")
+            is_to_send: Whether to send invoices automatically to client
+            settings_on_overdue: Configuration for overdue notifications
+            service_start_date: Service period start date (for SERVICES type)
+            service_end_date: Service period end date (for SERVICES type)
+            delivery_date: Delivery date (for GOODS type)
+
+        Returns:
+            Information about the created recurring invoice setup and always include the generated invoice pdf url from reportUrl field
+        """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -211,7 +312,15 @@ def register_invoice_tools(mcp):
         ctx: Context,
         invoice_id: str
     ) -> Dict[str, Any]:
-        """Get detailed information about a specific invoice."""
+        """
+        Get detailed information about a specific invoice.
+        
+        Args:
+            invoice_id: ID of the invoice to retrieve
+            
+        Returns:
+            Detailed invoice information
+        """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -235,7 +344,20 @@ def register_invoice_tools(mcp):
         is_send_to_company: bool = False,
         custom_client_email: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Send an invoice via email."""
+        """
+        Send an invoice via email.
+        
+        Args:
+            invoice_id: ID of the invoice to send
+            subject: Email subject line
+            body: Email body content
+            additional_emails: List of additional email addresses to send to
+            is_send_to_company: Whether to send the copy to the company email (Owner)
+            custom_client_email: Custom email address for the client (By default the email address of the client is used if it is set)
+            
+        Returns:
+            Response from the send invoice request
+        """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -270,7 +392,20 @@ def register_invoice_tools(mcp):
         is_send_to_company: bool = False,
         custom_client_email: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Send an overdue payment reminder for an invoice via email."""
+        """
+        Send an overdue payment reminder for an invoice via email.
+        
+        Args:
+            invoice_id: ID of the invoice to send reminder for
+            subject: Email subject line
+            body: Email body content
+            additional_emails: List of additional email addresses to send to
+            is_send_to_company: Whether to send the copy to the company email (Owner)
+            custom_client_email: Custom email address for the client (By default the email address of the client is used if it is set)
+            
+        Returns:
+            Response from the send overdue reminder request
+        """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -301,7 +436,16 @@ def register_invoice_tools(mcp):
         invoice_id: str,
         transaction_id: str
     ) -> Dict[str, Any]:
-        """Link a transaction to an invoice."""
+        """
+        Link a transaction to an invoice.
+        
+        Args:
+            invoice_id: ID of the invoice
+            transaction_id: ID of the transaction to link
+            
+        Returns:
+            Response from the link transaction request
+        """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -324,7 +468,15 @@ def register_invoice_tools(mcp):
         ctx: Context,
         invoice_id: str
     ) -> Dict[str, Any]:
-        """Get the e-invoice XML for a specific invoice."""
+        """
+        Get the e-invoice XML for a specific invoice.
+        
+        Args:
+            invoice_id: ID of the invoice to get XML for
+            
+        Returns:
+            E-invoice XML data
+        """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -361,7 +513,19 @@ def register_invoice_tools(mcp):
         to_date: Optional[str] = None,
         limit: Optional[int] = 100
     ) -> Dict[str, Any]:
-        """List invoices with optional filtering."""
+        """
+        List invoices with optional filtering.
+        
+        Args:
+            status: Filter by invoice status (draft, pending, sent, paid, overdue, uncollectible)
+            name: Filter by invoice (client) name
+            from_date: Filter invoices created after this date (YYYY-MM-DD)
+            to_date: Filter invoices created before this date (YYYY-MM-DD)
+            limit: Maximum number of invoices to return (default 100)
+            
+        Returns:
+            List of invoices matching the criteria
+        """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         

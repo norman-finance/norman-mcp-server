@@ -1,6 +1,12 @@
+import logging
 from typing import Dict, Any, Optional
 from urllib.parse import urljoin
 from datetime import datetime
+
+from norman_mcp.context import Context
+from norman_mcp import config
+
+logger = logging.getLogger(__name__)
 
 def register_company_tools(mcp):
     """Register all company-related tools with the MCP server."""
@@ -37,48 +43,6 @@ def register_company_tools(mcp):
         )
         
         return api._make_request("GET", balance_url)
-
-    @mcp.tool() 
-    async def get_company_tax_statistics(ctx: Context) -> Dict[str, Any]:
-        """
-        Get tax statistics for the company.
-        
-        Returns:
-            Company tax statistics data
-        """
-        api = ctx.request_context.lifespan_context["api"]
-        company_id = api.company_id
-        
-        if not company_id:
-            return {"error": "No company available. Please authenticate first."}
-        
-        stats_url = urljoin(
-            config.api_base_url,
-            f"api/v1/companies/{company_id}/company-tax-statistic/"
-        )
-        
-        return api._make_request("GET", stats_url)
-
-    @mcp.tool()
-    async def get_vat_next_report(ctx: Context) -> Dict[str, Any]:
-        """
-        Get the VAT amount for the next report period.
-        
-        Returns:
-            VAT next report amount data
-        """
-        api = ctx.request_context.lifespan_context["api"]
-        company_id = api.company_id
-        
-        if not company_id:
-            return {"error": "No company available. Please authenticate first."}
-        
-        vat_url = urljoin(
-            config.api_base_url,
-            f"api/v1/companies/{company_id}/vat-next-report-amount/"
-        )
-        
-        return api._make_request("GET", vat_url)
 
     @mcp.tool()
     async def update_company_details(
