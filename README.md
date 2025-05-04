@@ -2,9 +2,15 @@
 
 A Model Context Protocol (MCP) server that allows Large Language Models (LLMs) to interact with the basic Norman Finance API implementation. This server provides access to accounting, invoices, companies, clients, taxes, and more through a standardized protocol.
 
+> [!NOTE]
+> 
+> The Norman Finance MCP Server is currently in Beta. We welcome your feedback and encourage you to report any bugs by opening an issue [here](https://github.com/norman-finance/norman-mcp-server/issues).
+
+
 <a href="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server/badge" alt="Norman Finance Server MCP server" />
 </a>
+<br/>
 
 ## Features
 
@@ -36,6 +42,12 @@ Before using this MCP server, you need to:
 1. Create an account on [Norman Finance](https://app.norman.finance/sign-up?utm_source=mcp_server) (or [dev.norman.finance](https://dev.norman.finance/sign-up?utm_source=mcp_server) for the sandbox environment)
 2. Have your email and password ready for authentication
 
+## Remote MCP Server
+Norman now offers a hosted remote MCP server at:
+
+> http://mcp.norman.finance/sse
+The remote MCP is recommended because it utilizes OAuth authentication, enabling you to log in directly with your Norman account without the need to create or manage access tokens manually.
+> 
 ## Installation
 
 ### Using Claude Desktop with the Norman MCP Server (via PyPI)
@@ -53,6 +65,19 @@ Follow the instructions here: [Installing uv](https://docs.astral.sh/uv/getting-
 2. Launch Claude and navigate to: Settings > Developer > Edit Config.
 
 3. Update your `claude_desktop_config.json` file with the following configuration:
+
+#### Remote MCP
+```json
+{
+  "mcpServers": {
+    "norman-mcp-server": {
+      "command": "npx",
+      "args": ["mcp-remote", "http://mcp.norman.finance/sse"]
+    }
+  }
+}
+```
+#### Local MCP
 
 ```json
 {
