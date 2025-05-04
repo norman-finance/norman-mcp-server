@@ -26,6 +26,41 @@ from norman_mcp.config.settings import config
 
 logger = logging.getLogger(__name__)
 
+# Monkey patch OAuthClientInformationFull (from OAuthClientMetadata) 
+# to allow dynamic redirect URIs for Claude Desktop
+original_validate_redirect_uri = OAuthClientInformationFull.validate_redirect_uri
+
+# List of allowed hosts and patterns for redirect URIs
+ALLOWED_REDIRECT_HOSTS = [
+    "http://127.0.0.1:",  # Local development with any port
+    "http://localhost:",  # Local development with any port
+    "https://claude.ai",  # Claude.ai web app
+    "https://claude-api",  # Claude API client
+    "http://0.0.0.0:",    # Any local interface with any port
+]
+
+def patched_validate_redirect_uri(self, redirect_uri: Optional[AnyHttpUrl]) -> AnyHttpUrl:
+    """Patched version that allows dynamic redirect URIs from allowed hosts."""
+    if redirect_uri:
+        redirect_str = str(redirect_uri)
+        
+        # Check if the redirect_uri starts with any of our allowed hosts
+        for allowed_host in ALLOWED_REDIRECT_HOSTS:
+            if redirect_str.startswith(allowed_host) and "/oauth/callback" in redirect_str:
+                logger.info(f"Allowing dynamic redirect URI from allowed host: {redirect_uri}")
+                return redirect_uri
+                
+        # Special case for wildcard in registered URIs
+        if "*" in self.redirect_uris:
+            logger.info(f"Allowing redirect URI via wildcard: {redirect_uri}")
+            return redirect_uri
+    
+    # Fall back to original validation for other URIs
+    return original_validate_redirect_uri(self, redirect_uri)
+
+# Apply the patch
+OAuthClientInformationFull.validate_redirect_uri = patched_validate_redirect_uri
+
 # Create a custom AuthorizationCode class that always passes PKCE verification
 class GeneratedAuthorizationCode(AuthorizationCode):
     """Development version of AuthorizationCode that makes code_challenge comparison always pass."""
@@ -75,14 +110,14 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             
             # Create a new client with basic permissions
             from mcp.shared.auth import OAuthClientInformationFull
-            
+
             # For development/remote access, accept any redirect URI
             # In production, this would be more restricted
             new_client = OAuthClientInformationFull(
                 client_id=client_id,
                 client_name=f"Auto-registered Client {client_id[:8]}",
                 client_secret=secrets.token_hex(32),
-                redirect_uris=["*"],  # Accept any redirect URI for development
+                redirect_uris=["http://127.0.0.1:3001/oauth/callback"],  # Accept any redirect URI for development
                 token_endpoint_auth_method="client_secret_post",
                 grant_types=["authorization_code", "refresh_token"],
                 response_types=["code"],
