@@ -10,28 +10,47 @@ def register_resources(mcp):
         """Get details about a company by ID."""
         ctx = mcp.get_context()
         api = ctx.request_context.lifespan_context["api"]
-        
-        # If no specific company ID is provided, use the default one
+
+        # Now get the company details with our company ID
         company_id = api.company_id
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
-        company_data = api._make_request("GET", company_url)
         
-        # Format the company information for display
-        company_info = (
-            f"# {company_data.get('name', 'Unknown Company')}\n\n"
-            f"**Account Type**: {company_data.get('accountType', 'N/A')}\n"
-            f"**Activity Start**: {company_data.get('activityStart', 'N/A')}\n"
-            f"**VAT ID**: {company_data.get('vatNumber', 'N/A')}\n"
-            f"**Tax ID**: {company_data.get('taxNumber', 'N/A')}\n"
-            f"**Tax State**: {company_data.get('taxState', 'N/A')}\n"
-            f"**Profession**: {company_data.get('profession', 'N/A')}\n"
-            f"**Address**: {company_data.get('address', {})} "
-            f"{company_data.get('zipCode', '')} "
-            f"{company_data.get('city', '')}, "
-            f"{company_data.get('countryName', {})}\n"
-        )
-        
-        return company_info
+        try:
+            # Use a direct request with our token to avoid any issues
+            import requests
+            headers = {
+                "Authorization": f"Bearer {api.access_token}",
+                "User-Agent": "NormanMCPServer/0.1.0",
+                "X-Requested-With": "XMLHttpRequest",
+            }
+            
+            response = requests.get(
+                company_url,
+                headers=headers,
+                timeout=config.NORMAN_API_TIMEOUT
+            )
+            
+            response.raise_for_status()
+            company_data = response.json()
+            
+            # Format the company information for display
+            company_info = (
+                f"# {company_data.get('name', 'Unknown Company')}\n\n"
+                f"**Account Type**: {company_data.get('accountType', 'N/A')}\n"
+                f"**Activity Start**: {company_data.get('activityStart', 'N/A')}\n"
+                f"**VAT ID**: {company_data.get('vatNumber', 'N/A')}\n"
+                f"**Tax ID**: {company_data.get('taxNumber', 'N/A')}\n"
+                f"**Tax State**: {company_data.get('taxState', 'N/A')}\n"
+                f"**Profession**: {company_data.get('profession', 'N/A')}\n"
+                f"**Address**: {company_data.get('address', '')} "
+                f"{company_data.get('zipCode', '')} "
+                f"{company_data.get('city', '')}, "
+                f"{company_data.get('countryName', '')}\n"
+            )
+            
+            return company_info
+        except Exception as e:
+            return f"Error getting company details: {str(e)}"
 
     @mcp.resource("transactions://list/{page}/{page_size}")
     async def list_transactions(page: int = 1, page_size: int = 100) -> str:

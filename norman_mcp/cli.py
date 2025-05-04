@@ -6,11 +6,15 @@ import argparse
 import logging
 from dotenv import load_dotenv
 
-from .server import mcp
+from .server import create_app
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+HOST = os.environ.get("NORMAN_MCP_HOST", "0.0.0.0")
+PORT = int(os.environ.get("NORMAN_MCP_PORT", "3001"))
+PUBLIC_URL = os.environ.get("NORMAN_MCP_PUBLIC_URL", f"http://{HOST}:{PORT}")
 
 
 def setup_environment(args):
@@ -30,13 +34,19 @@ def main():
     # Load environment variables
     load_dotenv()
     
-    parser = argparse.ArgumentParser(description='Norman Finance MCP Server')
-    parser.add_argument('--email', help='Norman Finance account email')
-    parser.add_argument('--password', help='Norman Finance account password')
-    parser.add_argument('--environment', choices=['production', 'sandbox'], 
+    parser = argparse.ArgumentParser(description='Norman Finance MCP Server with OAuth')
+    parser.add_argument('--email', help='Norman Finance account email (optional)')
+    parser.add_argument('--password', help='Norman Finance account password (optional)')
+    parser.add_argument('--environment', choices=['production', 'sandbox'], default='production',
                         help='API environment (production or sandbox)')
     parser.add_argument('--timeout', type=int, help='API request timeout in seconds')
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    parser.add_argument("--host", type=str, default=HOST, help="Host to bind to")
+    parser.add_argument("--port", type=int, default=PORT, help="Port to bind to")
+    parser.add_argument("--public-url", type=str, default=PUBLIC_URL, help="Public URL for OAuth callbacks")
+    parser.add_argument('--transport', choices=['stdio', 'sse'], default='sse',
+                       help='Transport protocol to use (default: sse)')
+    
     
     args = parser.parse_args()
     
@@ -47,10 +57,24 @@ def main():
     # Set up environment variables
     setup_environment(args)
     
-    # Run the server
+    # Create and run the server
     try:
-        # Call mcp.run() directly - it handles its own event loop
-        mcp.run()
+        # Create the app with host and port settings
+        mcp_server = create_app(host=args.host, port=args.port)
+        
+        # Log information about the server
+        logger.info(f"Starting Norman MCP server with OAuth authentication")
+        logger.info(f"Server listening on http://{args.host}:{args.port}")
+        logger.info(f"Using transport: {args.transport}")
+
+        logger.info(f"NORMAN_ENVIRONMENT_start: {args.environment}")
+
+        # Create the app with the provided arguments
+        mcp = create_app(host=args.host, port=args.port, public_url=args.public_url, transport=args.transport)
+        
+        # Run the server
+        mcp.run(transport=args.transport)
+
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception as e:
