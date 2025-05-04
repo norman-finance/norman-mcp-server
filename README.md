@@ -46,8 +46,9 @@ Before using this MCP server, you need to:
 Norman now offers a hosted remote MCP server at:
 
 > http://mcp.norman.finance/sse
+
 The remote MCP is recommended because it utilizes OAuth authentication, enabling you to log in directly with your Norman account without the need to create or manage access tokens manually.
-> 
+
 ## Installation
 
 ### Using Claude Desktop with the Norman MCP Server (via PyPI)
