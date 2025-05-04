@@ -23,42 +23,12 @@ The deployment process is fully automated:
    - Update the Docker Compose configuration
    - Deploy the service with Traefik integration
 
-## Manual Deployment
-
-If you need to deploy manually, you can use the Ansible playbook directly:
-
-```bash
-# Clone the devops repository
-git clone https://github.com/norman-finance/norman-devops.git
-cd norman-devops
-
-# Add the vault password file
-echo "your-vault-password" > .vault-key
-
-# Run the playbook
-ansible-playbook -i hosts site.yml --tags mcp-server
-```
 
 ## Environment Variables
 
 The main environment variables that control the MCP server:
 
 - `NORMAN_ENVIRONMENT`: Set to "production" for production deployments
-- `NORMAN_TRANSPORT`: Set to "sse" for Server-Sent Events transport
 - `NORMAN_API_BASE_URL`: The Norman API base URL
 - `MCP_SERVER_HOST`: Server host (0.0.0.0 for Docker)
 - `MCP_SERVER_PORT`: Server port (default: 3001)
-
-## OAuth Configuration
-
-For OAuth authentication, you need to configure:
-
-- `NORMAN_OAUTH_CLIENT_ID`: OAuth client ID
-- `NORMAN_OAUTH_CLIENT_SECRET`: OAuth client secret
-- `NORMAN_OAUTH_REDIRECT_URI`: OAuth redirect URI
-
-These values are stored securely in the Ansible vault.
-
-## Monitoring
-
-The MCP server exposes a `/health` endpoint that can be used to monitor the service's health. Traefik is configured to use this endpoint for health checks. 
