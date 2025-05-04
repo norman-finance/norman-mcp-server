@@ -87,7 +87,7 @@ def register_tax_tools(mcp):
             report_id: Public ID of the tax report
             
         Returns:
-            The tax report preview as an image
+            The tax report preview as an image in PNG format
         """
         api = ctx.request_context.lifespan_context["api"]
         
