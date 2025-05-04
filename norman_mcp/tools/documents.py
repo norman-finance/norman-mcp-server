@@ -99,7 +99,7 @@ def register_document_tools(mcp):
             brand_name: Filter by brand name (case insensitive partial match)
             
         Returns:
-            List of attachments matching the filters
+            List of attachments matching the filters. Use field "file" that contains direct links to the file in the response and make the link clickable along with the other fields.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
