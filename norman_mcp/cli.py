@@ -12,10 +12,6 @@ from .server import create_app
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-HOST = os.environ.get("NORMAN_MCP_HOST", "0.0.0.0")
-PORT = int(os.environ.get("NORMAN_MCP_PORT", "3001"))
-PUBLIC_URL = os.environ.get("NORMAN_MCP_PUBLIC_URL", f"http://{HOST}:{PORT}")
-
 
 def setup_environment(args):
     """Set up environment variables from command line arguments."""
@@ -27,13 +23,22 @@ def setup_environment(args):
         os.environ["NORMAN_ENVIRONMENT"] = args.environment
     if args.timeout:
         os.environ["NORMAN_API_TIMEOUT"] = str(args.timeout)
+    if args.host:
+        os.environ["NORMAN_MCP_HOST"] = args.host
+    if args.port:
+        os.environ["NORMAN_MCP_PORT"] = str(args.port)
+    if args.public_url:
+        os.environ["NORMAN_MCP_PUBLIC_URL"] = args.public_url
 
 
 def main():
     """Main entry point for the CLI."""
     # Load environment variables
     load_dotenv()
-    
+    HOST = os.environ.get("NORMAN_MCP_HOST", "0.0.0.0")
+    PORT = int(os.environ.get("NORMAN_MCP_PORT", "3001"))
+    PUBLIC_URL = os.environ.get("NORMAN_MCP_PUBLIC_URL", f"http://{HOST}:{PORT}")
+
     parser = argparse.ArgumentParser(description='Norman Finance MCP Server with OAuth')
     parser.add_argument('--email', help='Norman Finance account email (optional)')
     parser.add_argument('--password', help='Norman Finance account password (optional)')
@@ -59,16 +64,10 @@ def main():
     
     # Create and run the server
     try:
-        # Create the app with host and port settings
-        mcp_server = create_app(host=args.host, port=args.port)
-        
         # Log information about the server
         logger.info(f"Starting Norman MCP server with OAuth authentication")
         logger.info(f"Server listening on http://{args.host}:{args.port}")
         logger.info(f"Using transport: {args.transport}")
-
-        logger.info(f"NORMAN_ENVIRONMENT_start: {args.environment}")
-
         # Create the app with the provided arguments
         mcp = create_app(host=args.host, port=args.port, public_url=args.public_url, transport=args.transport)
         

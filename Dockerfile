@@ -19,4 +19,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 3001
 
 # Run the server
-CMD ["python", "-m", "norman_mcp", "--transport", "sse", "--environment", "production"]
+CMD ["python", "-m", "norman_mcp", "--transport", "sse", "--environment", "production", "--host", "mcp.norman.finance", "--port", "3001", "--public-url", "https://mcp.norman.finance"]
