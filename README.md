@@ -45,7 +45,7 @@ Before using this MCP server, you need to:
 ## Remote MCP Server
 Norman now offers a hosted remote MCP server at:
 
-> http://mcp.norman.finance/sse
+> https://mcp.norman.finance/sse
 
 The remote MCP is recommended because it utilizes OAuth authentication, enabling you to log in directly with your Norman account without the need to create or manage access tokens manually.
 
@@ -73,7 +73,7 @@ Follow the instructions here: [Installing uv](https://docs.astral.sh/uv/getting-
   "mcpServers": {
     "norman-mcp-server": {
       "command": "npx",
-      "args": ["mcp-remote", "http://mcp.norman.finance/sse"]
+      "args": ["mcp-remote", "https://mcp.norman.finance/sse"]
     }
   }
 }
