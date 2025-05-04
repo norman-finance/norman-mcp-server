@@ -75,13 +75,13 @@ jobs:
         with:
           string: ${{ github.repository_owner }}
 
-      - name: update ai image
+      - name: update mcp server image
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: root
           key: ${{ secrets.SSH_KEY }}
-          script: docker service update norman_mcp --image ghcr.io/${{ steps.image.outputs.lowercase }}/norman-mcp-server:${{ github.sha }} --with-registry-auth
+          script: docker service update norman_mcp_server --image ghcr.io/${{ steps.image.outputs.lowercase }}/norman-mcp-server:${{ github.sha }} --with-registry-auth
 
       - name: finalize sentry release
         uses: getsentry/action-release@v1
