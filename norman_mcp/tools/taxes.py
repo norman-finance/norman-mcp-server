@@ -2,10 +2,11 @@ import logging
 import requests
 from typing import Dict, Any, Optional
 from urllib.parse import urljoin
-from datetime import datetime
-import tempfile
-import os
-import re
+from pydantic import Field
+from mcp.server.fastmcp.utilities.types import Image
+import io
+from pdf2image import convert_from_bytes
+from PIL import Image as PILImage
 
 from norman_mcp.context import Context
 from norman_mcp import config
@@ -27,7 +28,7 @@ def register_tax_tools(mcp):
     @mcp.tool()
     async def get_tax_report(
         ctx: Context,
-        report_id: str
+        report_id: str = Field(description="Public ID of the tax report to retrieve")
     ) -> Dict[str, Any]:
         """
         Retrieve a specific tax report.
@@ -50,8 +51,8 @@ def register_tax_tools(mcp):
     @mcp.tool()
     async def validate_tax_number(
         ctx: Context,
-        tax_number: str,
-        region_code: str
+        tax_number: str = Field(description="Tax number to validate"),
+        region_code: str = Field(description="Region code (e.g., DE for Germany)")
     ) -> Dict[str, Any]:
         """
         Validate a tax number for a specific region.
@@ -77,28 +78,22 @@ def register_tax_tools(mcp):
     @mcp.tool()
     async def generate_finanzamt_preview(
         ctx: Context,
-        report_id: str
-    ) -> Dict[str, Any]:
+        report_id: str = Field(description="Public ID of the tax report to generate a preview for")
+    ) -> Image:
         """
-        Generate a test Finanzamt preview for a tax report.
+        Generate a test Finanzamt preview for a tax report and return it as an image.
         
         Args:
             report_id: Public ID of the tax report
             
         Returns:
-            Generate a PDF preview of the tax report. 
-            Always suggest to check the preview before sending it to the Finanzamt.
-            Always include the path to the generated PDF file as a link to open the file from local file system.
-            Get the report data from @get_tax_report and show line items and totals.
-            You could add short summary based on the report data.
-            Ask follow up question to file the tax report to the Finanzamt @submit_tax_report.
-            Don't send the report to the Finanzamt without the user confirmation.
+            The tax report preview as an image
         """
         api = ctx.request_context.lifespan_context["api"]
         
         # Validate report_id
         if not report_id or not isinstance(report_id, str) or not report_id.strip():
-            return {"error": "Invalid report ID"}
+            raise ValueError("Invalid report ID")
         
         preview_url = urljoin(
             config.api_base_url,
@@ -115,43 +110,49 @@ def register_tax_tools(mcp):
             
             # The response contains raw PDF bytes
             if isinstance(response.content, bytes) and len(response.content) > 0:
-                # Create a secure temporary directory and file
-                temp_dir = tempfile.mkdtemp(prefix="norman_tax_")
+                # Convert PDF to image
+                images = convert_from_bytes(response.content, dpi=150)
                 
-                # Use safe filename generation
-                safe_report_id = re.sub(r'[^a-zA-Z0-9_-]', '', report_id)  # Remove any unsafe chars
-                temp_filename = f"tax_report_preview_{safe_report_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
-                pdf_path = os.path.join(temp_dir, temp_filename)
+                # Get the first page as PIL Image
+                first_page = images[0]
                 
-                # Set proper permissions - only allow owner to read/write
-                with open(pdf_path, 'wb') as f:
-                    f.write(response.content)
-                    
-                try:
-                    os.chmod(pdf_path, 0o600)  # Read/write for owner only
-                except Exception as e:
-                    logger.warning(f"Could not set file permissions: {str(e)}")
+                # Convert to RGB and resize if needed to keep file size manageable
+                first_page = first_page.convert('RGB')
                 
-                return {
-                    "file": pdf_path,
-                    "content_type": "application/pdf",
-                    "message": "Tax report preview generated successfully. Please review before submitting."
-                }
+                # Calculate new dimensions while maintaining aspect ratio
+                width, height = first_page.size
+                max_dim = 1000
+                if width > max_dim or height > max_dim:
+                    if width > height:
+                        new_width = max_dim
+                        new_height = int(height * (max_dim / width))
+                    else:
+                        new_height = max_dim
+                        new_width = int(width * (max_dim / height))
+                    first_page = first_page.resize((new_width, new_height), PILImage.LANCZOS)
+                
+                # Save as PNG to bytes buffer
+                buffer = io.BytesIO()
+                first_page.save(buffer, format="PNG", optimize=True)
+                buffer.seek(0)
+                
+                # Return as Image
+                return Image(data=buffer.getvalue(), format="png")
             else:
-                return {"error": "Preview generation failed or invalid response format"}
+                raise ValueError("Preview generation failed or invalid response format")
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to generate tax report preview: {str(e)}")
             if hasattr(e, 'response') and e.response is not None:
                 logger.error(f"Response: {e.response.text}")
-            return {"error": f"Failed to generate tax report preview: {str(e)}"}
+            raise ValueError(f"Failed to generate tax report preview: {str(e)}")
         except Exception as e:
             logger.error(f"Error generating tax report preview: {str(e)}")
-            return {"error": f"Error generating tax report preview: {str(e)}"}
+            raise ValueError(f"Error generating tax report preview: {str(e)}")
 
     @mcp.tool()
     async def submit_tax_report(
         ctx: Context,
-        report_id: str
+        report_id: str = Field(description="Public ID of the tax report to submit")
     ) -> Dict[str, Any]:
         """
         Submit a tax report to the Finanzamt.
@@ -212,12 +213,12 @@ def register_tax_tools(mcp):
     @mcp.tool()
     async def update_tax_setting(
         ctx: Context,
-        setting_id: str,
-        tax_type: Optional[str] = None,
-        vat_type: Optional[str] = None,
-        vat_percent: Optional[float] = None,
-        start_tax_report_date: Optional[str] = None,
-        reporting_frequency: Optional[str] = None
+        setting_id: str = Field(description="Public ID of the tax setting to update"),
+        tax_type: Optional[str] = Field(description="Type of tax (e.g. 'sales')"),
+        vat_type: Optional[str] = Field(description="VAT type (e.g. 'vat_subject')"),
+        vat_percent: Optional[float] = Field(description="VAT percentage"),
+        start_tax_report_date: Optional[str] = Field(description="Start date for tax reporting (YYYY-MM-DD)"),
+        reporting_frequency: Optional[str] = Field(description="Frequency of reporting (e.g. 'monthly')")
     ) -> Dict[str, Any]:
         """
         Update a tax setting. Always generate a preview of the tax report @generate_finanzamt_preview before submitting it to the Finanzamt.
