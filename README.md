@@ -104,11 +104,13 @@ Then update your claude_desktop_config.json file to point to the Python module d
 
 ## Configuration
 
-### Environment Variables
+### Authentication Methods
 
-The server requires authentication with your Norman Finance credentials. You can provide these through environment variables:
+The Norman MCP server supports two authentication methods:
 
-Create a `.env` file with:
+#### 1. Environment Variables (for stdio transport)
+
+When using the server with Claude Desktop or stdin/stdout communication, provide credentials through environment variables:
 
 ```bash
 # .env
@@ -116,6 +118,36 @@ NORMAN_EMAIL=your-email@example.com
 NORMAN_PASSWORD=your-password
 NORMAN_ENVIRONMENT=production  # or "sandbox" for the development environment
 NORMAN_API_TIMEOUT=200  # Request timeout in seconds
+```
+
+#### 2. OAuth Authentication (for SSE transport)
+
+When using the server with MCP Inspector, Claude API, or other SSE clients, the server uses OAuth 2.0 authentication:
+
+1. Start the server with SSE transport:
+   ```bash
+   python -m norman_mcp --transport sse
+   ```
+
+2. When connecting to the server, you'll be directed to a login page
+3. Enter your Norman Finance credentials
+4. You'll be redirected back to your application with authentication tokens
+
+### Environment Variables
+
+The server can be configured using these environment variables:
+
+```bash
+# Authentication (for stdio transport)
+NORMAN_EMAIL=your-email@example.com
+NORMAN_PASSWORD=your-password
+NORMAN_ENVIRONMENT=production  # or "sandbox" for the development environment
+
+# Server configuration
+NORMAN_MCP_HOST=0.0.0.0  # Host to bind to
+NORMAN_MCP_PORT=3001     # Port to bind to
+NORMAN_MCP_PUBLIC_URL=http://example.com  # Public URL for OAuth callbacks (important for remote access)
+NORMAN_API_TIMEOUT=200   # Request timeout in seconds
 ```
 
 ### Command Line Arguments
@@ -130,13 +162,29 @@ norman-mcp --email your-email@example.com --password your-password --environment
 
 ### With Claude or Other MCP-Compatible LLMs
 
-1. Start the MCP server:
+1. Start the MCP server using one of these methods:
+
+   ```bash
+   # For stdio transport (environment variable authentication)
+   python -m norman_mcp --transport stdio
+   
+   # For SSE transport (OAuth authentication)
+   python -m norman_mcp --transport sse
+   ```
+
+2. Connect to the server using your preferred MCP client.
+
+### Helper Scripts
+
+The package includes helper scripts for different use cases:
 
 ```bash
-norman-mcp
-```
+# Run with stdio transport (environment variable authentication)
+./tools/run_stdio.sh
 
-2. Add the server to your Claude configuration using stdio protocol.
+# Run with remote access using ngrok (for sharing with others)
+./tools/run_remote.sh
+```
 
 ### Integration with Claude Desktop
 
