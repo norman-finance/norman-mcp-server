@@ -37,6 +37,7 @@ ALLOWED_REDIRECT_HOSTS = [
     "https://claude.ai",  # Claude.ai web app
     "https://claude-api",  # Claude API client
     "http://0.0.0.0:",    # Any local interface with any port
+    "https://mcp.norman.finance",
 ]
 
 def patched_validate_redirect_uri(self, redirect_uri: Optional[AnyHttpUrl]) -> AnyHttpUrl:
