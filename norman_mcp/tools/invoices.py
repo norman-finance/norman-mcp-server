@@ -3,6 +3,7 @@ from urllib.parse import urljoin
 from datetime import datetime, timedelta
 import logging
 import requests
+from pydantic import Field
 
 from norman_mcp.context import Context
 from norman_mcp import config
@@ -15,29 +16,29 @@ def register_invoice_tools(mcp):
     @mcp.tool()
     async def create_invoice(
         ctx: Context,
-        client_id: str,
-        items: list[dict],
-        invoice_number: Optional[str] = None,
-        issued: Optional[str] = None,
-        due_to: Optional[str] = None,
-        currency: str = "EUR",
-        payment_terms: Optional[str] = None,
-        notes: Optional[str] = None,
-        language: str = "en",
-        invoice_type: str = "SERVICES",
-        is_vat_included: bool = False,
-        bank_name: Optional[str] = None,
-        iban: Optional[str] = None,
-        bic: Optional[str] = None,
-        create_qr: bool = False,
-        color_schema: str = "#FFFFFF",
-        font: str = "Plus Jakarta Sans",
-        is_to_send: bool = False,
-        mailing_data: Optional[Dict[str, str]] = None,
-        settings_on_overdue: Optional[Dict[str, Any]] = None,
-        service_start_date: Optional[str] = None,
-        service_end_date: Optional[str] = None,
-        delivery_date: Optional[str] = None,
+        client_id: str = Field(description="ID of the client for the invoice"),
+        items: list[dict] = Field(description="List of invoice items, each containing name, quantity, rate, vatRate and total. Example: [{'name': 'Software Development', 'quantity': 3, 'rate': 30000, 'vatRate': 19, 'total': 1071}] // VAT rates might be 0, 7, 19. By default it's 19. Rate and total are in cents."),
+        invoice_number: str = Field(description="Optional invoice number (will be auto-generated if not provided)"),
+        issued: str = Field(description="Issue date in YYYY-MM-DD format"),
+        due_to: str = Field(description="Due date in YYYY-MM-DD format"),
+        currency: str = Field(description="Invoice currency (EUR, USD), by default it's EUR"),
+        payment_terms: Optional[str] = Field(description="Payment terms text"),
+        notes: Optional[str] = Field(description="Additional notes"),
+        language: str = Field(description="Invoice language (en, de)"),
+        invoice_type: str = Field(description="Type of invoice (SERVICES, GOODS)"),
+        is_vat_included: bool = Field(description="Whether prices include VAT"),
+        bank_name: Optional[str] = Field(description="Name of the bank"),
+        iban: Optional[str] = Field(description="IBAN for payments"),
+        bic: Optional[str] = Field(description="BIC/SWIFT code"),
+        create_qr: bool = Field(description="Whether to create payment QR code"),
+        color_schema: str = Field(description="Invoice style color (hex code)"),
+        font: str = Field(description="Invoice font (e.g. Plus Jakarta Sans, Inter)"),
+        is_to_send: bool = Field(description="Whether to send invoice automatically to client"),
+        mailing_data: Optional[Dict[str, str]] = Field(description="Email data if is_to_send is True. Example: {'emailSubject': 'Invoice No.{invoice_number} for {client_name}', 'emailBody': 'Dear {client_name},...', 'customClientEmail': 'client@example.com'} // email to send the invoice to, if not provided, it will be sent to the client email address"),
+        settings_on_overdue: Optional[Dict[str, Any]] = Field(description="Configuration for overdue notifications. Example: {'isToAutosendNotification': true, 'customEmailSubject': 'Reminder: Invoice {invoice_number} is overdue', 'customEmailBody': 'Dear {client_name},...', 'notifyAfterDays': [1, 3], 'notifyInParticularDays': []} // days to notify after the due date, days to notify in particular dates"),
+        service_start_date: Optional[str] = Field(description="Service period start date (YYYY-MM-DD) by default it's today, should be provided if invoice_type is SERVICES"),
+        service_end_date: Optional[str] = Field(description="Service period end date (YYYY-MM-DD) by default it's one month from today, should be provided if invoice_type is SERVICES"),
+        delivery_date: Optional[str] = Field(description="Delivery date for goods (YYYY-MM-DD) by default it's today, should be provided if invoice_type is GOODS"),
     ) -> Dict[str, Any]:
         """
         Create a new invoice. Ask for additional information if needed, for example:
@@ -110,6 +111,10 @@ def register_invoice_tools(mcp):
             next_invoice_data = api._make_request("GET", next_invoice_url)
             invoice_number = next_invoice_data.get("nextInvoiceNumber")
         
+        user_url = urljoin(config.api_base_url, "api/v1/users/me/")
+        user_data = api._make_request("GET", user_url)
+        company_email = user_data.get("email")
+
         # Prepare invoice data
         invoice_data = {
             "client": client_id,
@@ -124,7 +129,7 @@ def register_invoice_tools(mcp):
             "isToSend": is_to_send,
             "type": "invoice",
             "companyId": company_id,
-            "companyEmail": config.NORMAN_EMAIL
+            "companyEmail": company_email
         }
         
         # Add optional fields if provided
@@ -253,6 +258,10 @@ def register_invoice_tools(mcp):
             next_invoice_data = api._make_request("GET", next_invoice_url)
             invoice_number = next_invoice_data.get("nextInvoiceNumber")
 
+        user_url = urljoin(config.api_base_url, "api/v1/users/me/")
+        user_data = api._make_request("GET", user_url)
+        company_email = user_data.get("email")
+
         # Prepare recurring invoice data
         invoice_data = {
             "client": client_id,
@@ -272,7 +281,7 @@ def register_invoice_tools(mcp):
             "startsFromDate": starts_from_date,
             "type": "invoice",
             "companyId": company_id,
-            "companyEmail": config.NORMAN_EMAIL
+            "companyEmail": company_email
         }
 
         # Add conditional end parameters

@@ -87,7 +87,13 @@ def register_tax_tools(mcp):
             report_id: Public ID of the tax report
             
         Returns:
-            The tax report preview as an image in PNG format
+            Generate a preview of the tax report and return it as an image in PNG format. 
+            Always suggest to check the preview before sending it to the Finanzamt.
+            Always include the preview image in the response.
+            Get the report data from @get_tax_report and show line items and totals.
+            You could add short summary based on the report data.
+            Ask follow up question to file the tax report to the Finanzamt @submit_tax_report.
+            Don't send the report to the Finanzamt without the user confirmation.
         """
         api = ctx.request_context.lifespan_context["api"]
         
@@ -161,7 +167,7 @@ def register_tax_tools(mcp):
             report_id: Public ID of the tax report to submit
             
         Returns:
-            Response from the submission request and a link to the tax report from reportFile to download.
+            Response from the submission request and a link to the tax report from reportFile field to download. Always include the link in the response and make it clickable/openable.
             If response status is 403, it means a paid subscription is required to file the report.
         """
         api = ctx.request_context.lifespan_context["api"]
@@ -283,7 +289,7 @@ def register_tax_tools(mcp):
     @mcp.tool()
     async def get_vat_next_report(ctx: Context) -> Dict[str, Any]:
         """
-        Get the VAT amount for the next report period.
+        Get the VAT amount and the next report date for the next report period. Always use this tool if someone asks for the next report date.
         
         Returns:
             VAT next report amount data

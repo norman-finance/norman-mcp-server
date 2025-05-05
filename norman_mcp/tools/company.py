@@ -2,6 +2,7 @@ import logging
 from typing import Dict, Any, Optional
 from urllib.parse import urljoin
 from datetime import datetime
+from pydantic import Field
 
 from norman_mcp.context import Context
 from norman_mcp import config
@@ -10,6 +11,20 @@ logger = logging.getLogger(__name__)
 
 def register_company_tools(mcp):
     """Register all company-related tools with the MCP server."""
+    
+    @mcp.tool()
+    async def get_current_user_info(ctx: Context) -> Dict[str, Any]:
+        """
+        Retrieve information about the currently logged-in user.
+        
+        Returns:
+            User information including public_id, username, email, companies,
+            and other profile details.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        
+        user_url = urljoin(config.api_base_url, "api/v1/users/me/")
+        return api._make_request("GET", user_url)
     
     @mcp.tool()
     async def get_company_details(ctx: Context) -> Dict[str, Any]:

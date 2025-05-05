@@ -81,14 +81,14 @@ def register_document_tools(mcp):
     @mcp.tool()
     async def upload_bulk_attachments(
         ctx: Context,
-        file_paths: List[str] = Field(description="List of paths or URLs to files to upload"),
+        file_paths: List[str] = Field(description="List of paths or direct URLs to files to upload"),
         cashflow_type: Optional[str] = Field(description="Optional cashflow type for the transactions (INCOME or EXPENSE). If not provided, then try to detect it from the file")
     ) -> Dict[str, Any]:
         """
         Upload multiple file attachments in bulk.
         
         Args:
-            file_paths: List of paths or URLs to files to upload
+            file_paths: List of paths or direct URLs to files to upload
             cashflow_type: Optional cashflow type for the transactions (INCOME or EXPENSE). If not provided, then try to detect it from the file
             
         Returns:
@@ -250,7 +250,7 @@ def register_document_tools(mcp):
     @mcp.tool()
     async def create_attachment(
         ctx: Context,
-        file_path: str = Field(description="Path or URL to file to upload"),
+        file_path: str = Field(description="Path or direct URL to file to upload"),
         transactions: Optional[List[str]] = Field(description="List of transaction IDs to link"),
         attachment_type: Optional[str] = Field(description="Type of attachment (invoice, receipt)"),
         amount: Optional[float] = Field(description="Amount related to attachment"),
@@ -272,7 +272,7 @@ def register_document_tools(mcp):
         Create a new attachment.
         
         Args:
-            file_path: Path to file or URL to upload
+            file_path: Path to file or direct URL to upload
             transactions: List of transaction IDs to link
             attachment_type: Type of attachment (invoice, receipt)
             amount: Amount related to attachment

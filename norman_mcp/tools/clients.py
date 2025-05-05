@@ -2,6 +2,7 @@ import logging
 import requests
 from typing import Dict, Any, Optional
 from urllib.parse import urljoin
+from pydantic import Field
 
 from norman_mcp.context import Context
 from norman_mcp import config
@@ -37,7 +38,7 @@ def register_client_tools(mcp):
     @mcp.tool()
     async def get_client(
         ctx: Context,
-        client_id: str
+        client_id: str = Field(description="ID of the client to retrieve")
     ) -> Dict[str, Any]:
         """
         Get detailed information about a specific client.
@@ -64,15 +65,15 @@ def register_client_tools(mcp):
     @mcp.tool()
     async def create_client(
         ctx: Context,
-        name: str,
-        client_type: str = "business",
-        address: Optional[str] = None,
-        zip_code: Optional[str] = None,
-        email: Optional[str] = None,
-        country: Optional[str] = None,
-        vat_number: Optional[str] = None,
-        city: Optional[str] = None,
-        phone: Optional[str] = None
+        name: str = Field(description="Name of the client"),
+        client_type: str = Field(description="Type of client (defaults to 'business'); Options: 'business', 'private'"),
+        address: Optional[str] = Field(description="Client physical address"),
+        zip_code: Optional[str] = Field(description="Client postal/zip code"),
+        email: Optional[str] = Field(description="Client email address"),
+        country: Optional[str] = Field(description="Client country code (e.g. 'DE')"),
+        vat_number: Optional[str] = Field(description="Client VAT number"),
+        city: Optional[str] = Field(description="Client city"),
+        phone: Optional[str] = Field(description="Client phone number")
     ) -> Dict[str, Any]:
         """
         Create a new client.
@@ -130,16 +131,16 @@ def register_client_tools(mcp):
     @mcp.tool()
     async def update_client(
         ctx: Context,
-        client_id: str,
-        name: Optional[str] = None,
-        client_type: Optional[str] = None,
-        address: Optional[str] = None,
-        zip_code: Optional[str] = None,
-        email: Optional[str] = None,
-        country: Optional[str] = None,
-        vat_number: Optional[str] = None,
-        city: Optional[str] = None,
-        phone: Optional[str] = None
+        client_id: str = Field(description="ID of the client to update"),
+        name: Optional[str] = Field(description="Updated client name"),
+        client_type: Optional[str] = Field(description="Updated client type; Options: 'business', 'private'"),
+        address: Optional[str] = Field(description="Updated client physical address"),
+        zip_code: Optional[str] = Field(description="Updated client postal/zip code"),
+        email: Optional[str] = Field(description="Updated client email address"),
+        country: Optional[str] = Field(description="Updated client country code (e.g. 'DE')"),
+        vat_number: Optional[str] = Field(description="Updated client VAT number"),
+        city: Optional[str] = Field(description="Updated client city"),
+        phone: Optional[str] = Field(description="Updated client phone number")
     ) -> Dict[str, Any]:
         """
         Update an existing client.
@@ -206,7 +207,7 @@ def register_client_tools(mcp):
     @mcp.tool()
     async def delete_client(
         ctx: Context,
-        client_id: str
+        client_id: str = Field(description="ID of the client to delete")
     ) -> Dict[str, Any]:
         """
         Delete a client.
