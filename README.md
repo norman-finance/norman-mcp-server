@@ -75,13 +75,36 @@ Norman now offers a hosted remote MCP server at:
 
 The remote MCP is recommended because it utilizes OAuth authentication, enabling you to log in directly with your Norman account without the need to create or manage access tokens manually.
 
-<img width="400" alt="image" src="https://github.com/user-attachments/assets/5edfac9c-1fbd-4443-a831-d93bee3b8e15" />
-
 ## Installation
 
-### Using Claude Desktop with the Norman MCP Server
+### [Claude.ai Integrations](https://www.anthropic.com/news/integrations)
+Adding the Norman MCP Server to Claude.ai:
 
-To run the Norman Finance MCP server with Claude Desktop, follow these steps:
+**For Claude Max:**
+1. Head to _Settings > Profile_
+2. Find the "Integrations" section
+3. Tap "Add more"
+4. Enter the Norman MCP server URL: ```https://mcp.norman.finance/sse```
+5. Click "Add" to finish up
+
+**For Claude Enterprise & Teams:**
+1. Go to _Settings > Integrations_ (for Teams) or _Settings > Data management_ (for Enterprise)
+2. Find the "Integrations" section
+3. Hit "Add more"
+4. Enter the Norman MCP server URL: ```https://mcp.norman.finance/sse```
+5. Click "Add" to finish up
+
+**Enabling the Norman Integration:**
+1. Start a chat with Claude.
+2. Open the _Search and tools menu_.
+3. Click "Connect" to link your Norman account.
+4. <img width="400" alt="image" src="https://github.com/user-attachments/assets/5edfac9c-1fbd-4443-a831-d93bee3b8e15" />
+5. After connecting, use the same menu to turn on specific Norman tools.
+
+
+### Adding to Claude Desktop
+
+To run the Norman Finance MCP server with Claude Desktop, you can use the instruction above or add it manually using the following steps:
 
 #### 1. Download and Configure Claude Desktop
 
