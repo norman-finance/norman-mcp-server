@@ -1,7 +1,12 @@
 import logging
 import os
+import re
 from typing import Dict, Any, Optional, List
 from urllib.parse import urljoin
+import tempfile
+import requests
+from urllib.parse import urlparse
+from pydantic import Field
 
 from norman_mcp.context import Context
 from norman_mcp import config
@@ -9,20 +14,81 @@ from norman_mcp.security.utils import validate_file_path, validate_input
 
 logger = logging.getLogger(__name__)
 
+def is_url(path: str) -> bool:
+    """Check if the given path is a URL."""
+    try:
+        result = urlparse(path)
+        return all([result.scheme, result.netloc]) and result.scheme in ['http', 'https']
+    except Exception:
+        return False
+
+def download_file(url: str) -> Optional[str]:
+    """Download a file from URL to a temporary location and return its path."""
+    try:
+        response = requests.get(url, stream=True, timeout=30)
+        response.raise_for_status()
+        
+        # Extract filename from URL or Content-Disposition header
+        filename = None
+        
+        if "Content-Disposition" in response.headers:
+            # Try to get filename from Content-Disposition header
+            content_disposition = response.headers["Content-Disposition"]
+            match = re.search(r'filename="?([^"]+)"?', content_disposition)
+            if match:
+                filename = match.group(1)
+        
+        # If no filename found in header, extract from URL
+        if not filename:
+            url_path = urlparse(url).path
+            filename = os.path.basename(url_path) or "downloaded_file"
+        
+        # Create a temporary file
+        temp_dir = tempfile.mkdtemp(prefix="norman_")
+        temp_path = os.path.join(temp_dir, filename)
+        
+        # Write the file
+        with open(temp_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+                
+        return temp_path
+    except Exception as e:
+        logger.error(f"Error downloading file from {url}: {str(e)}")
+        return None
+
+def validate_file_path(file_path: str) -> bool:
+    """Validate that a file path is safe to use."""
+    # Allow URLs as they'll be handled separately
+    if is_url(file_path):
+        return True
+        
+    # Check for local file path safety
+    file_path = os.path.abspath(file_path)
+    is_path_traversal = ".." in file_path or "~" in file_path
+    return not is_path_traversal
+
+def validate_input(input_str: str) -> str:
+    """Validate that input string doesn't contain malicious content."""
+    if not input_str:
+        return ""
+    # Remove any potential script or command injection characters
+    return re.sub(r'[;<>&|]', '', input_str)
+
 def register_document_tools(mcp):
     """Register all document-related tools with the MCP server."""
     
     @mcp.tool()
     async def upload_bulk_attachments(
         ctx: Context,
-        file_paths: List[str],
-        cashflow_type: Optional[str] = None
+        file_paths: List[str] = Field(description="List of paths or URLs to files to upload"),
+        cashflow_type: Optional[str] = Field(description="Optional cashflow type for the transactions (INCOME or EXPENSE). If not provided, then try to detect it from the file")
     ) -> Dict[str, Any]:
         """
         Upload multiple file attachments in bulk.
         
         Args:
-            file_paths: List of paths to files to upload
+            file_paths: List of paths or URLs to files to upload
             cashflow_type: Optional cashflow type for the transactions (INCOME or EXPENSE). If not provided, then try to detect it from the file
             
         Returns:
@@ -43,34 +109,74 @@ def register_document_tools(mcp):
             "api/v1/accounting/transactions/upload-documents/"
         )
         
+        temp_files = []  # Track temp files for cleanup
+        opened_files = []  # Track opened file handles for cleanup
+        
         try:
             files = []
             valid_paths = []
             
-            # Validate all file paths before proceeding
+            # Process all file paths before proceeding
             for path in file_paths:
                 if not validate_file_path(path):
                     logger.warning(f"Invalid or unsafe file path: {path}")
                     continue
-                    
-                if not os.path.exists(path):
-                    logger.warning(f"File not found: {path}")
+                
+                actual_path = path
+                
+                # Handle URLs by downloading them first
+                if is_url(path):
+                    logger.info(f"Downloading file from URL: {path}")
+                    downloaded_path = download_file(path)
+                    if not downloaded_path:
+                        logger.warning(f"Failed to download file from URL: {path}")
+                        continue
+                    actual_path = downloaded_path
+                    temp_files.append(actual_path)
+                    logger.info(f"File downloaded to: {actual_path}")
+                
+                # Validate the file exists and is accessible
+                if not os.path.exists(actual_path):
+                    logger.warning(f"File not found: {actual_path}")
+                    continue
+                
+                if not os.access(actual_path, os.R_OK):
+                    logger.warning(f"Permission denied when accessing file: {actual_path}")
                     continue
                     
-                valid_paths.append(path)
+                valid_paths.append(actual_path)
                 
             if not valid_paths:
                 return {"error": "No valid files found for upload"}
                 
             # Open and prepare valid files
             for path in valid_paths:
-                files.append(("files", open(path, "rb")))
+                file_handle = open(path, "rb")
+                opened_files.append(file_handle)
+                files.append(("files", file_handle))
                     
             data = {}
             if cashflow_type:
                 data["cashflow_type"] = cashflow_type
                 
-            return api._make_request("POST", upload_url, json_data=data, files=files)
+            response = api._make_request("POST", upload_url, json_data=data, files=files)
+            
+            # Close all opened file handles
+            for file_handle in opened_files:
+                file_handle.close()
+                
+            # Clean up temporary files
+            for temp_file in temp_files:
+                try:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                        os.rmdir(os.path.dirname(temp_file))
+                        logger.info(f"Removed temporary file: {temp_file}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove temporary file {temp_file}: {str(e)}")
+                    
+            return response
+            
         except FileNotFoundError as e:
             return {"error": f"File not found: {str(e)}"}
         except PermissionError as e:
@@ -78,15 +184,30 @@ def register_document_tools(mcp):
         except Exception as e:
             logger.error(f"Error uploading files: {str(e)}")
             return {"error": f"Error uploading files: {str(e)}"}
+        finally:
+            # Ensure files are closed and temp files are cleaned up in case of exceptions
+            for file_handle in opened_files:
+                try:
+                    file_handle.close()
+                except Exception:
+                    pass
+                    
+            for temp_file in temp_files:
+                try:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                        os.rmdir(os.path.dirname(temp_file))
+                except Exception:
+                    pass
 
     @mcp.tool()
     async def list_attachments(
         ctx: Context,
-        file_name: Optional[str] = None,
-        linked: Optional[bool] = None,
-        attachment_type: Optional[str] = None,
-        description: Optional[str] = None,
-        brand_name: Optional[str] = None
+        file_name: Optional[str] = Field(description="Filter by file name (case insensitive partial match)"),
+        linked: Optional[bool] = Field(description="Filter by whether attachment is linked to transactions"),
+        attachment_type: Optional[str] = Field(description="Filter by attachment type (invoice, receipt, contract, other)"),
+        description: Optional[str] = Field(description="Filter by description (case insensitive partial match)"),
+        brand_name: Optional[str] = Field(description="Filter by brand name (case insensitive partial match)")
     ) -> Dict[str, Any]:
         """
         Get list of attachments with optional filters.
@@ -129,29 +250,29 @@ def register_document_tools(mcp):
     @mcp.tool()
     async def create_attachment(
         ctx: Context,
-        file_path: str,
-        transactions: Optional[List[str]] = None,
-        attachment_type: Optional[str] = None,
-        amount: Optional[float] = None,
-        amount_exchanged: Optional[float] = None,
-        attachment_number: Optional[str] = None,
-        brand_name: Optional[str] = None,
+        file_path: str = Field(description="Path or URL to file to upload"),
+        transactions: Optional[List[str]] = Field(description="List of transaction IDs to link"),
+        attachment_type: Optional[str] = Field(description="Type of attachment (invoice, receipt)"),
+        amount: Optional[float] = Field(description="Amount related to attachment"),
+        amount_exchanged: Optional[float] = Field(description="Exchanged amount in different currency"),
+        attachment_number: Optional[str] = Field(description="Unique number for attachment"),
+        brand_name: Optional[str] = Field(description="Brand name associated with attachment"),
         currency: str = "EUR",
         currency_exchanged: str = "EUR",
-        description: Optional[str] = None,
-        supplier_country: Optional[str] = None,
-        value_date: Optional[str] = None,
-        vat_sum_amount: Optional[float] = None,
-        vat_sum_amount_exchanged: Optional[float] = None,
-        vat_rate: Optional[int] = None,
-        sale_type: Optional[str] = None,
-        additional_metadata: Optional[Dict[str, Any]] = None
+        description: Optional[str] = Field(description="Description of attachment"),
+        supplier_country: Optional[str] = Field(description="Country of supplier (DE, INSIDE_EU, OUTSIDE_EU)"),
+        value_date: Optional[str] = Field(description="Date of value"),
+        vat_sum_amount: Optional[float] = Field(description="VAT sum amount"),
+        vat_sum_amount_exchanged: Optional[float] = Field(description="Exchanged VAT sum amount"),
+        vat_rate: Optional[int] = Field(description="VAT rate percentage"),
+        sale_type: Optional[str] = Field(description="Type of sale"),
+        additional_metadata: Optional[Dict[str, Any]] = Field(description="Additional metadata for attachment")
     ) -> Dict[str, Any]:
         """
         Create a new attachment.
         
         Args:
-            file_path: Path to file to upload
+            file_path: Path to file or URL to upload
             transactions: List of transaction IDs to link
             attachment_type: Type of attachment (invoice, receipt)
             amount: Amount related to attachment
@@ -200,15 +321,27 @@ def register_document_tools(mcp):
         )
         
         try:
+            temp_file_path = None
+            actual_file_path = file_path
+            
+            # Check if file_path is a URL and download it if needed
+            if is_url(file_path):
+                logger.info(f"Downloading file from URL: {file_path}")
+                temp_file_path = download_file(file_path)
+                if not temp_file_path:
+                    return {"error": f"Failed to download file from URL: {file_path}"}
+                actual_file_path = temp_file_path
+                logger.info(f"File downloaded to: {actual_file_path}")
+            
             # Check if file exists and is readable
-            if not os.path.exists(file_path):
-                return {"error": f"File not found: {file_path}"}
+            if not os.path.exists(actual_file_path):
+                return {"error": f"File not found: {actual_file_path}"}
                 
-            if not os.access(file_path, os.R_OK):
-                return {"error": f"Permission denied when accessing file: {file_path}"}
+            if not os.access(actual_file_path, os.R_OK):
+                return {"error": f"Permission denied when accessing file: {actual_file_path}"}
                 
             files = {
-                "file": open(file_path, "rb")
+                "file": open(actual_file_path, "rb")
             }
                 
             data = {}
@@ -253,20 +386,41 @@ def register_document_tools(mcp):
                         sanitized_metadata[validate_input(key)] = value
                 data["additional_metadata"] = sanitized_metadata
                 
-            return api._make_request("POST", attachments_url, json_data=data, files=files)
+            response = api._make_request("POST", attachments_url, json_data=data, files=files)
+            
+            # Close the file handle
+            files["file"].close()
+            
+            # Clean up temporary file if we downloaded one
+            if temp_file_path and os.path.exists(temp_file_path):
+                try:
+                    os.remove(temp_file_path)
+                    os.rmdir(os.path.dirname(temp_file_path))
+                    logger.info(f"Removed temporary file: {temp_file_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove temporary file: {str(e)}")
+                    
+            return response
         except FileNotFoundError:
             return {"error": f"File not found: {file_path}"}
         except PermissionError:
             return {"error": f"Permission denied when accessing file: {file_path}"}
         except Exception as e:
+            # Clean up temporary file if there was an error
+            if temp_file_path and os.path.exists(temp_file_path):
+                try:
+                    os.remove(temp_file_path)
+                    os.rmdir(os.path.dirname(temp_file_path))
+                except Exception:
+                    pass
             logger.error(f"Error uploading file: {str(e)}")
             return {"error": f"Error uploading file: {str(e)}"}
 
     @mcp.tool()
     async def link_attachment_transaction(
         ctx: Context,
-        attachment_id: str,
-        transaction_id: str
+        attachment_id: str = Field(description="ID of the attachment"),
+        transaction_id: str = Field(description="ID of the transaction to link")
     ) -> Dict[str, Any]:
         """
         Link a transaction to an attachment.
