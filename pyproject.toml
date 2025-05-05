@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "norman-mcp-server"
-version = "0.1.4"
+version = "0.1.5"
 description = "A Model Context Protocol (MCP) server for Norman Finance API"
 readme = "README.md"
 authors = [
