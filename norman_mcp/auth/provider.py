@@ -255,7 +255,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                         token=refresh_token_id,
                         client_id=client_id,
                         scopes=scopes,
-                        expires_at=int(time.time()) + 30 * 24 * 3600,  # 30 days expiry
+                        expires_at=int(time.time()) + 20 * 24 * 3600,  # 20 days expiry
                     )
                     # Create mapping between refresh token ID and actual Norman refresh token
                     self.token_mapping[refresh_token_id] = norman_refresh
@@ -321,7 +321,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             token=mcp_token,
             client_id=client.client_id,
             scopes=authorization_code.scopes,
-            expires_at=int(time.time()) + 7 * 24 * 3600,  # 7 days expiry
+            expires_at=int(time.time()) + 15 * 24 * 3600,  # 15 days expiry
         )
         
         # Map MCP token to Norman token
@@ -343,7 +343,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         token_response = OAuthToken(
             access_token=mcp_token,
             token_type="bearer",
-            expires_in=7 * 24 * 3600,  # 7 days
+            expires_in=15 * 24 * 3600,  # 15 days
             scope=" ".join(authorization_code.scopes),
             refresh_token=refresh_token_id,
         )
@@ -415,7 +415,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                     token=new_mcp_token,
                     client_id=client.client_id,
                     scopes=scopes or refresh_token.scopes,
-                    expires_at=int(time.time()) + 7 * 24 * 3600,  # 7 days expiry
+                    expires_at=int(time.time()) + 15 * 24 * 3600,  # 15 days expiry
                 )
                 
                 # Map new MCP token to new Norman token
@@ -424,7 +424,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 return OAuthToken(
                     access_token=new_mcp_token,
                     token_type="bearer",
-                    expires_in=7 * 24 * 3600,  # 7 days
+                    expires_in=15 * 24 * 3600,  # 15 days
                     scope=" ".join(scopes or refresh_token.scopes),
                     refresh_token=refresh_token.token,  # Return the same refresh token
                 )

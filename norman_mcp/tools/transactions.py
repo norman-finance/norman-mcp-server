@@ -2,6 +2,7 @@ import logging
 from typing import Dict, Any, Optional, List
 from urllib.parse import urljoin
 from datetime import datetime
+from pydantic import Field
 
 from norman_mcp.context import Context
 from norman_mcp import config
@@ -14,17 +15,17 @@ def register_transaction_tools(mcp):
     @mcp.tool()
     async def search_transactions(
         ctx: Context,
-        description: Optional[str] = None,
-        from_date: Optional[str] = None,
-        to_date: Optional[str] = None,
-        min_amount: Optional[float] = None,
-        max_amount: Optional[float] = None,
-        category: Optional[str] = None,
-        no_invoice: Optional[bool] = False,
-        no_receipt: Optional[bool] = False,
-        status: Optional[str] = None,
-        cashflow_type: Optional[str] = None,
-        limit: Optional[int] = 100
+        description: Optional[str] = Field(description="Text to search for in transaction descriptions"),
+        from_date: Optional[str] = Field(description="Start date in YYYY-MM-DD format"),
+        to_date: Optional[str] = Field(description="End date in YYYY-MM-DD format"),
+        min_amount: Optional[float] = Field(description="Minimum transaction amount"),
+        max_amount: Optional[float] = Field(description="Maximum transaction amount"),
+        category: Optional[str] = Field(description="Transaction category"),
+        no_invoice: Optional[bool] = Field(description="Whether to exclude invoices"),
+        no_receipt: Optional[bool] = Field(description="Whether to exclude receipts"),
+        status: Optional[str] = Field(description="Status of the transaction (UNVERIFIED, VERIFIED)"),
+        cashflow_type: Optional[str] = Field(description="Cashflow type of the transaction (INCOME, EXPENSE)"),
+        limit: Optional[int] = Field(description="Maximum number of results to return (default 100)")
     ) -> Dict[str, Any]:
         """
         Search for transactions matching specified criteria.
@@ -86,14 +87,14 @@ def register_transaction_tools(mcp):
     @mcp.tool()
     async def create_transaction(
         ctx: Context,
-        amount: float,
-        description: str,
-        cashflow_type: str,  # "INCOME" or "EXPENSE"
-        supplier_country: str, # DE, INSIDE_EU, OUTSIDE_EU
-        category_id: Optional[str] = None,
-        vat_rate: Optional[int] = None,
-        sale_type: Optional[str] = None,
-        date: Optional[str] = None,
+        amount: float = Field(description="Transaction amount (positive for income, negative for expense)"),
+        description: str = Field(description="Transaction description"),
+        cashflow_type: str = Field(description="Cashflow type of the transaction (INCOME, EXPENSE)"),
+        supplier_country: str = Field(description="Country of the supplier (DE, INSIDE_EU, OUTSIDE_EU)"),
+        category_id: Optional[str] = Field(description="Category ID of the transaction (If not provided, the transaction will be categorized automatically using AI)"),
+        vat_rate: Optional[int] = Field(description="VAT rate (0, 7, 19)"),
+        sale_type: Optional[str] = Field(description="Sale type (GOODS, SERVICES)"),
+        date: Optional[str] = Field(description="Transaction date in YYYY-MM-DD format (defaults to today)"),
     ) -> Dict[str, Any]:
         """
         Create a new manual transaction.
@@ -146,16 +147,16 @@ def register_transaction_tools(mcp):
     @mcp.tool()
     async def update_transaction(
         ctx: Context,
-        transaction_id: str,
-        amount: Optional[float] = None,
-        description: Optional[str] = None,
-        category: Optional[str] = None,
-        date: Optional[str] = None,
-        vat_rate: Optional[int] = None,
-        sale_type: Optional[str] = None,
-        supplier_country: Optional[str] = None,
-        cashflow_type: Optional[str] = None,
-        category_id: Optional[str] = None,
+        transaction_id: str = Field(description="Public ID of the transaction to update"),
+        amount: Optional[float] = Field(description="Transaction amount (positive for income, negative for expense)"),
+        description: Optional[str] = Field(description="Transaction description"),
+        category: Optional[str] = Field(description="Transaction category"),
+        date: Optional[str] = Field(description="Transaction date in YYYY-MM-DD format (defaults to today)"),
+        vat_rate: Optional[int] = Field(description="VAT rate (0, 7, 19)"),
+        sale_type: Optional[str] = Field(description="Sale type (GOODS, SERVICES)"),
+        supplier_country: Optional[str] = Field(description="Country of the supplier (DE, INSIDE_EU, OUTSIDE_EU)"),
+        cashflow_type: Optional[str] = Field(description="Cashflow type of the transaction (INCOME, EXPENSE)"),
+        category_id: Optional[str] = Field(description="Category ID of the transaction (If not provided, the transaction will be categorized automatically using AI)"),
     ) -> Dict[str, Any]:
         """Update an existing transaction."""
         api = ctx.request_context.lifespan_context["api"]
@@ -195,9 +196,9 @@ def register_transaction_tools(mcp):
     @mcp.tool()
     async def categorize_transaction(
         ctx: Context,
-        transaction_amount: float,
-        transaction_description: str,
-        transaction_type: str
+        transaction_amount: float = Field(description="Amount of the transaction"),
+        transaction_description: str = Field(description="Description of the transaction"),
+        transaction_type: str = Field(description="Type of transaction (income or expense)")
     ) -> Dict[str, Any]:
         """
         Detect category for a transaction using AI.
@@ -223,4 +224,36 @@ def register_transaction_tools(mcp):
             "transaction_type": transaction_type
         }
         
-        return api._make_request("POST", detect_url, json_data=request_data) 
+        return api._make_request("POST", detect_url, json_data=request_data)
+
+    @mcp.tool()
+    async def change_transaction_verification(
+        ctx: Context,
+        transaction_id: str = Field(description="Public ID of the transaction to update"),
+        verify: bool = Field(description="If True, verify (finalize) the transaction; if False, unverify (unfinalize) it")
+    ) -> Dict[str, Any]:
+        """
+        Verify or unverify a transaction (finalize or unfinalize).
+        
+        Args:
+            transaction_id: Public ID of the transaction to update
+            verify: If True, verify (finalize) the transaction; if False, unverify (unfinalize) it
+            
+        Returns:
+            Updated transaction information
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+        
+        # Choose the appropriate endpoint based on the verify parameter
+        action = "verify" if verify else "unverify"
+        
+        transaction_url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/accounting/transactions/{transaction_id}/{action}/"
+        )
+        
+        return api._make_request("POST", transaction_url) 
