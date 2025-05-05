@@ -15,7 +15,7 @@ COPY . /app/
 
 # Install the package and additional dependencies
 RUN pip install -e . && \
-    pip install fastapi uvicorn pydantic pdf2image pillow
+    pip install fastapi uvicorn pydantic pdf2image pillow requests
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
