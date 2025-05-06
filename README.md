@@ -8,7 +8,7 @@ This [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server ena
 > The Norman Finance MCP Server is currently in Beta. We welcome your feedback and encourage you to report any bugs by opening an issue [here](https://github.com/norman-finance/norman-mcp-server/issues).
 
 <a href="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server/badge" alt="Norman Finance Server MCP server" />
+  <img width="250" height="135" src="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server/badge" alt="Norman Finance Server MCP server" />
 </a>
 <br/>
 
