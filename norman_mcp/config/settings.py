@@ -6,10 +6,22 @@ load_dotenv()
 
 class Config:
     """Configuration for the Norman MCP server."""
-    NORMAN_EMAIL = os.getenv("NORMAN_EMAIL", "")
-    NORMAN_PASSWORD = os.getenv("NORMAN_PASSWORD", "")
-    NORMAN_ENVIRONMENT = os.getenv("NORMAN_ENVIRONMENT", "production")
-    NORMAN_API_TIMEOUT = int(os.getenv("NORMAN_API_TIMEOUT", "200"))
+    
+    @property
+    def NORMAN_EMAIL(self):
+        return os.getenv("NORMAN_EMAIL", "")
+    
+    @property
+    def NORMAN_PASSWORD(self):
+        return os.getenv("NORMAN_PASSWORD", "")
+    
+    @property
+    def NORMAN_ENVIRONMENT(self):
+        return os.getenv("NORMAN_ENVIRONMENT", "production")
+    
+    @property
+    def NORMAN_API_TIMEOUT(self):
+        return int(os.getenv("NORMAN_API_TIMEOUT", "200"))
     
     @property
     def api_base_url(self) -> str:
