@@ -40,26 +40,24 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
-# Get host settings from environment with defaults
-HOST = os.environ.get("NORMAN_MCP_HOST", "0.0.0.0")
-PORT = int(os.environ.get("NORMAN_MCP_PORT", "3001"))
-PUBLIC_URL = os.environ.get("NORMAN_MCP_PUBLIC_URL", f"http://{HOST}:{PORT}")
-
 # Get auth credentials from environment (for stdio transport)
-NORMAN_EMAIL = os.environ.get("NORMAN_EMAIL")
-NORMAN_PASSWORD = os.environ.get("NORMAN_PASSWORD")
+# Note: These are now only used for reference; actual values are read in create_app and authenticate_with_credentials
 
 
 async def authenticate_with_credentials(api_client):
     """Authenticate using environment variables."""
     from norman_mcp.config.settings import config
     
-    if not NORMAN_EMAIL or not NORMAN_PASSWORD:
+    # Read env vars dynamically here instead of using module-level variables
+    norman_email = os.environ.get("NORMAN_EMAIL")
+    norman_password = os.environ.get("NORMAN_PASSWORD")
+    
+    if not norman_email or not norman_password:
         logger.warning("NORMAN_EMAIL or NORMAN_PASSWORD not set. Authentication will fail.")
         return False
         
     auth_url = f"{config.api_base_url}api/v1/auth/token/"
-    username = NORMAN_EMAIL.split('@')[0]
+    username = norman_email.split('@')[0]
     
     try:
         async with httpx.AsyncClient() as client:
@@ -67,8 +65,8 @@ async def authenticate_with_credentials(api_client):
                 auth_url,
                 json={
                     "username": username,
-                    "email": NORMAN_EMAIL,
-                    "password": NORMAN_PASSWORD
+                    "email": norman_email,
+                    "password": norman_password
                 },
                 timeout=config.NORMAN_API_TIMEOUT
             )
@@ -91,7 +89,7 @@ async def authenticate_with_credentials(api_client):
             from norman_mcp.context import set_api_token
             set_api_token(norman_token)
             
-            logger.info(f"✅ Authenticated with credentials: {NORMAN_EMAIL}")
+            logger.info(f"✅ Authenticated with credentials: {norman_email}")
             return True
             
     except Exception as e:
@@ -242,16 +240,26 @@ logger.info("Token handler patched with PKCE bypass")
 
 logger.info("HTTPS validation bypassed for localhost (development only)")
 
-def create_app(host=HOST, port=PORT, public_url=PUBLIC_URL, transport="sse"):
+def create_app(host=None, port=None, public_url=None, transport="sse"):
     """Create and configure the MCP server."""
+    # Read environment variables inside the function to get the most up-to-date values
+    host = host or os.environ.get("NORMAN_MCP_HOST", "0.0.0.0")
+    port = port or int(os.environ.get("NORMAN_MCP_PORT", "3001"))
+    public_url = public_url or os.environ.get("NORMAN_MCP_PUBLIC_URL", f"http://{host}:{port}")
+    
     logger.info(f"Creating app with transport: {transport}")
+    logger.info(f"Host: {host}, Port: {port}, Public URL: {public_url}")
     
     # Store the transport type for later use
     transport_type = transport
     
+    # Read auth credentials directly from environment
+    norman_email = os.environ.get("NORMAN_EMAIL")
+    norman_password = os.environ.get("NORMAN_PASSWORD")
+    
     # For stdio transport, we'll skip OAuth setup if credentials are provided
     use_oauth = True
-    if transport_type == "stdio" and NORMAN_EMAIL and NORMAN_PASSWORD:
+    if transport_type == "stdio" and norman_email and norman_password:
         logger.info("Using stdio transport with environment credentials - skipping OAuth setup")
         use_oauth = False
     

@@ -23,6 +23,40 @@ fi
 PORT=3001
 HOST="0.0.0.0"
 
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --email=*)
+      EMAIL="${1#*=}"
+      shift
+      ;;
+    --password=*)
+      PASSWORD="${1#*=}"
+      shift
+      ;;
+    --environment=*)
+      ENVIRONMENT="${1#*=}"
+      shift
+      ;;
+    --port=*)
+      PORT="${1#*=}"
+      shift
+      ;;
+    --host=*)
+      HOST="${1#*=}"
+      shift
+      ;;
+    --debug)
+      DEBUG=true
+      shift
+      ;;
+    *)
+      # Unknown option
+      shift
+      ;;
+  esac
+done
+
 # Start the ngrok tunnel
 echo "Starting ngrok tunnel on port $PORT..."
 ngrok http $PORT > /dev/null &
@@ -46,12 +80,35 @@ echo "================================================================"
 echo "Use this URL when configuring Claude Desktop or MCP Inspector."
 echo "----------------------------------------------------------------"
 
-# Export the environment variable
-export NORMAN_MCP_PUBLIC_URL=$NGROK_URL
+# Build command line arguments
+ARGS=()
+ARGS+=("--host" "$HOST")
+ARGS+=("--port" "$PORT")
+ARGS+=("--public-url" "$NGROK_URL")
+ARGS+=("--transport" "sse")
 
-# Start the Norman MCP server
-echo "Starting Norman MCP server..."
-python -m norman_mcp --transport sse --public-url "$NGROK_URL"
+# Add optional arguments if provided
+if [ ! -z "$EMAIL" ]; then
+  ARGS+=("--email" "$EMAIL")
+fi
+
+if [ ! -z "$PASSWORD" ]; then
+  ARGS+=("--password" "$PASSWORD")
+fi
+
+if [ ! -z "$ENVIRONMENT" ]; then
+  ARGS+=("--environment" "$ENVIRONMENT")
+fi
+
+if [ "$DEBUG" = true ]; then
+  ARGS+=("--debug")
+fi
+
+# Print command for debugging
+echo "Starting Norman MCP server with arguments: ${ARGS[@]}"
+
+# Start the Norman MCP server with CLI arguments
+python -m norman_mcp "${ARGS[@]}"
 
 # Clean up ngrok when the server stops
 kill $NGROK_PID
