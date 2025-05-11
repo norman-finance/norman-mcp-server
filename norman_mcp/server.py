@@ -3,6 +3,8 @@ import logging
 from typing import Any, Dict, Optional
 from contextlib import asynccontextmanager
 import time
+import uuid
+import secrets
 
 from pydantic import AnyHttpUrl
 from dotenv import load_dotenv
@@ -308,6 +310,18 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
     # Set the mount path for the transport - consistent for SSE and streamable-http
     mount_path = "/mcp"
     
+    # Create middlewares for auth if needed
+    middlewares = []
+    if use_oauth:
+        # Add auth middleware
+        middlewares.append(
+            Middleware(AuthenticationMiddleware, backend=BearerAuthBackend(provider=oauth_provider))
+        )
+        middlewares.append(
+            Middleware(AuthContextMiddleware)
+        )
+        logger.info("Created authentication middleware for FastMCP")
+    
     # Create the MCP server with guardrails and OAuth if needed
     server = FastMCP(
         "Norman Finance API", 
@@ -318,6 +332,7 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
         host=host,
         port=port,
         debug=True,
+        middleware=middlewares,  # Add middlewares here
         guardrails={
             "block_indirect_prompt_injections_in_tool_output": True,
             "block_looping_tool_calls": True,
@@ -368,6 +383,8 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
             # Create auth backend for OAuth
             auth_backend = BearerAuthBackend(provider=oauth_provider)
             logger.info("Created OAuth auth backend for streamable-http")
+            
+            # Note: Authentication middleware is now added during FastMCP initialization
         
         # Create a StreamableHTTP session manager with the provided options
         session_manager = StreamableHTTPSessionManager(
@@ -379,6 +396,132 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
         
         # Store the session manager on the server for use in the app's lifespan
         server._streamable_http_session_manager = session_manager
+        
+        # Apply RequireAuthMiddleware to protect StreamableHTTP endpoints
+        if use_oauth:
+            original_handle_request = session_manager.handle_request
+            
+            async def protected_handle_request(scope, receive, send):
+                logger.debug(f"StreamableHTTP request: {scope.get('path')}")
+                
+                # Extract query params to check for authorization code
+                query_string = scope.get('query_string', b'').decode()
+                query_params = {}
+                
+                # Parse query string
+                if query_string:
+                    for param in query_string.split('&'):
+                        if '=' in param:
+                            key, value = param.split('=', 1)
+                            query_params[key] = value
+                
+                # Check if this is a callback with code and state
+                code = query_params.get('code')
+                if code:
+                    logger.info(f"Authorization code found in query params: {code[:8]}...")
+                    # Continue with normal request handling to process the code
+                    await original_handle_request(scope, receive, send)
+                    return
+                
+                # Check for auth info in headers
+                auth_header = next(
+                    (value.decode() for key, value in scope.get('headers', []) 
+                     if key.decode().lower() == 'authorization'),
+                    None
+                )
+                
+                if auth_header:
+                    logger.debug(f"Auth header found: {auth_header[:15]}...")
+                    try:
+                        # Pass the request to the original handler with auth header
+                        await original_handle_request(scope, receive, send)
+                    except Exception as e:
+                        logger.error(f"Error handling authenticated request: {str(e)}")
+                        # Return error response
+                        await send({
+                            "type": "http.response.start",
+                            "status": 500,
+                            "headers": [
+                                [b"content-type", b"application/json"],
+                            ],
+                        })
+                        await send({
+                            "type": "http.response.body",
+                            "body": f'{{"error": "Server error", "detail": "{str(e)}"}}',
+                        })
+                else:
+                    logger.warning("No authorization header found in request")
+                    
+                    try:
+                        # Instead of returning 401, redirect to OAuth authorization flow
+                        # Generate a client ID for this request - always use the same one for streaming
+                        client_id = "streamable_http_client"
+                        redirect_uri = f"{public_url}/mcp/"
+                        
+                        # Get or create client for this request
+                        client = await oauth_provider.get_client(client_id)
+                        if not client:
+                            # Create a new client with the streamable_http_client ID
+                            client = await oauth_provider.create_client(
+                                client_id=client_id, 
+                                client_name="StreamableHTTP Client",
+                                redirect_uris=[redirect_uri],
+                                token_endpoint_auth_method="none"  # No client authentication required
+                            )
+                            logger.info(f"Created new client for StreamableHTTP: {client_id}")
+                        
+                        # Get authorization URL with state
+                        state = secrets.token_hex(16)
+                        
+                        # Create auth parameters
+                        from mcp.server.auth.settings import AuthorizationParams
+                        
+                        params = AuthorizationParams(
+                            response_type="code",
+                            client_id=client_id,
+                            redirect_uri=AnyHttpUrl(redirect_uri),
+                            state=state,
+                            scopes=["norman.read", "norman.write"],
+                            code_challenge=secrets.token_hex(32),  # Generate a random challenge
+                            code_challenge_method="S256",
+                            redirect_uri_provided_explicitly=True
+                        )
+                        
+                        # Get authorization URL
+                        auth_url = await oauth_provider.authorize(client, params)
+                        logger.info(f"Redirecting to authorization URL: {auth_url}")
+                        
+                        # Redirect to login page
+                        await send({
+                            "type": "http.response.start",
+                            "status": 302,
+                            "headers": [
+                                [b"location", auth_url.encode()],
+                                [b"content-type", b"text/html"],
+                            ],
+                        })
+                        await send({
+                            "type": "http.response.body",
+                            "body": b"Redirecting to login page...",
+                        })
+                    except Exception as e:
+                        logger.error(f"Error redirecting to auth flow: {str(e)}")
+                        # Return error response
+                        await send({
+                            "type": "http.response.start",
+                            "status": 500,
+                            "headers": [
+                                [b"content-type", b"application/json"],
+                            ],
+                        })
+                        await send({
+                            "type": "http.response.body",
+                            "body": f'{{"error": "Server error during auth", "detail": "{str(e)}"}}',
+                        })
+            
+            # Replace the handle_request method with the protected version
+            session_manager.handle_request = protected_handle_request
+            logger.info("Added OAuth redirect to StreamableHTTP endpoint")
         
         # Patch the run method to use the session manager
         original_run = server.run
