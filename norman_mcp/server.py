@@ -1,16 +1,21 @@
 import os
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from contextlib import asynccontextmanager
 import time
 
 from pydantic import AnyHttpUrl
 from dotenv import load_dotenv
 from starlette.requests import Request
+from starlette.middleware.authentication import AuthenticationMiddleware
+from starlette.middleware import Middleware
 
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.auth.routes import validate_issuer_url
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend, RequireAuthMiddleware
+from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
 
 from norman_mcp.api.client import NormanAPI
 from norman_mcp.tools.clients import register_client_tools
@@ -240,12 +245,19 @@ logger.info("Token handler patched with PKCE bypass")
 
 logger.info("HTTPS validation bypassed for localhost (development only)")
 
-def create_app(host=None, port=None, public_url=None, transport="sse"):
+def create_app(host=None, port=None, public_url=None, transport="sse", streamable_http_options=None):
     """Create and configure the MCP server."""
     # Read environment variables inside the function to get the most up-to-date values
     host = host or os.environ.get("NORMAN_MCP_HOST", "0.0.0.0")
     port = port or int(os.environ.get("NORMAN_MCP_PORT", "3001"))
     public_url = public_url or os.environ.get("NORMAN_MCP_PUBLIC_URL", f"http://{host}:{port}")
+    
+    # Initialize streamable_http_options if not provided
+    if streamable_http_options is None:
+        streamable_http_options = {
+            "stateless": False,
+            "json_response": False
+        }
     
     logger.info(f"Creating app with transport: {transport}")
     logger.info(f"Host: {host}, Port: {port}, Public URL: {public_url}")
@@ -293,6 +305,9 @@ def create_app(host=None, port=None, public_url=None, transport="sse"):
             },
         )
     
+    # Set the mount path for the transport - consistent for SSE and streamable-http
+    mount_path = "/mcp"
+    
     # Create the MCP server with guardrails and OAuth if needed
     server = FastMCP(
         "Norman Finance API", 
@@ -315,6 +330,14 @@ def create_app(host=None, port=None, public_url=None, transport="sse"):
         }
     )
     
+    # Configure mount paths for different transports
+    if transport_type == "streamable_http" or transport_type == "streamable-http":
+        # Explicitly set the streamable HTTP path to /mcp
+        server.settings.streamable_http_path = mount_path
+        
+        # Enable debug logging for auth flows
+        logging.getLogger("mcp.server.auth").setLevel(logging.DEBUG)
+    
     # Store transport type on server instance for access in lifespan
     server._transport = transport_type
     
@@ -333,6 +356,56 @@ def create_app(host=None, port=None, public_url=None, transport="sse"):
     register_company_tools(server)
     register_prompts(server)
     register_resources(server)
+    
+    # If using streamable_http transport, setup the session manager
+    if transport_type == "streamable_http":
+        logger.info("Setting up StreamableHTTP transport")
+        logger.info(f"StreamableHTTP options: {streamable_http_options}")
+        
+        # Create the authentication backends for streamable_http
+        auth_backend = None
+        if use_oauth:
+            # Create auth backend for OAuth
+            auth_backend = BearerAuthBackend(provider=oauth_provider)
+            logger.info("Created OAuth auth backend for streamable-http")
+        
+        # Create a StreamableHTTP session manager with the provided options
+        session_manager = StreamableHTTPSessionManager(
+            app=server._mcp_server,  # Use server._mcp_server
+            stateless=streamable_http_options.get("stateless", False),
+            json_response=streamable_http_options.get("json_response", False),
+            event_store=None  # No event store for now, could be added later
+        )
+        
+        # Store the session manager on the server for use in the app's lifespan
+        server._streamable_http_session_manager = session_manager
+        
+        # Patch the run method to use the session manager
+        original_run = server.run
+        
+        def patched_run(**kwargs):
+            """Patched run method that uses the session manager for streamable_http."""
+            # The transport name in FastMCP uses a hyphen, not an underscore
+            transport = kwargs.get("transport", transport_type)
+            if transport == "streamable_http" or transport == "streamable-http":
+                logger.info("Starting server with StreamableHTTP transport")
+                # Use the correct transport name with a hyphen for the FastMCP run method
+                kwargs["transport"] = "streamable-http"
+                # Pass the mount path to make sure OAuth works with streamable-http
+                kwargs["mount_path"] = mount_path
+                original_run(**kwargs)
+            else:
+                original_run(**kwargs)
+                
+        # Apply the patch
+        server.run = patched_run
+        
+        # Define a property to access our session manager
+        def get_session_manager(self):
+            return self._streamable_http_session_manager
+            
+        # Add the property to the server
+        setattr(FastMCP, "session_manager", property(get_session_manager))
     
     return server
 

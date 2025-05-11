@@ -49,8 +49,12 @@ def main():
                         default=os.environ.get("NORMAN_MCP_PUBLIC_URL", 
                                               f"http://{os.environ.get('NORMAN_MCP_HOST', '0.0.0.0')}:{os.environ.get('NORMAN_MCP_PORT', '3001')}"), 
                         help="Public URL for OAuth callbacks")
-    parser.add_argument('--transport', choices=['stdio', 'sse'], default='sse',
+    parser.add_argument('--transport', choices=['stdio', 'sse', 'streamable-http'], default='sse',
                        help='Transport protocol to use (default: sse)')
+    parser.add_argument('--stateless', action='store_true',
+                       help='Run the streamable-http transport in stateless mode (no session tracking)')
+    parser.add_argument('--json-response', action='store_true',
+                       help='Use JSON responses instead of SSE streams for streamable-http transport')
     
     args = parser.parse_args()
     
@@ -74,7 +78,20 @@ def main():
         logger.info(f"Using environment: {os.environ.get('NORMAN_ENVIRONMENT', 'production')}")
         
         # Create the app with the provided arguments
-        mcp = create_app(host=args.host, port=args.port, public_url=args.public_url, transport=args.transport)
+        # Convert streamable-http to streamable_http for internal use
+        transport = args.transport
+        internal_transport = transport.replace('-', '_') if transport == 'streamable-http' else transport
+        
+        mcp = create_app(
+            host=args.host, 
+            port=args.port, 
+            public_url=args.public_url, 
+            transport=internal_transport,
+            streamable_http_options={
+                "stateless": args.stateless,
+                "json_response": args.json_response
+            }
+        )
         
         # Run the server
         mcp.run(transport=args.transport)
