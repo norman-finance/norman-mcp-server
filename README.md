@@ -155,15 +155,19 @@ Follow the instructions here: [Installing uv](https://docs.astral.sh/uv/getting-
 
 ### Authentication Methods
 
-The Norman MCP server supports two authentication methods:
+The Norman MCP server supports three authentication methods:
 
-#### 1. OAuth Authentication (for SSE transport)
+#### 1. OAuth Authentication (for SSE and StreamableHTTP transports)
 
-When using the server with MCP Inspector, Claude, or other SSE clients, the server uses OAuth 2.0 authentication:
+When using the server with MCP Inspector, Claude, or other clients that support OAuth, the server uses OAuth 2.0 authentication:
 
-1. Start the server with SSE transport:
+1. Start the server with the appropriate transport:
    ```bash
+   # For SSE transport
    python -m norman_mcp --transport sse
+   
+   # For StreamableHTTP transport
+   python -m norman_mcp --transport streamable-http
    ```
 
 2. When connecting to the server, you'll be directed to a login page

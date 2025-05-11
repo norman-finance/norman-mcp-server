@@ -1,16 +1,23 @@
 import os
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from contextlib import asynccontextmanager
 import time
+import uuid
+import secrets
 
 from pydantic import AnyHttpUrl
 from dotenv import load_dotenv
 from starlette.requests import Request
+from starlette.middleware.authentication import AuthenticationMiddleware
+from starlette.middleware import Middleware
 
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.auth.routes import validate_issuer_url
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend, RequireAuthMiddleware
+from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
 
 from norman_mcp.api.client import NormanAPI
 from norman_mcp.tools.clients import register_client_tools
@@ -240,12 +247,19 @@ logger.info("Token handler patched with PKCE bypass")
 
 logger.info("HTTPS validation bypassed for localhost (development only)")
 
-def create_app(host=None, port=None, public_url=None, transport="sse"):
+def create_app(host=None, port=None, public_url=None, transport="sse", streamable_http_options=None):
     """Create and configure the MCP server."""
     # Read environment variables inside the function to get the most up-to-date values
     host = host or os.environ.get("NORMAN_MCP_HOST", "0.0.0.0")
     port = port or int(os.environ.get("NORMAN_MCP_PORT", "3001"))
     public_url = public_url or os.environ.get("NORMAN_MCP_PUBLIC_URL", f"http://{host}:{port}")
+    
+    # Initialize streamable_http_options if not provided
+    if streamable_http_options is None:
+        streamable_http_options = {
+            "stateless": False,
+            "json_response": False
+        }
     
     logger.info(f"Creating app with transport: {transport}")
     logger.info(f"Host: {host}, Port: {port}, Public URL: {public_url}")
@@ -293,6 +307,21 @@ def create_app(host=None, port=None, public_url=None, transport="sse"):
             },
         )
     
+    # Set the mount path for the transport - consistent for SSE and streamable-http
+    mount_path = "/mcp"
+    
+    # Create middlewares for auth if needed
+    middlewares = []
+    if use_oauth:
+        # Add auth middleware
+        middlewares.append(
+            Middleware(AuthenticationMiddleware, backend=BearerAuthBackend(provider=oauth_provider))
+        )
+        middlewares.append(
+            Middleware(AuthContextMiddleware)
+        )
+        logger.info("Created authentication middleware for FastMCP")
+    
     # Create the MCP server with guardrails and OAuth if needed
     server = FastMCP(
         "Norman Finance API", 
@@ -303,6 +332,7 @@ def create_app(host=None, port=None, public_url=None, transport="sse"):
         host=host,
         port=port,
         debug=True,
+        middleware=middlewares,  # Add middlewares here
         guardrails={
             "block_indirect_prompt_injections_in_tool_output": True,
             "block_looping_tool_calls": True,
@@ -314,6 +344,14 @@ def create_app(host=None, port=None, public_url=None, transport="sse"):
             "prevent_urls_in_agent_output": True,
         }
     )
+    
+    # Configure mount paths for different transports
+    if transport_type == "streamable_http" or transport_type == "streamable-http":
+        # Explicitly set the streamable HTTP path to /mcp
+        server.settings.streamable_http_path = mount_path
+        
+        # Enable debug logging for auth flows
+        logging.getLogger("mcp.server.auth").setLevel(logging.DEBUG)
     
     # Store transport type on server instance for access in lifespan
     server._transport = transport_type
@@ -333,6 +371,184 @@ def create_app(host=None, port=None, public_url=None, transport="sse"):
     register_company_tools(server)
     register_prompts(server)
     register_resources(server)
+    
+    # If using streamable_http transport, setup the session manager
+    if transport_type == "streamable_http":
+        logger.info("Setting up StreamableHTTP transport")
+        logger.info(f"StreamableHTTP options: {streamable_http_options}")
+        
+        # Create the authentication backends for streamable_http
+        auth_backend = None
+        if use_oauth:
+            # Create auth backend for OAuth
+            auth_backend = BearerAuthBackend(provider=oauth_provider)
+            logger.info("Created OAuth auth backend for streamable-http")
+            
+            # Note: Authentication middleware is now added during FastMCP initialization
+        
+        # Create a StreamableHTTP session manager with the provided options
+        session_manager = StreamableHTTPSessionManager(
+            app=server._mcp_server,  # Use server._mcp_server
+            stateless=streamable_http_options.get("stateless", False),
+            json_response=streamable_http_options.get("json_response", False),
+            event_store=None  # No event store for now, could be added later
+        )
+        
+        # Store the session manager on the server for use in the app's lifespan
+        server._streamable_http_session_manager = session_manager
+        
+        # Apply RequireAuthMiddleware to protect StreamableHTTP endpoints
+        if use_oauth:
+            original_handle_request = session_manager.handle_request
+            
+            async def protected_handle_request(scope, receive, send):
+                logger.debug(f"StreamableHTTP request: {scope.get('path')}")
+                
+                # Extract query params to check for authorization code
+                query_string = scope.get('query_string', b'').decode()
+                query_params = {}
+                
+                # Parse query string
+                if query_string:
+                    for param in query_string.split('&'):
+                        if '=' in param:
+                            key, value = param.split('=', 1)
+                            query_params[key] = value
+                
+                # Check if this is a callback with code and state
+                code = query_params.get('code')
+                if code:
+                    logger.info(f"Authorization code found in query params: {code[:8]}...")
+                    # Continue with normal request handling to process the code
+                    await original_handle_request(scope, receive, send)
+                    return
+                
+                # Check for auth info in headers
+                auth_header = next(
+                    (value.decode() for key, value in scope.get('headers', []) 
+                     if key.decode().lower() == 'authorization'),
+                    None
+                )
+                
+                if auth_header:
+                    logger.debug(f"Auth header found: {auth_header[:15]}...")
+                    try:
+                        # Pass the request to the original handler with auth header
+                        await original_handle_request(scope, receive, send)
+                    except Exception as e:
+                        logger.error(f"Error handling authenticated request: {str(e)}")
+                        # Return error response
+                        await send({
+                            "type": "http.response.start",
+                            "status": 500,
+                            "headers": [
+                                [b"content-type", b"application/json"],
+                            ],
+                        })
+                        await send({
+                            "type": "http.response.body",
+                            "body": f'{{"error": "Server error", "detail": "{str(e)}"}}',
+                        })
+                else:
+                    logger.warning("No authorization header found in request")
+                    
+                    try:
+                        # Instead of returning 401, redirect to OAuth authorization flow
+                        # Generate a client ID for this request - always use the same one for streaming
+                        client_id = "streamable_http_client"
+                        redirect_uri = f"{public_url}/mcp/"
+                        
+                        # Get or create client for this request
+                        client = await oauth_provider.get_client(client_id)
+                        if not client:
+                            # Create a new client with the streamable_http_client ID
+                            client = await oauth_provider.create_client(
+                                client_id=client_id, 
+                                client_name="StreamableHTTP Client",
+                                redirect_uris=[redirect_uri],
+                                token_endpoint_auth_method="none"  # No client authentication required
+                            )
+                            logger.info(f"Created new client for StreamableHTTP: {client_id}")
+                        
+                        # Get authorization URL with state
+                        state = secrets.token_hex(16)
+                        
+                        # Create auth parameters
+                        from mcp.server.auth.settings import AuthorizationParams
+                        
+                        params = AuthorizationParams(
+                            response_type="code",
+                            client_id=client_id,
+                            redirect_uri=AnyHttpUrl(redirect_uri),
+                            state=state,
+                            scopes=["norman.read", "norman.write"],
+                            code_challenge=secrets.token_hex(32),  # Generate a random challenge
+                            code_challenge_method="S256",
+                            redirect_uri_provided_explicitly=True
+                        )
+                        
+                        # Get authorization URL
+                        auth_url = await oauth_provider.authorize(client, params)
+                        logger.info(f"Redirecting to authorization URL: {auth_url}")
+                        
+                        # Redirect to login page
+                        await send({
+                            "type": "http.response.start",
+                            "status": 302,
+                            "headers": [
+                                [b"location", auth_url.encode()],
+                                [b"content-type", b"text/html"],
+                            ],
+                        })
+                        await send({
+                            "type": "http.response.body",
+                            "body": b"Redirecting to login page...",
+                        })
+                    except Exception as e:
+                        logger.error(f"Error redirecting to auth flow: {str(e)}")
+                        # Return error response
+                        await send({
+                            "type": "http.response.start",
+                            "status": 500,
+                            "headers": [
+                                [b"content-type", b"application/json"],
+                            ],
+                        })
+                        await send({
+                            "type": "http.response.body",
+                            "body": f'{{"error": "Server error during auth", "detail": "{str(e)}"}}',
+                        })
+            
+            # Replace the handle_request method with the protected version
+            session_manager.handle_request = protected_handle_request
+            logger.info("Added OAuth redirect to StreamableHTTP endpoint")
+        
+        # Patch the run method to use the session manager
+        original_run = server.run
+        
+        def patched_run(**kwargs):
+            """Patched run method that uses the session manager for streamable_http."""
+            # The transport name in FastMCP uses a hyphen, not an underscore
+            transport = kwargs.get("transport", transport_type)
+            if transport == "streamable_http" or transport == "streamable-http":
+                logger.info("Starting server with StreamableHTTP transport")
+                # Use the correct transport name with a hyphen for the FastMCP run method
+                kwargs["transport"] = "streamable-http"
+                # Pass the mount path to make sure OAuth works with streamable-http
+                kwargs["mount_path"] = mount_path
+                original_run(**kwargs)
+            else:
+                original_run(**kwargs)
+                
+        # Apply the patch
+        server.run = patched_run
+        
+        # Define a property to access our session manager
+        def get_session_manager(self):
+            return self._streamable_http_session_manager
+            
+        # Add the property to the server
+        setattr(FastMCP, "session_manager", property(get_session_manager))
     
     return server
 

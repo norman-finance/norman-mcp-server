@@ -10,6 +10,41 @@ The server now reads these environment variables for configuration:
 - `NORMAN_MCP_PORT`: The port to bind to (default: 3001)
 - `NORMAN_MCP_PUBLIC_URL`: The public URL where the server can be accessed (default: "http://{HOST}:{PORT}")
 
+## Transport Options
+
+The Norman MCP server supports three different transport protocols:
+
+### SSE (Server-Sent Events)
+
+The default transport method, best for web-based clients:
+
+```bash
+python -m norman_mcp --transport sse
+```
+
+### StreamableHTTP
+
+A newer transport method that offers better performance and flexibility:
+
+```bash
+# Run with default options (stateful mode with SSE responses)
+python -m norman_mcp --transport streamable_http
+
+# Run in stateless mode (no session tracking)
+python -m norman_mcp --transport streamable_http --stateless
+
+# Use JSON responses instead of SSE streams
+python -m norman_mcp --transport streamable_http --json-response
+```
+
+### stdio (Standard Input/Output)
+
+For command-line tools or local use, requires credentials in environment variables:
+
+```bash
+python -m norman_mcp --transport stdio
+```
+
 ## Remote Hosting Setup
 
 ### 1. Server Configuration
@@ -29,7 +64,11 @@ export NORMAN_MCP_PUBLIC_URL="http://203.0.113.1:3001"
 2. Launch the server with the appropriate parameters:
 
 ```bash
-python -m norman_mcp.server --transport sse --public-url "https://norman-mcp.example.com"
+# For SSE transport
+python -m norman_mcp --transport sse --public-url "https://norman-mcp.example.com"
+
+# For StreamableHTTP transport
+python -m norman_mcp --transport streamable_http --public-url "https://norman-mcp.example.com"
 ```
 
 ### 2. Using with MCP Inspector or Claude Desktop
@@ -58,8 +97,8 @@ For development, you can use tools like ngrok to make your localhost accessible 
 # Install ngrok
 npm install -g ngrok
 
-# Start Norman MCP server
-python -m norman_mcp.server --transport sse
+# Start Norman MCP server (with your preferred transport)
+python -m norman_mcp --transport streamable_http
 
 # In another terminal, create a tunnel
 ngrok http 3001
@@ -67,16 +106,23 @@ ngrok http 3001
 
 Then use the ngrok URL (e.g., https://abcd1234.ngrok.io) as your `NORMAN_MCP_PUBLIC_URL`.
 
+## Streamable HTTP vs SSE
+
+When deciding which transport to use, consider these factors:
+
+1. **Compatibility**: SSE has wider client compatibility, while StreamableHTTP is newer but more flexible.
+2. **Performance**: StreamableHTTP can offer better performance for high-traffic scenarios.
+3. **Features**:
+   - **Stateless Mode**: StreamableHTTP can operate in stateless mode, which is useful for serverless environments.
+   - **JSON Responses**: StreamableHTTP can return JSON responses instead of SSE streams, which may be easier to process for some clients.
+
+For most use cases, either transport will work well. The StreamableHTTP transport provides backward compatibility with SSE clients.
+
 ## Troubleshooting
 
-### CORS Issues
+If you experience issues with remote hosting:
 
-If you experience CORS issues, make sure your public URL is properly configured and that clients are using the correct URL.
-
-### OAuth Failures
-
-If OAuth authentication fails:
-
-1. Check that your redirect URIs are being accepted
-2. Verify that you're using the correct public URL
-3. Make sure the Norman API token is being correctly obtained and stored 
+1. Check your firewall settings to ensure the server port is open
+2. Verify that your `NORMAN_MCP_PUBLIC_URL` is correctly set and accessible
+3. For SSL/TLS issues, ensure your certificates are valid
+4. Check the server logs for any error messages 
