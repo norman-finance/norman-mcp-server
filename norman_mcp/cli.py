@@ -51,6 +51,8 @@ def main():
                         help="Public URL for OAuth callbacks")
     parser.add_argument('--transport', choices=['stdio', 'sse'], default='sse',
                        help='Transport protocol to use (default: sse)')
+    parser.add_argument('--tax-registration-only', action='store_true', 
+                       help='Start server with only tax registration tools, skipping auth', default=False)
     
     args = parser.parse_args()
     
@@ -70,11 +72,21 @@ def main():
         logger.info(f"Starting Norman MCP server with OAuth authentication")
         logger.info(f"Server listening on http://{args.host}:{args.port}")
         logger.info(f"Using transport: {args.transport}")
-        logger.info(f"Using email: {os.environ.get('NORMAN_EMAIL', '')}")
-        logger.info(f"Using environment: {os.environ.get('NORMAN_ENVIRONMENT', 'production')}")
+        
+        if args.tax_registration_only:
+            logger.info("Authentication is skipped - only tax registration tools will be available")
+        else:
+            logger.info(f"Using email: {os.environ.get('NORMAN_EMAIL', '')}")
+            logger.info(f"Using environment: {os.environ.get('NORMAN_ENVIRONMENT', 'production')}")
         
         # Create the app with the provided arguments
-        mcp = create_app(host=args.host, port=args.port, public_url=args.public_url, transport=args.transport)
+        mcp = create_app(
+            host=args.host, 
+            port=args.port, 
+            public_url=args.public_url, 
+            transport=args.transport,
+            tax_registration_only=args.tax_registration_only
+        )
         
         # Run the server
         mcp.run(transport=args.transport)

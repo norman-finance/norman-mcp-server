@@ -151,7 +151,7 @@ class NormanAPI:
     
     def _make_request(self, method: str, url: str, params: Optional[Dict[str, Any]] = None, 
                      json_data: Optional[Dict[str, Any]] = None, 
-                     files: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                     files: Optional[Dict[str, Any]] = None, skip_auth: bool = False) -> Dict[str, Any]:
         """Make a request to the Norman Finance API with security controls."""
         # Always check for a global token first, as it's most reliable
         try:
@@ -165,7 +165,7 @@ class NormanAPI:
             logger.error(f"Error getting global token: {str(e)}")
         
         # If still no token, try environment variables as last resort
-        if not self.access_token:
+        if not self.access_token and not skip_auth:
             try:
                 logger.warning("No Norman token available. Attempting authentication with environment variables...")
                 self.authenticate()
@@ -180,7 +180,7 @@ class NormanAPI:
         
         # Set secure headers with our token
         headers = {
-            "Authorization": f"Bearer {self.access_token}",
+            "Authorization": f"Bearer {self.access_token}" if not skip_auth else None,
             "User-Agent": "NormanMCPServer/0.1.0",
             "X-Requested-With": "XMLHttpRequest",
             # Security headers

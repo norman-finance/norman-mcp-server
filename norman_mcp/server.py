@@ -19,6 +19,7 @@ from norman_mcp.tools.taxes import register_tax_tools
 from norman_mcp.tools.transactions import register_transaction_tools
 from norman_mcp.tools.documents import register_document_tools
 from norman_mcp.tools.company import register_company_tools
+from norman_mcp.tools.tax_registration import register_tax_registration_tools
 from norman_mcp.prompts.templates import register_prompts
 from norman_mcp.resources.endpoints import register_resources
 from norman_mcp.auth.provider import NormanOAuthProvider
@@ -109,9 +110,14 @@ async def lifespan(app):
     
     # If using stdio transport, authenticate using environment variables
     transport = getattr(app, "_transport", "sse")
-    if transport == "stdio":
-        logger.info("Using stdio transport - attempting authentication with environment variables")
-        await authenticate_with_credentials(api_client)
+    skip_auth = getattr(app, "_skip_auth", False)
+    
+    if transport == "stdio" or skip_auth:
+        if skip_auth:
+            logger.info("Skip auth flag is set - running without authentication")
+        else:
+            logger.info("Using stdio transport - attempting authentication with environment variables")
+            await authenticate_with_credentials(api_client)
     else:
         # Store API client in global context for access across modules
         from norman_mcp.context import set_api_client, get_api_token
@@ -240,7 +246,7 @@ logger.info("Token handler patched with PKCE bypass")
 
 logger.info("HTTPS validation bypassed for localhost (development only)")
 
-def create_app(host=None, port=None, public_url=None, transport="sse"):
+def create_app(host=None, port=None, public_url=None, transport="sse", tax_registration_only=False):
     """Create and configure the MCP server."""
     # Read environment variables inside the function to get the most up-to-date values
     host = host or os.environ.get("NORMAN_MCP_HOST", "0.0.0.0")
@@ -259,7 +265,7 @@ def create_app(host=None, port=None, public_url=None, transport="sse"):
     
     # For stdio transport, we'll skip OAuth setup if credentials are provided
     use_oauth = True
-    if transport_type == "stdio" and norman_email and norman_password:
+    if (transport_type == "stdio" and norman_email and norman_password) or tax_registration_only:
         logger.info("Using stdio transport with environment credentials - skipping OAuth setup")
         use_oauth = False
     
@@ -323,16 +329,20 @@ def create_app(host=None, port=None, public_url=None, transport="sse"):
         norman_routes = create_norman_auth_routes(oauth_provider)
         for route in norman_routes:
             server._custom_starlette_routes.append(route)
+
     
-    # Register all tools
-    register_client_tools(server)
-    register_invoice_tools(server)
-    register_tax_tools(server)
-    register_transaction_tools(server)
-    register_document_tools(server)
-    register_company_tools(server)
-    register_prompts(server)
-    register_resources(server)
+    if tax_registration_only:
+       register_tax_registration_tools(server)
+    else:
+        # Register all tools
+        register_client_tools(server)
+        register_invoice_tools(server)
+        register_tax_tools(server)
+        register_transaction_tools(server)
+        register_document_tools(server)
+        register_company_tools(server)
+        register_prompts(server)
+        register_resources(server)
     
     return server
 
