@@ -43,33 +43,59 @@ def register_tax_registration_tools(mcp):
     @mcp.tool()
     async def create_tax_registration(
         ctx: Context,
-        step: int = Field(default=1, description="Registration step (1-6)"),
         # Step 1 fields
-        civil_status: Optional[str] = Field(default=None, description="Civil status code. Use get_tax_registration_choices to get the list of available choices."),
-        civil_status_changed_since: Optional[str] = Field(default=None, description="Date when civil status changed (YYYY-MM-DD)"),
-        person_a_gender: Optional[str] = Field(default=None, description="Person A gender code. Use get_tax_registration_choices to get the list of available choices."),
-        person_a_last_name: Optional[str] = Field(default=None, description="Person A last name"),
-        person_a_first_name: Optional[str] = Field(default=None, description="Person A first name"),
-        person_a_birth_name: Optional[str] = Field(default=None, description="Person A birth name"),
-        person_a_current_profession: Optional[str] = Field(default=None, description="Person A current profession"),
-        person_a_dob: Optional[str] = Field(default=None, description="Person A date of birth (YYYY-MM-DD)"),
-        person_a_street: Optional[str] = Field(default=None, description="Person A street name"),
-        person_a_house_number: Optional[str] = Field(default=None, description="Person A house number"),
-        person_a_apartment_number: Optional[str] = Field(default=None, description="Person A apartment number"),
-        person_a_address_ext: Optional[str] = Field(default=None, description="Person A address additional info"),
-        person_a_city: Optional[str] = Field(default=None, description="Person A city name"),
-        person_a_post_code: Optional[str] = Field(default=None, description="Person A post code"),
-        uses_post_office_box: Optional[bool] = Field(default=None, description="Whether person A uses post office box"),
-        person_a_religion: Optional[str] = Field(default=None, description="Person A religion code"),
-        person_a_idnr: Optional[str] = Field(default=None, description="Person A tax ID"),
-        person_a_email: Optional[str] = Field(default=None, description="Person A email"),
-        person_a_phone_number: Optional[str] = Field(default=None, description="Person A phone number"),
+        civil_status: str = Field(default='001', description="Civil status code. Use get_tax_registration_choices 'civil-status' to get the list of available choices."),
+        civil_status_changed_since: Optional[str] = Field(default=None, description="Date when civil status changed (YYYY-MM-DD). Only if civil_status not '001'"),
+        person_a_gender: str = Field(default=None, description="Filer person gender code. Use get_tax_registration_choices 'genders' to get the list of available choices."),
+        person_a_last_name: str = Field(default=None, description="Filer person last name"),
+        person_a_first_name: str = Field(default=None, description="Filer person first name"),
+        person_a_birth_name: Optional[str] = Field(default=None, description="Filer person birth name"),
+        person_a_current_profession: Optional[str] = Field(default=None, description="Filer person current profession"),
+        person_a_dob: str = Field(default=None, description="Filer person date of birth (YYYY-MM-DD)"),
+        person_a_street: str = Field(default=None, description="Filer person residence street name"),
+        person_a_house_number: str = Field(default=None, description="Filer person residence house number"),
+        person_a_apartment_number: Optional[str] = Field(default=None, description="Filer person residence apartment number"),
+        person_a_address_ext: Optional[str] = Field(default=None, description="Filer person residence address additional info"),
+        person_a_city: str = Field(default=None, description="Filer person residence city name"),
+        person_a_post_code: str = Field(default=None, description="Filer person residence post code"),
+        uses_post_office_box: Optional[bool] = Field(default=False, description="Whether filer person uses post office box"),
+        person_a_religion: str = Field(default="11", description="Filer person religion code. Use get_tax_registration_choices 'religions' to get the list of available choices."),
+        person_a_email: Optional[str] = Field(default=None, description="Filer person email"),
+        person_a_phone_number: Optional[str] = Field(default=None, description="Filer person phone number"),
+        person_a_website: Optional[str] = Field(default=None, description="Filer person website"),
+        person_a_idnr: str = Field(default=None, description="Filer person tax ID number. German format. Example: 79 538 461 449"),
         # Basic spouse fields (can be expanded as needed)
-        person_b_same_address: Optional[bool] = Field(default=None, description="Whether person B has same address"),
-        moved_from_other_german_city: Optional[bool] = Field(default=None, description="Whether person moved from other German city")
+        person_b_same_address: bool = Field(default=True, description="Whether spouse has same address"),
+        moved_from_other_german_city: bool = Field(default=False, description="Whether person moved from other German city"),
+        person_b_gender: str = Field(default=None, description="Spouse gender code. Use get_tax_registration_choices 'genders' to get the list of available choices. Only if civil_status not '001'"),
+        person_b_last_name: str = Field(default=None, description="Spouse last name. Only if civil_status not '001'"),
+        person_b_first_name: str = Field(default=None, description="Spouse first name. Only if civil_status not '001'"),
+        person_b_birth_name: Optional[str] = Field(default=None, description="Spouse birth name. Only if civil_status not '001'"),
+        person_b_current_profession: Optional[str] = Field(default=None, description="Spouse current profession in German. Only if civil_status not '001'"),
+        person_b_dob: str = Field(default=None, description="Spouse date of birth (YYYY-MM-DD). Only if civil_status not '001'"),
+        person_b_street: str = Field(default=None, description="Spouse residence street name. Only if civil_status not '001' and person_b_same_address is False"),
+        person_b_house_number: str = Field(default=None, description="Spouse residence house number. Only if civil_status not '001' and person_b_same_address is False"),
+        person_b_apartment_number: Optional[str] = Field(default=None, description="Spouse residence apartment number. Only if civil_status not '001' and person_b_same_address is False"),
+        person_b_address_ext: Optional[str] = Field(default=None, description="Spouse residence address additional info. Only if civil_status not '001' and person_b_same_address is False"),
+        person_b_city: str = Field(default=None, description="Spouse residence city name. Only if civil_status not '001' and person_b_same_address is False"),
+        person_b_post_code: str = Field(default=None, description="Spouse residence post code. Only if civil_status not '001' and person_b_same_address is False"),
+        person_b_idnr: Optional[str] = Field(default=None, description="Spouse tax ID number. German format. Example: 79 538 461 449. Only if civil_status not '001'"),
+        person_b_religion: str = Field(default="11", description="Spouse religion code. Use get_tax_registration_choices 'religions' to get the list of available choices. Only if civil_status not '001'"),
+        person_a_other_city_moving_date: str = Field(default=None, description="Date when person moved from other German city (YYYY-MM-DD). Only if moved_from_other_german_city is True"),
+        person_a_other_city_moving_street: Optional[str] = Field(default=None, description="Person moved from other German city street name. Only if moved_from_other_german_city is True"),
+        person_a_other_city_moving_house_number: Optional[str] = Field(default=None, description="Person moved from other German city house number. Only if moved_from_other_german_city is True"),
+        person_a_other_city_moving_apartment_number: Optional[str] = Field(default=None, description="Person moved from other German city apartment number. Only if moved_from_other_german_city is True"),
+        person_a_other_city_moving_address_ext: Optional[str] = Field(default=None, description="Person moved from other German city address additional info. Only if moved_from_other_german_city is True"),
+        person_a_other_city_moving_city: str = Field(default=None, description="Person moved from other German city city name. Only if moved_from_other_german_city is True"),
+        person_a_other_city_moving_post_code: str = Field(default=None, description="Person moved from other German city post code. Only if moved_from_other_german_city is True")
     ) -> Dict[str, Any]:
         """
-        Create a new tax registration.
+        This tool is used to file a new self-employed tax registration with the Finanzamt (Fragebogen zur steuerlichen Erfassung).
+        Create a new tax registration. You should call this tool first and then call update_tax_registration for each step.
+        Ask the user for the information needed for each step. 
+        You can get the list of available choices for each field using get_tax_registration_choices.
+        You can get the public_id from the response of this tool.
+        You can update the tax registration using update_tax_registration.
         
         Args:
             step: Registration step (1-6)
@@ -89,22 +115,65 @@ def register_tax_registration_tools(mcp):
         
         # Create base payload
         payload = {
-            "step": step,
+            "step": 1,
             "source": source,
-            "external_user_id": external_user_id
+            "external_user_id": external_user_id,
+            "personAGender": person_a_gender,
+            "personALastName": person_a_last_name,
+            "personAFirstName": person_a_first_name,
+            "personABirthName": person_a_birth_name,
+            "personACurrentProfession": person_a_current_profession,
+            "personADob": person_a_dob,
+            "personAStreet": person_a_street,
+            "personAHouseNumber": person_a_house_number,
+            "personAApartmentNumber": person_a_apartment_number,
+            "personAAddressExt": person_a_address_ext,
+            "personACity": person_a_city,
+            "personAPostCode": person_a_post_code,
+            "usesPostOfficeBox": uses_post_office_box,
+            "personAReligion": person_a_religion,
+            "personAEmail": person_a_email,
+            "personAPhoneNumber": person_a_phone_number,
+            "personAWebsite": person_a_website,
+            "personAIdnr": person_a_idnr,
+            "civilStatus": civil_status
         }
         
-        # Add all other provided fields
-        for key, value in ctx.parameters.items():
-            if key not in ["step", "source", "external_user_id"] and value is not None:
-                payload[key] = value
+        if civil_status != "001":
+            payload["civilStatusChangedSince"] = civil_status_changed_since
+            payload["personBGender"] = person_b_gender
+            payload["personBLastName"] = person_b_last_name
+            payload["personBFirstName"] = person_b_first_name
+            payload["personBBirthName"] = person_b_birth_name
+            payload["personBCurrentProfession"] = person_b_current_profession
+            payload["personBDob"] = person_b_dob
+            payload["personBSameAddress"] = person_b_same_address
+            payload["personBIdnr"] = person_b_idnr
+            payload["personBReligion"] = person_b_religion
+            if person_b_same_address:
+                payload["personBStreet"] = person_b_street
+                payload["personBHouseNumber"] = person_b_house_number
+                payload["personBApartmentNumber"] = person_b_apartment_number
+                payload["personBAddressExt"] = person_b_address_ext
+                payload["personBCity"] = person_b_city
+                payload["personBPostCode"] = person_b_post_code
+        
+        if moved_from_other_german_city:
+            payload["personAOtherCityMovingDate"] = person_a_other_city_moving_date
+            payload["personAOtherCityMovingStreet"] = person_a_other_city_moving_street
+            payload["personAOtherCityMovingHouseNumber"] = person_a_other_city_moving_house_number
+            payload["personAOtherCityMovingApartmentNumber"] = person_a_other_city_moving_apartment_number
+            payload["personAOtherCityMovingAddressExt"] = person_a_other_city_moving_address_ext
+            payload["personAOtherCityMovingCity"] = person_a_other_city_moving_city
+            payload["personAOtherCityMovingPostCode"] = person_a_other_city_moving_post_code
+        
         
         return api._make_request("POST", registration_url, json_data=payload, skip_auth=True)
     
     @mcp.tool()
     async def update_tax_registration(
         ctx: Context,
-        public_id: str = Field(description="Public ID of the tax registration to update"),
+        public_id: str = Field(description="Public ID of the tax registration to update.  Get it from create_tax_registration"),
         step: Optional[int] = Field(default=None, description="Registration step (1-6)"),
         # Step 2 fields
         profession_description: Optional[str] = Field(default=None, description="Profession description"),
