@@ -46,7 +46,7 @@ def register_tax_registration_tools(mcp):
         # Step 1 fields
         civil_status: str = Field(default='001', description="Civil status code. Use get_tax_registration_choices 'civil-status' to get the list of available choices."),
         civil_status_changed_since: Optional[str] = Field(default=None, description="Date when civil status changed (YYYY-MM-DD). Only if civil_status not '001'"),
-        person_a_gender: str = Field(default=None, description="Filer person gender code. Use get_tax_registration_choices 'genders' to get the list of available choices."),
+        person_a_gender: int = Field(default=None, description="Filer person gender code. Use get_tax_registration_choices 'genders' to get the list of available choices."),
         person_a_last_name: str = Field(default=None, description="Filer person last name"),
         person_a_first_name: str = Field(default=None, description="Filer person first name"),
         person_a_birth_name: Optional[str] = Field(default=None, description="Filer person birth name"),
@@ -66,8 +66,8 @@ def register_tax_registration_tools(mcp):
         person_a_idnr: str = Field(default=None, description="Filer person tax ID number. German format. Example: 79 538 461 449"),
         # Basic spouse fields (can be expanded as needed)
         person_b_same_address: bool = Field(default=True, description="Whether spouse has same address"),
-        moved_from_other_german_city: bool = Field(default=False, description="Whether person moved from other German city"),
-        person_b_gender: str = Field(default=None, description="Spouse gender code. Use get_tax_registration_choices 'genders' to get the list of available choices. Only if civil_status not '001'"),
+        moved_from_other_german_city: bool = Field(default=False, description="Whether person moved from other German city. You should ask the user"),
+        person_b_gender: int = Field(default=None, description="Spouse gender code. Use get_tax_registration_choices 'genders' to get the list of available choices. Only if civil_status not '001'"),
         person_b_last_name: str = Field(default=None, description="Spouse last name. Only if civil_status not '001'"),
         person_b_first_name: str = Field(default=None, description="Spouse first name. Only if civil_status not '001'"),
         person_b_birth_name: Optional[str] = Field(default=None, description="Spouse birth name. Only if civil_status not '001'"),
@@ -79,7 +79,7 @@ def register_tax_registration_tools(mcp):
         person_b_address_ext: Optional[str] = Field(default=None, description="Spouse residence address additional info. Only if civil_status not '001' and person_b_same_address is False"),
         person_b_city: str = Field(default=None, description="Spouse residence city name. Only if civil_status not '001' and person_b_same_address is False"),
         person_b_post_code: str = Field(default=None, description="Spouse residence post code. Only if civil_status not '001' and person_b_same_address is False"),
-        person_b_idnr: Optional[str] = Field(default=None, description="Spouse tax ID number. German format. Example: 79 538 461 449. Only if civil_status not '001'"),
+        person_b_idnr: Optional[str] = Field(default=None, description="Spouse tax ID number. German format. Example: 79 538 461 449. Only if civil_status not '001'. Trim whitespaces."),
         person_b_religion: str = Field(default="11", description="Spouse religion code. Use get_tax_registration_choices 'religions' to get the list of available choices. Only if civil_status not '001'"),
         person_a_other_city_moving_date: str = Field(default=None, description="Date when person moved from other German city (YYYY-MM-DD). Only if moved_from_other_german_city is True"),
         person_a_other_city_moving_street: Optional[str] = Field(default=None, description="Person moved from other German city street name. Only if moved_from_other_german_city is True"),
@@ -117,7 +117,7 @@ def register_tax_registration_tools(mcp):
         payload = {
             "step": 1,
             "source": source,
-            "external_user_id": external_user_id,
+            "externalUserId": external_user_id,
             "personAGender": person_a_gender,
             "personALastName": person_a_last_name,
             "personAFirstName": person_a_first_name,
@@ -130,14 +130,20 @@ def register_tax_registration_tools(mcp):
             "personAAddressExt": person_a_address_ext,
             "personACity": person_a_city,
             "personAPostCode": person_a_post_code,
-            "usesPostOfficeBox": uses_post_office_box,
             "personAReligion": person_a_religion,
             "personAEmail": person_a_email,
             "personAPhoneNumber": person_a_phone_number,
             "personAWebsite": person_a_website,
             "personAIdnr": person_a_idnr,
-            "civilStatus": civil_status
+            "civilStatus": civil_status,
+            "movedFromOtherGermanCity": moved_from_other_german_city
         }
+
+        if uses_post_office_box:
+            payload["usesPostOfficeBox"] = uses_post_office_box
+            # payload["personAPostOfficeBox"] = person_a_post_office_box
+            # payload["personAPostOfficeBoxPostCode"] = person_a_post_office_box_post_code
+            # payload["personAPostOfficeBoxCity"] = person_a_post_office_box_city
         
         if civil_status != "001":
             payload["civilStatusChangedSince"] = civil_status_changed_since
