@@ -20,13 +20,13 @@ def register_tax_registration_tools(mcp):
     @mcp.tool()
     async def get_tax_registration_choices(
         ctx: Context,
-        choice_type: str = Field(description="Type of choices to retrieve (e.g., 'civil-status', 'genders', 'religions', etc.)")
+        choice_type: str = Field(description="Type of choices to retrieve (options: 'civil-status', 'genders', 'religions', 'income-taxation-methods', 'profession-founding-articles', 'tax-states', 'profit-detections')")
     ) -> Dict[str, Any]:
         """
         Get choices/options for tax registration fields.
         
         Args:
-            choice_type: Type of choices to retrieve (e.g., 'civil_status', 'gender', 'religion', etc.)
+            choice_type: Type of choices to retrieve (options: 'civil-status', 'genders', 'religions', 'income-taxation-methods', 'profession-founding-articles', 'tax-states', 'profit-detections')
             
         Returns:
             Dictionary of choices with their values and labels
@@ -44,12 +44,10 @@ def register_tax_registration_tools(mcp):
     async def create_tax_registration(
         ctx: Context,
         step: int = Field(default=1, description="Registration step (1-6)"),
-        source: str = Field(default="NORMAN_EXTERNAL", description="Registration source"),
-        external_user_id: Optional[str] = Field(default=None, description="External user ID (UUID)"),
         # Step 1 fields
-        civil_status: Optional[str] = Field(default=None, description="Civil status code"),
+        civil_status: Optional[str] = Field(default=None, description="Civil status code. Use get_tax_registration_choices to get the list of available choices."),
         civil_status_changed_since: Optional[str] = Field(default=None, description="Date when civil status changed (YYYY-MM-DD)"),
-        person_a_gender: Optional[str] = Field(default=None, description="Person A gender code"),
+        person_a_gender: Optional[str] = Field(default=None, description="Person A gender code. Use get_tax_registration_choices to get the list of available choices."),
         person_a_last_name: Optional[str] = Field(default=None, description="Person A last name"),
         person_a_first_name: Optional[str] = Field(default=None, description="Person A first name"),
         person_a_birth_name: Optional[str] = Field(default=None, description="Person A birth name"),
@@ -83,17 +81,11 @@ def register_tax_registration_tools(mcp):
             Created tax registration data
         """
         api = ctx.request_context.lifespan_context.get("api")
-        if not api:
-            # Handle case when running without auth
-            headers = {}
-        else:
-            headers = {"Authorization": f"Bearer {api.access_token}"}
-        
         registration_url = urljoin(config.api_base_url, "api/v1/tax-registration/")
         
         # Generate UUID if not provided
-        if not external_user_id:
-            external_user_id = str(uuid.uuid4())
+        external_user_id = str(uuid.uuid4())
+        source = "norman_external"
         
         # Create base payload
         payload = {
@@ -107,20 +99,7 @@ def register_tax_registration_tools(mcp):
             if key not in ["step", "source", "external_user_id"] and value is not None:
                 payload[key] = value
         
-        try:
-            response = requests.post(
-                registration_url,
-                json=payload,
-                headers=headers,
-                timeout=config.NORMAN_API_TIMEOUT
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to create tax registration: {str(e)}")
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"Response: {e.response.text}")
-            raise ValueError(f"Failed to create tax registration: {str(e)}")
+        return api._make_request("POST", registration_url, json_data=payload, skip_auth=True)
     
     @mcp.tool()
     async def update_tax_registration(
@@ -167,12 +146,7 @@ def register_tax_registration_tools(mcp):
             Updated tax registration data
         """
         api = ctx.request_context.lifespan_context.get("api")
-        if not api:
-            # Handle case when running without auth
-            headers = {}
-        else:
-            headers = {"Authorization": f"Bearer {api.access_token}"}
-        
+
         registration_url = urljoin(config.api_base_url, f"api/v1/tax-registration/{public_id}/")
         
         # Create payload with all provided fields
@@ -181,21 +155,7 @@ def register_tax_registration_tools(mcp):
             if key != "public_id" and value is not None:
                 payload[key] = value
         
-        try:
-            response = requests.patch(
-                registration_url,
-                json=payload,
-                headers=headers,
-                timeout=config.NORMAN_API_TIMEOUT
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to update tax registration: {str(e)}")
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"Response: {e.response.text}")
-            raise ValueError(f"Failed to update tax registration: {str(e)}")
-    
+        return api._make_request("PATCH", registration_url, json_data=payload, skip_auth=True)
     @mcp.tool()
     async def get_tax_registration(
         ctx: Context,
@@ -213,12 +173,7 @@ def register_tax_registration_tools(mcp):
             Tax registration data
         """
         api = ctx.request_context.lifespan_context.get("api")
-        if not api:
-            # Handle case when running without auth
-            headers = {}
-        else:
-            headers = {"Authorization": f"Bearer {api.access_token}"}
-        
+
         if public_id:
             registration_url = urljoin(config.api_base_url, f"api/v1/tax-registration/{public_id}/")
             params = {}
@@ -226,20 +181,7 @@ def register_tax_registration_tools(mcp):
             registration_url = urljoin(config.api_base_url, "api/v1/tax-registration/my/")
             params = {"external_user_id": external_user_id}
         
-        try:
-            response = requests.get(
-                registration_url,
-                params=params,
-                headers=headers,
-                timeout=config.NORMAN_API_TIMEOUT
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to get tax registration: {str(e)}")
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"Response: {e.response.text}")
-            raise ValueError(f"Failed to get tax registration: {str(e)}")
+        return api._make_request("GET", registration_url, params=params, skip_auth=True)
     
     @mcp.tool()
     async def generate_registration_preview(
@@ -328,27 +270,9 @@ def register_tax_registration_tools(mcp):
             Response from the submission
         """
         api = ctx.request_context.lifespan_context.get("api")
-        if not api:
-            # Handle case when running without auth
-            headers = {}
-        else:
-            headers = {"Authorization": f"Bearer {api.access_token}"}
-        
         submit_url = urljoin(config.api_base_url, f"api/v1/tax-registration/{public_id}/submit/")
-        
-        try:
-            response = requests.post(
-                submit_url,
-                headers=headers,
-                timeout=config.NORMAN_API_TIMEOUT
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to submit tax registration: {str(e)}")
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"Response: {e.response.text}")
-            raise ValueError(f"Failed to submit tax registration: {str(e)}")
+
+        return api._make_request("POST", submit_url)
     
     @mcp.tool()
     async def check_tax_registration_submitted(
@@ -365,26 +289,9 @@ def register_tax_registration_tools(mcp):
             Submission status information
         """
         api = ctx.request_context.lifespan_context.get("api")
-        if not api:
-            # Handle case when running without auth
-            headers = {}
-        else:
-            headers = {"Authorization": f"Bearer {api.access_token}"}
+
         
         check_url = urljoin(config.api_base_url, "api/v1/tax-registration/check-is-submitted/")
         params = {"external_user_id": external_user_id}
         
-        try:
-            response = requests.get(
-                check_url,
-                params=params,
-                headers=headers,
-                timeout=config.NORMAN_API_TIMEOUT
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to check tax registration submission: {str(e)}")
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"Response: {e.response.text}")
-            raise ValueError(f"Failed to check tax registration submission: {str(e)}") 
+        return api._make_request("GET", check_url, params=params, skip_auth=True)
