@@ -155,7 +155,7 @@ def register_tax_tools(mcp):
         report_id: str = Field(description="Public ID of the tax report to submit")
     ) -> Dict[str, Any]:
         """
-        Submit a tax report to the Finanzamt.
+        Submit a tax report to the Finanzamt. Always generate a preview of the tax report @generate_finanzamt_preview before submitting it to the Finanzamt.
         
         Args:
             report_id: Public ID of the tax report to submit
@@ -221,7 +221,7 @@ def register_tax_tools(mcp):
         reporting_frequency: Optional[str] = Field(description="Frequency of reporting (e.g. 'monthly')")
     ) -> Dict[str, Any]:
         """
-        Update a tax setting. Always generate a preview of the tax report @generate_finanzamt_preview before submitting it to the Finanzamt.
+        Update a tax setting.
         
         Args:
             setting_id: Public ID of the tax setting to update
