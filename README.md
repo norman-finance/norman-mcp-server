@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/norman-finance-norman-mcp-server-badge.png)](https://mseep.ai/app/norman-finance-norman-mcp-server)
+
 # [Norman Finance](http://norman.finance?utm_source=mcp_server) MCP Server
 
 A Model Context Protocol (MCP) server that allows Large Language Models (LLMs) to interact with the basic Norman Finance API implementation. This server provides access to accounting, invoices, companies, clients, taxes, and more through a standardized protocol.
