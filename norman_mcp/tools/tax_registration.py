@@ -43,32 +43,6 @@ def register_tax_registration_tools(mcp):
         return response
     
     @mcp.tool()
-    async def get_tax_offices(
-        ctx: Context,
-        search_term: Optional[str] = Field(default=None, description="Optional search term to filter tax offices by name")
-    ) -> Dict[str, Any]:
-        """
-        Get a list of tax offices in Germany.
-        
-        Args:
-            search_term: Optional search term to filter tax offices by name
-            
-        Returns:
-            Dictionary with a list of tax offices
-        """
-        tax_offices = get_all_tax_offices()
-        
-        if search_term and search_term.strip():
-            search_term = search_term.lower()
-            filtered_offices = [
-                office for office in tax_offices 
-                if search_term in office["label"].lower()
-            ]
-            return {"tax_offices": filtered_offices}
-        
-        return {"tax_offices": tax_offices}
-    
-    @mcp.tool()
     async def create_tax_registration(
         ctx: Context,
         # Step 1 fields
