@@ -236,6 +236,7 @@ class NormanAPI:
             json_data = sanitized_json
         
         try:
+            logger.info(f"Making API request to {url} with json_data: {json_data}")
             response = requests.request(
                 method=method,
                 url=url,
@@ -279,7 +280,7 @@ class NormanAPI:
                 logger.error(f"HTTP error: {str(e)}")
                 if hasattr(e, 'response') and e.response is not None:
                     logger.error(f"Response: {e.response.text}")
-                return {"error": f"Request failed: {str(e)}", "status_code": e.response.status_code}
+                return {"error": f"Request failed: {str(e)}", "status_code": e.response.status_code, "response": e.response.text}
         except requests.exceptions.ConnectionError:
             logger.error(f"Connection error when accessing {url}")
             return {"error": "Connection error. Please check your network connection."}

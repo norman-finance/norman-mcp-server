@@ -20,11 +20,11 @@ def validate_input(input_str: Optional[str]) -> Optional[str]:
     ]
     
     sanitized = input_str
-    for pattern in dangerous_patterns:
-        if re.search(pattern, sanitized, re.IGNORECASE):
-            logger.warning(f"Potential injection attack detected in input: {input_str}")
-            # Replace potential injection patterns with empty string
-            sanitized = re.sub(pattern, '', sanitized, flags=re.IGNORECASE)
+    # for pattern in dangerous_patterns:
+    #     if re.search(pattern, sanitized, re.IGNORECASE):
+    #         logger.warning(f"Potential injection attack detected in input: {input_str}")
+    #         # Replace potential injection patterns with empty string
+    #         sanitized = re.sub(pattern, '', sanitized, flags=re.IGNORECASE)
     
     return sanitized
 
