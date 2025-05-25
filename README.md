@@ -1,4 +1,3 @@
-# [Norman Finance](http://norman.finance?utm_source=mcp_server) MCP Server
 # <div align="center">[Norman Finance](http://norman.finance?utm_source=mcp_server) MCP Server</div>
 <div align="center"><img width="140px" src="https://github.com/user-attachments/assets/d2cb1df3-69f1-460e-b675-beb677577b06"></div>
 
@@ -8,13 +7,20 @@ This [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server ena
 > 
 > The Norman Finance MCP Server is currently in Beta. We welcome your feedback and encourage you to report any bugs by opening an issue [here](https://github.com/norman-finance/norman-mcp-server/issues).
 
-<a href="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server">
+  <table>
+    <tr>
+      <td align="center">
+       <a href="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server">
   <img width="250" height="135" src="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server/badge" alt="Norman Finance Server MCP server" />
 </a>
-<br/>
-<a href="https://mseep.ai/app/norman-finance-norman-mcp-server">
-  <img width="250" height="135" src="https://mseep.net/pr/norman-finance-norman-mcp-server-badge.png" alt="MseeP.ai Security Assessment Badge" />
+      </td>
+      <td align="center">
+        <a href="https://mseep.ai/app/norman-finance-norman-mcp-server">
+  <img src="https://mseep.net/pr/norman-finance-norman-mcp-server-badge.png" alt="MseeP.ai Security Assessment Badge" />
 </a>
+      </td>
+    </tr>
+  </table>
 
 ## Features
 
