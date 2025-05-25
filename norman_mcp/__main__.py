@@ -1,7 +1,7 @@
-"""Main entry point for the Norman Finance MCP server."""
+#!/usr/bin/env python
 
-from .server import mcp
+import sys
+from norman_mcp.cli import main
 
 if __name__ == "__main__":
-    # Call mcp.run() directly - it handles its own event loop
-    mcp.run() 
+    sys.exit(main()) 
