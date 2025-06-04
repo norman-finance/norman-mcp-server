@@ -6,9 +6,7 @@ This [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server ena
 > [!NOTE]
 > 
 > The Norman Finance MCP Server is currently in Beta. We welcome your feedback and encourage you to report any bugs by opening an issue [here](https://github.com/norman-finance/norman-mcp-server/issues).
-
   <table>
-    <tr>
       <td align="center">
        <a href="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server">
   <img width="250" height="135" src="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server/badge" alt="Norman Finance Server MCP server" />
@@ -86,6 +84,11 @@ The remote MCP is recommended because it utilizes OAuth authentication, enabling
 
 ## Installation
 
+### Cursor
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.png)](cursor://anysphere.cursor-deeplink/mcp/install?name=norman-finance-mcp&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyJtY3AtcmVtb3RlIiwiaHR0cHM6Ly9tY3Aubm9ybWFuLmZpbmFuY2Uvc3NlIl19)
+
+---
+
 ### [Claude.ai Integrations](https://www.anthropic.com/news/integrations)
 Adding the Norman MCP Server to Claude.ai:
 
@@ -110,6 +113,7 @@ Adding the Norman MCP Server to Claude.ai:
 4. <img width="400" alt="image" src="https://github.com/user-attachments/assets/5edfac9c-1fbd-4443-a831-d93bee3b8e15" />
 5. After connecting, use the same menu to turn on specific Norman tools.
 
+---
 
 ### Adding to Claude Desktop
 
