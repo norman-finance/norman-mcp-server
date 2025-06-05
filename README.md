@@ -9,7 +9,7 @@ This [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server ena
   <table>
       <td align="center">
        <a href="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server">
-  <img width="250" height="135" src="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server/badge" alt="Norman Finance Server MCP server" />
+  <img width="250" height="auto" src="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server/badge" alt="Norman Finance Server MCP server" />
 </a>
       </td>
       <td align="center">
@@ -85,7 +85,12 @@ The remote MCP is recommended because it utilizes OAuth authentication, enabling
 ## Installation
 
 ### Cursor
-[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.png)](cursor://anysphere.cursor-deeplink/mcp/install?name=norman-finance-mcp&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyJtY3AtcmVtb3RlIiwiaHR0cHM6Ly9tY3Aubm9ybWFuLmZpbmFuY2Uvc3NlIl19)
+
+**To add the Norman MCP server to Cursor, copy and paste the following deeplink into your browser:**
+
+```markdown
+cursor://anysphere.cursor-deeplink/mcp/install?name=norman-finance-mcp&config=eyJjb21tYW5kIjoibnB4IiwidHlwZSI6InNzZSIsImFyZ3MiOlsibWNwLXJlbW90ZSIsImh0dHBzOi8vbWNwLm5vcm1hbi5maW5hbmNlL3NzZSJdfQ==
+```
 
 ---
 
