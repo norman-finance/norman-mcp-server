@@ -86,8 +86,7 @@ The remote MCP is recommended because it utilizes OAuth authentication, enabling
 
 ### Cursor
 
-**To add the Norman MCP server to Cursor, copy and paste the following deeplink into your browser:**
-
+To add the Norman MCP server to Cursor, copy and paste the following deeplink into your browser:
 ```markdown
 cursor://anysphere.cursor-deeplink/mcp/install?name=norman-finance-mcp&config=eyJjb21tYW5kIjoibnB4IiwidHlwZSI6InNzZSIsImFyZ3MiOlsibWNwLXJlbW90ZSIsImh0dHBzOi8vbWNwLm5vcm1hbi5maW5hbmNlL3NzZSJdfQ==
 ```
