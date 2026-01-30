@@ -1,93 +1,90 @@
-"""Routes for Norman OAuth authentication."""
+"""Routes for Norman OAuth callback handling."""
 
 import logging
-from pathlib import Path
-from typing import List, Optional
-import uuid
-import json
+from typing import List
 
-from pydantic import AnyHttpUrl
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, RedirectResponse, JSONResponse
+from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
-from starlette.templating import Jinja2Templates
 
 from norman_mcp.auth.provider import NormanOAuthProvider
 
 logger = logging.getLogger(__name__)
 
-# Setup Jinja2 templates
-BASE_DIR = Path(__file__).resolve().parent
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-async def login_page(request: Request, oauth_provider: NormanOAuthProvider) -> HTMLResponse:
-    """Render the login page."""
+async def oauth_callback(request: Request, oauth_provider: NormanOAuthProvider) -> RedirectResponse:
+    """Handle OAuth callback from Norman.
+    
+    Norman redirects here after user authorizes with:
+    - code: Authorization code
+    - state: State parameter to match original request
+    """
+    code = request.query_params.get("code")
     state = request.query_params.get("state")
-    if not state:
-        return HTMLResponse("Invalid request: Missing state parameter", status_code=400)
-        
-    if state not in oauth_provider.state_mapping:
-        return HTMLResponse("Invalid request: Unknown state parameter", status_code=400)
-    
     error = request.query_params.get("error")
-    return templates.TemplateResponse(
-        "login.html", {"request": request, "state": state, "error": error}
-    )
-
-async def login_handler(request: Request, oauth_provider: NormanOAuthProvider) -> RedirectResponse:
-    """Handle login form submission."""
-    form_data = await request.form()
-    state = form_data.get("state")
-    email = form_data.get("email")
-    password = form_data.get("password")
+    error_description = request.query_params.get("error_description", "")
     
-    if not all([state, email, password]):
-        return RedirectResponse(
-            url=f"/norman/login?state={state}&error=Missing+required+fields",
-            status_code=302,
+    logger.info(f"OAuth callback: code={'yes' if code else 'no'}, state={state}, error={error}")
+    
+    if error:
+        logger.error(f"OAuth error from Norman: {error} - {error_description}")
+        return HTMLResponse(
+            f"""
+            <html>
+            <head><title>Authorization Failed</title></head>
+            <body>
+                <h1>Authorization Failed</h1>
+                <p>Error: {error}</p>
+                <p>{error_description}</p>
+            </body>
+            </html>
+            """,
+            status_code=400
+        )
+    
+    if not code or not state:
+        return HTMLResponse(
+            """
+            <html>
+            <head><title>Invalid Callback</title></head>
+            <body>
+                <h1>Invalid Callback</h1>
+                <p>Missing code or state parameter.</p>
+            </body>
+            </html>
+            """,
+            status_code=400
         )
     
     try:
-        # Process login via Norman API
-        redirect_url = await oauth_provider.handle_norman_login(
-            email=email,
-            password=password,
-            state=state,
-        )
+        redirect_url = await oauth_provider.handle_oauth_callback(code=code, state=state)
         return RedirectResponse(url=redirect_url, status_code=302)
     except Exception as e:
-        logger.error(f"Login error: {str(e)}")
-        error_message = "Invalid credentials"
-        if hasattr(e, "status_code") and e.status_code == 500:
-            error_message = "Server error. Please try again later."
-        
-        return RedirectResponse(
-            url=f"/norman/login?state={state}&error={error_message}",
-            status_code=302,
+        logger.error(f"OAuth callback error: {e}")
+        return HTMLResponse(
+            f"""
+            <html>
+            <head><title>Authorization Failed</title></head>
+            <body>
+                <h1>Authorization Failed</h1>
+                <p>Error exchanging authorization code: {str(e)}</p>
+            </body>
+            </html>
+            """,
+            status_code=500
         )
 
-def create_norman_auth_routes(
-    oauth_provider: NormanOAuthProvider,
-) -> List[Route]:
-    """Create routes for Norman OAuth authentication."""
+
+def create_norman_auth_routes(oauth_provider: NormanOAuthProvider) -> List[Route]:
+    """Create routes for Norman OAuth callback."""
     
-    # Create proper async wrapper functions
-    async def get_login_page(request: Request) -> HTMLResponse:
-        return await login_page(request, oauth_provider)
-    
-    async def handle_login_form(request: Request) -> RedirectResponse:
-        return await login_handler(request, oauth_provider)
-    
+    async def handle_callback(request: Request) -> RedirectResponse:
+        return await oauth_callback(request, oauth_provider)
     
     return [
         Route(
-            "/norman/login",
-            endpoint=get_login_page,
+            "/oauth/callback",
+            endpoint=handle_callback,
             methods=["GET"],
         ),
-        Route(
-            "/norman/login",
-            endpoint=handle_login_form,
-            methods=["POST"],
-        ),
-    ] 
+    ]

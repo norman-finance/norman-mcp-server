@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  norman-mcp-server:
+    build: .
+    container_name: norman-mcp-server
+    ports:
+      - "3001:3001"
+    environment:
+      # Required: OAuth credentials from Norman Finance
+      - NORMAN_OAUTH_CLIENT_ID=${NORMAN_OAUTH_CLIENT_ID}
+      - NORMAN_OAUTH_CLIENT_SECRET=${NORMAN_OAUTH_CLIENT_SECRET}
+      
+      # Required: Public URL for OAuth callbacks (MUST be HTTPS in production)
+      - NORMAN_MCP_PUBLIC_URL=${NORMAN_MCP_PUBLIC_URL:-https://mcp.norman.finance}
+      
+      # Optional: Environment (production or sandbox)
+      - NORMAN_ENVIRONMENT=${NORMAN_ENVIRONMENT:-production}
+      
+      # Optional: Server configuration
+      - NORMAN_MCP_HOST=0.0.0.0
+      - NORMAN_MCP_PORT=3001
+      - NORMAN_API_TIMEOUT=200
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/.well-known/oauth-authorization-server"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
