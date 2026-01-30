@@ -53,8 +53,10 @@ def main():
                        help='Transport protocol to use (default: sse)')
     parser.add_argument('--stateless', action='store_true',
                        help='Run the streamable-http transport in stateless mode (no session tracking)')
-    parser.add_argument('--json-response', action='store_true',
-                       help='Use JSON responses instead of SSE streams for streamable-http transport')
+    parser.add_argument('--json-response', action='store_true', default=True,
+                       help='Use JSON responses instead of SSE streams for streamable-http transport (default: True)')
+    parser.add_argument('--sse-response', action='store_true',
+                       help='Use SSE streaming responses for streamable-http transport (overrides --json-response)')
     
     args = parser.parse_args()
     
@@ -66,7 +68,7 @@ def main():
     setup_environment(args)
     
     # Import server module after environment setup
-    from .server import create_app
+    from .server import create_app, create_cors_app
     
     # Create and run the server
     try:
@@ -78,23 +80,30 @@ def main():
         logger.info(f"Using environment: {os.environ.get('NORMAN_ENVIRONMENT', 'production')}")
         
         # Create the app with the provided arguments
-        # Convert streamable-http to streamable_http for internal use
         transport = args.transport
-        internal_transport = transport.replace('-', '_') if transport == 'streamable-http' else transport
+        
+        # Determine json_response setting (--sse-response overrides default)
+        json_response = not args.sse_response if hasattr(args, 'sse_response') and args.sse_response else args.json_response
         
         mcp = create_app(
             host=args.host, 
             port=args.port, 
             public_url=args.public_url, 
-            transport=internal_transport,
+            transport=transport,
             streamable_http_options={
                 "stateless": args.stateless,
-                "json_response": args.json_response
+                "json_response": json_response
             }
         )
         
-        # Run the server
-        mcp.run(transport=args.transport)
+        # For streamable-http, use CORS-wrapped app with uvicorn directly
+        if transport == "streamable-http":
+            import uvicorn
+            cors_app = create_cors_app(mcp)
+            uvicorn.run(cors_app, host=args.host, port=args.port)
+        else:
+            # For stdio and sse, use the standard run method
+            mcp.run(transport=args.transport)
 
     except KeyboardInterrupt:
         logger.info("Server stopped by user")

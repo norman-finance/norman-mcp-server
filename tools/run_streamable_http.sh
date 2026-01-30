@@ -2,6 +2,20 @@
 
 # Run Norman MCP Server with Streamable HTTP transport
 # This script sets the necessary environment variables for authentication and starts the server
+#
+# Usage:
+#   ./run_streamable_http.sh [options]
+#
+# Options:
+#   --host HOST         Host to bind to (default: 0.0.0.0)
+#   --port PORT         Port to bind to (default: 3001)
+#   --public-url URL    Public URL for OAuth callbacks
+#   --stateless         Run in stateless mode (no session tracking)
+#   --sse-response      Use SSE streaming responses instead of JSON
+#   --debug             Enable debug logging
+#   --email EMAIL       Norman account email (optional, for stdio transport)
+#   --password PASS     Norman account password (optional, for stdio transport)
+#   --environment ENV   API environment: production or sandbox (default: production)
 
 # Check if .env file exists and source it if it does
 if [ -f .env ]; then
@@ -13,7 +27,7 @@ HOST="0.0.0.0"
 PORT=3001
 PUBLIC_URL=""
 STATELESS=false
-JSON_RESPONSE=false
+SSE_RESPONSE=false
 DEBUG=false
 EMAIL=""
 PASSWORD=""
@@ -38,8 +52,8 @@ while [[ $# -gt 0 ]]; do
       STATELESS=true
       shift
       ;;
-    --json-response)
-      JSON_RESPONSE=true
+    --sse-response)
+      SSE_RESPONSE=true
       shift
       ;;
     --debug)
@@ -78,8 +92,9 @@ if [ "$STATELESS" = true ]; then
   ARGS+=("--stateless")
 fi
 
-if [ "$JSON_RESPONSE" = true ]; then
-  ARGS+=("--json-response")
+# JSON response is now the default, only add --sse-response if needed
+if [ "$SSE_RESPONSE" = true ]; then
+  ARGS+=("--sse-response")
 fi
 
 if [ "$DEBUG" = true ]; then
@@ -99,10 +114,15 @@ if [ ! -z "$ENVIRONMENT" ]; then
 fi
 
 # Print server information
-echo "Starting Norman MCP Server with Streamable HTTP transport"
+echo "========================================"
+echo "Norman MCP Server - Streamable HTTP"
+echo "========================================"
+echo ""
 echo "Host: $HOST"
 echo "Port: $PORT"
 echo "Public URL: $PUBLIC_URL"
+echo "MCP Endpoint: ${PUBLIC_URL}/mcp"
+echo ""
 
 if [ "$STATELESS" = true ]; then
   echo "Mode: Stateless (no session tracking)"
@@ -110,10 +130,10 @@ else
   echo "Mode: Stateful (with session tracking)"
 fi
 
-if [ "$JSON_RESPONSE" = true ]; then
-  echo "Response format: JSON"
-else
+if [ "$SSE_RESPONSE" = true ]; then
   echo "Response format: SSE streams"
+else
+  echo "Response format: JSON (default)"
 fi
 
 if [ ! -z "$EMAIL" ]; then
@@ -122,7 +142,11 @@ fi
 
 echo "Environment: $ENVIRONMENT"
 echo ""
-
+echo "OAuth endpoints:"
+echo "  - Authorization: ${PUBLIC_URL}/authorize"
+echo "  - Token: ${PUBLIC_URL}/token"
+echo "  - Login: ${PUBLIC_URL}/norman/login"
+echo ""
 echo "Starting server with: python -m norman_mcp ${ARGS[@]}"
 echo ""
 

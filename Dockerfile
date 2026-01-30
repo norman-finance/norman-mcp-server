@@ -23,5 +23,5 @@ ENV PYTHONUNBUFFERED=1
 # Expose server port
 EXPOSE 3001
 
-# Run the server
-CMD ["python", "-m", "norman_mcp", "--transport", "sse", "--environment", "production"]
+# Run the server with streamable-http transport (OAuth-enabled)
+CMD ["python", "-m", "norman_mcp", "--transport", "streamable-http", "--environment", "production", "--host", "0.0.0.0", "--port", "3001"]
