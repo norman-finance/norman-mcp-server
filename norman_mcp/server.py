@@ -201,6 +201,22 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
         for route in create_norman_auth_routes(oauth_provider):
             server._custom_starlette_routes.append(route)
     
+    # Register domain verification route for OpenAI Apps
+    from starlette.routing import Route
+    from starlette.responses import PlainTextResponse
+    
+    def openai_apps_challenge(request):
+        """Serve OpenAI Apps domain verification token."""
+        verification_token = os.environ.get(
+            "OPENAI_APPS_VERIFICATION_TOKEN",
+            ""
+        )
+        return PlainTextResponse(verification_token)
+    
+    server._custom_starlette_routes.append(
+        Route("/.well-known/openai-apps-challenge", openai_apps_challenge, methods=["GET"])
+    )
+    
     # Register tools, prompts, and resources
     register_client_tools(server)
     register_invoice_tools(server)
