@@ -101,6 +101,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 "http://127.0.0.1:6274/oauth/callback/debug",
                 "https://mcp.norman.finance/oauth/callback",
                 "https://mcp.norman.finance/callback",
+                "https://chatgpt.com/connector_platform_oauth_redirect"
             ]
             
             # Register as public client (no client_secret) for MCP clients like Inspector
@@ -138,6 +139,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 "http://127.0.0.1:6274/oauth/callback/debug",
                 "https://mcp.norman.finance/oauth/callback",
                 "https://mcp.norman.finance/callback",
+                "https://chatgpt.com/connector_platform_oauth_redirect"
             ]
             client = OAuthClientInformationFull(
                 client_id=client_id,
