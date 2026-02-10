@@ -78,7 +78,7 @@ Before using this MCP server, you need to:
 ## Remote MCP Server
 Norman now offers a hosted remote MCP server at:
 
-> https://mcp.norman.finance/sse
+> https://mcp.norman.finance/mcp
 
 The remote MCP is recommended because it utilizes OAuth authentication, enabling you to log in directly with your Norman account without the need to create or manage access tokens manually.
 
@@ -88,7 +88,7 @@ The remote MCP is recommended because it utilizes OAuth authentication, enabling
 
 To add the Norman MCP server to Cursor, copy and paste the following deeplink into your browser:
 ```markdown
-cursor://anysphere.cursor-deeplink/mcp/install?name=norman-finance-mcp&config=eyJjb21tYW5kIjoibnB4IiwidHlwZSI6InNzZSIsImFyZ3MiOlsibWNwLXJlbW90ZSIsImh0dHBzOi8vbWNwLm5vcm1hbi5maW5hbmNlL3NzZSJdfQ==
+cursor://anysphere.cursor-deeplink/mcp/install?name=norman-finance-mcp&config=eyJ0eXBlIjoiaHR0cCIsImVudiI6e30sImNvbW1hbmQiOiJucHggbWNwLXJlbW90ZSBodHRwczovL21jcC5ub3JtYW4uZmluYW5jZS9tY3AifQ%3D%3D
 ```
 
 ---
@@ -100,14 +100,14 @@ Adding the Norman MCP Server to Claude.ai:
 1. Head to _Settings > Profile_
 2. Find the "Integrations" section
 3. Tap "Add more"
-4. Enter the Norman MCP server URL: ```https://mcp.norman.finance/sse```
+4. Enter the Norman MCP server URL: ```https://mcp.norman.finance/mcp```
 5. Click "Add" to finish up
 
 **For Claude Enterprise & Teams:**
 1. Go to _Settings > Integrations_ (for Teams) or _Settings > Data management_ (for Enterprise)
 2. Find the "Integrations" section
 3. Hit "Add more"
-4. Enter the Norman MCP server URL: ```https://mcp.norman.finance/sse```
+4. Enter the Norman MCP server URL: ```https://mcp.norman.finance/mcp```
 5. Click "Add" to finish up
 
 **Enabling the Norman Integration:**
@@ -137,7 +137,7 @@ To run the Norman Finance MCP server with Claude Desktop, you can use the instru
   "mcpServers": {
     "norman-mcp-server": {
       "command": "npx",
-      "args": ["mcp-remote", "https://mcp.norman.finance/sse"]
+      "args": ["mcp-remote", "https://mcp.norman.finance/mcp"]
     }
   }
 }
