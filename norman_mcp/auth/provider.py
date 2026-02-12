@@ -16,7 +16,7 @@ import httpx
 from urllib.parse import urljoin, urlencode
 from typing import Any, Dict, Optional
 
-from pydantic import AnyHttpUrl
+from pydantic import AnyHttpUrl, AnyUrl
 from starlette.exceptions import HTTPException
 
 from mcp.server.auth.provider import (
@@ -161,7 +161,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         client = self.clients.get(client_id)
         if client and redirect_uri not in [str(uri) for uri in client.redirect_uris]:
             # Create new client with updated redirect URIs
-            new_uris = list(client.redirect_uris) + [AnyHttpUrl(redirect_uri)]
+            new_uris = list(client.redirect_uris) + [AnyUrl(redirect_uri)]
             self.clients[client_id] = OAuthClientInformationFull(
                 client_id=client.client_id,
                 client_name=client.client_name,
@@ -295,7 +295,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 auth_code = AuthorizationCode(
                     code=mcp_code,
                     client_id=client_id,
-                    redirect_uri=AnyHttpUrl(redirect_uri),
+                    redirect_uri=AnyUrl(redirect_uri),
                     redirect_uri_provided_explicitly=state_data["redirect_uri_provided_explicitly"],
                     expires_at=time.time() + 600,  # 10 minutes
                     scopes=scopes,
