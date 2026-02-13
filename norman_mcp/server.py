@@ -253,6 +253,22 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
         Route("/.well-known/openai-apps-challenge", openai_apps_challenge, methods=["GET"])
     )
     
+    # Serve favicon for Google favicon service (used by Claude directory listing)
+    from starlette.responses import FileResponse
+    from pathlib import Path
+    
+    FAVICON_PATH = Path(__file__).parent / "static" / "favicon.ico"
+    
+    def favicon(request):
+        """Serve favicon.ico."""
+        if FAVICON_PATH.exists():
+            return FileResponse(str(FAVICON_PATH), media_type="image/x-icon")
+        return PlainTextResponse("", status_code=404)
+    
+    server._custom_starlette_routes.append(
+        Route("/favicon.ico", favicon, methods=["GET"])
+    )
+    
     # Register tools, prompts, and resources
     register_client_tools(server)
     register_invoice_tools(server)
