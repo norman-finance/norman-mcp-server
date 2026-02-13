@@ -8,6 +8,7 @@ import requests
 from urllib.parse import urlparse
 from pydantic import Field
 
+from mcp.types import ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
 from norman_mcp.security.utils import validate_file_path, validate_input
@@ -78,7 +79,15 @@ def validate_input(input_str: str) -> str:
 def register_document_tools(mcp):
     """Register all document-related tools with the MCP server."""
     
-    @mcp.tool()
+    @mcp.tool(
+        title="Upload Bulk Attachments",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
     async def upload_bulk_attachments(
         ctx: Context,
         file_paths: List[str] = Field(description="List of paths or URLs to files to upload"),
@@ -200,7 +209,15 @@ def register_document_tools(mcp):
                 except Exception:
                     pass
 
-    @mcp.tool()
+    @mcp.tool(
+        title="List Attachments",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def list_attachments(
         ctx: Context,
         file_name: Optional[str] = Field(description="Filter by file name (case insensitive partial match)"),
@@ -247,7 +264,15 @@ def register_document_tools(mcp):
             
         return api._make_request("GET", attachments_url, params=params)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Create Attachment",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
     async def create_attachment(
         ctx: Context,
         file_path: str = Field(description="Path or URL to file to upload"),
@@ -416,7 +441,15 @@ def register_document_tools(mcp):
             logger.error(f"Error uploading file: {str(e)}")
             return {"error": f"Error uploading file: {str(e)}"}
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Link Attachment to Transaction",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def link_attachment_transaction(
         ctx: Context,
         attachment_id: str = Field(description="ID of the attachment"),

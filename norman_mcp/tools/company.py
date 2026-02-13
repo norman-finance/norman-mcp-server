@@ -3,6 +3,7 @@ from typing import Dict, Any, Optional
 from urllib.parse import urljoin
 from datetime import datetime
 
+from mcp.types import ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
 
@@ -11,7 +12,15 @@ logger = logging.getLogger(__name__)
 def register_company_tools(mcp):
     """Register all company-related tools with the MCP server."""
     
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Company Details",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_company_details(ctx: Context) -> Dict[str, Any]:
         """Get detailed information about the user's company."""
         api = ctx.request_context.lifespan_context["api"]
@@ -23,7 +32,15 @@ def register_company_tools(mcp):
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
         return api._make_request("GET", company_url)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Company Balance",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_company_balance(ctx: Context) -> Dict[str, Any]:
         """
         Get the current balance of the company.
@@ -44,7 +61,15 @@ def register_company_tools(mcp):
         
         return api._make_request("GET", balance_url)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Update Company Details",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def update_company_details(
         ctx: Context,
         name: Optional[str] = None,

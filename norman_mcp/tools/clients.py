@@ -3,6 +3,7 @@ import requests
 from typing import Dict, Any, Optional
 from urllib.parse import urljoin
 
+from mcp.types import ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
 
@@ -11,7 +12,15 @@ logger = logging.getLogger(__name__)
 def register_client_tools(mcp):
     """Register all client-related tools with the MCP server."""
     
-    @mcp.tool()
+    @mcp.tool(
+        title="List Clients",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def list_clients(
         ctx: Context
     ) -> Dict[str, Any]:
@@ -34,7 +43,15 @@ def register_client_tools(mcp):
         
         return api._make_request("GET", clients_url)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Client Details",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_client(
         ctx: Context,
         client_id: str
@@ -61,7 +78,15 @@ def register_client_tools(mcp):
         
         return api._make_request("GET", client_url)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Create Client",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
     async def create_client(
         ctx: Context,
         name: str,
@@ -127,7 +152,15 @@ def register_client_tools(mcp):
             
         return api._make_request("POST", clients_url, json_data=client_data)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Update Client",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def update_client(
         ctx: Context,
         client_id: str,
@@ -203,7 +236,15 @@ def register_client_tools(mcp):
         
         return api._make_request("PATCH", client_url, json_data=update_data)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Delete Client",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def delete_client(
         ctx: Context,
         client_id: str
