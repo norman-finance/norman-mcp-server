@@ -66,6 +66,42 @@ def patched_build_metadata(*args, **kwargs):
     return metadata
 mcp.server.auth.routes.build_metadata = patched_build_metadata
 
+# Patch to accept dynamic redirect URIs (Cursor, Inspector use random ports)
+from mcp.shared.auth import OAuthClientInformationFull, InvalidRedirectUriError
+
+_original_validate_redirect_uri = OAuthClientInformationFull.validate_redirect_uri
+
+def _flexible_validate_redirect_uri(self, redirect_uri):
+    """Accept redirect URIs dynamically for MCP clients that use random ports."""
+    if redirect_uri is not None:
+        uri_str = str(redirect_uri)
+        # RFC 8252 Section 7.3: Loopback redirects with dynamic ports are safe
+        # when combined with PKCE (which the MCP SDK enforces via S256).
+        # Non-loopback URIs are restricted to an explicit allowlist.
+        allowed_patterns = [
+            "http://localhost:",              # RFC 8252 loopback IPv4 name
+            "http://localhost/",
+            "http://127.0.0.1:",              # RFC 8252 loopback IPv4 address
+            "http://127.0.0.1/",
+            "http://[::1]:",                  # RFC 8252 loopback IPv6
+            "http://[::1]/",
+            "https://mcp.norman.finance/",    # Production domain
+            "https://chatgpt.com/",           # OpenAI Apps
+            "cursor://anysphere.cursor",      # Cursor IDE (exact vendor prefix)
+        ]
+        if any(uri_str.startswith(p) for p in allowed_patterns):
+            return redirect_uri
+        # Fall back to standard validation for other URIs
+        return _original_validate_redirect_uri(self, redirect_uri)
+    elif self.redirect_uris is not None and len(self.redirect_uris) == 1:
+        return self.redirect_uris[0]
+    else:
+        raise InvalidRedirectUriError(
+            "redirect_uri must be specified when client has multiple registered URIs"
+        )
+
+OAuthClientInformationFull.validate_redirect_uri = _flexible_validate_redirect_uri
+
 
 
 
