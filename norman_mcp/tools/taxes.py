@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional
 from urllib.parse import urljoin
 from pydantic import Field
 from mcp.server.fastmcp.utilities.types import Image
+from mcp.types import ToolAnnotations
 import io
 from pdf2image import convert_from_bytes
 from PIL import Image as PILImage
@@ -16,7 +17,15 @@ logger = logging.getLogger(__name__)
 def register_tax_tools(mcp):
     """Register all tax-related tools with the MCP server."""
     
-    @mcp.tool()
+    @mcp.tool(
+        title="List Tax Reports",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def list_tax_reports(ctx: Context) -> Dict[str, Any]:
         """List all available tax reports."""
         api = ctx.request_context.lifespan_context["api"]
@@ -25,7 +34,15 @@ def register_tax_tools(mcp):
         
         return api._make_request("GET", taxes_url)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Tax Report",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_tax_report(
         ctx: Context,
         report_id: str = Field(description="Public ID of the tax report to retrieve")
@@ -48,7 +65,15 @@ def register_tax_tools(mcp):
         
         return api._make_request("GET", report_url)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Validate Tax Number",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def validate_tax_number(
         ctx: Context,
         tax_number: str = Field(description="Tax number to validate"),
@@ -75,7 +100,15 @@ def register_tax_tools(mcp):
         
         return api._make_request("POST", validate_url, json_data=validation_data)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Generate Finanzamt Preview",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def generate_finanzamt_preview(
         ctx: Context,
         report_id: str = Field(description="Public ID of the tax report to generate a preview for")
@@ -149,7 +182,15 @@ def register_tax_tools(mcp):
             logger.error(f"Error generating tax report preview: {str(e)}")
             raise ValueError(f"Error generating tax report preview: {str(e)}")
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Submit Tax Report to Finanzamt",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
     async def submit_tax_report(
         ctx: Context,
         report_id: str = Field(description="Public ID of the tax report to submit")
@@ -182,7 +223,15 @@ def register_tax_tools(mcp):
                 }
             raise
 
-    @mcp.tool()
+    @mcp.tool(
+        title="List German Tax States",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def list_tax_states(ctx: Context) -> Dict[str, Any]:
         """
         Get list of available tax states.
@@ -196,7 +245,15 @@ def register_tax_tools(mcp):
         
         return api._make_request("GET", states_url)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="List Tax Settings",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def list_tax_settings(ctx: Context) -> Dict[str, Any]:
         """
         Get list of tax settings for the current company.
@@ -210,7 +267,15 @@ def register_tax_tools(mcp):
         
         return api._make_request("GET", settings_url)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Update Tax Setting",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def update_tax_setting(
         ctx: Context,
         setting_id: str = Field(description="Public ID of the tax setting to update"),
@@ -259,7 +324,15 @@ def register_tax_tools(mcp):
         else:
             return {"message": "No changes to apply"}
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Company Tax Statistics",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_company_tax_statistics(ctx: Context) -> Dict[str, Any]:
         """
         Get tax statistics for the company.
@@ -280,7 +353,15 @@ def register_tax_tools(mcp):
         
         return api._make_request("GET", stats_url)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Next VAT Report",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_vat_next_report(ctx: Context) -> Dict[str, Any]:
         """
         Get the VAT amount for the next report period.

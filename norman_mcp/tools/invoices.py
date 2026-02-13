@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import logging
 import requests
 
+from mcp.types import ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
 
@@ -12,7 +13,15 @@ logger = logging.getLogger(__name__)
 def register_invoice_tools(mcp):
     """Register all invoice-related tools with the MCP server."""
     
-    @mcp.tool()
+    @mcp.tool(
+        title="Create Invoice",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
     async def create_invoice(
         ctx: Context,
         client_id: str,
@@ -150,7 +159,15 @@ def register_invoice_tools(mcp):
 
         return api._make_request("POST", invoices_url, json_data=invoice_data)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Create Recurring Invoice",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
     async def create_recurring_invoice(
         ctx: Context,
         client_id: str,
@@ -307,7 +324,15 @@ def register_invoice_tools(mcp):
 
         return api._make_request("POST", recurring_invoices_url, json_data=invoice_data)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Invoice Details",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_invoice(
         ctx: Context,
         invoice_id: str
@@ -334,7 +359,15 @@ def register_invoice_tools(mcp):
         
         return api._make_request("GET", invoice_url)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Send Invoice via Email",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
     async def send_invoice(
         ctx: Context,
         invoice_id: str,
@@ -382,7 +415,15 @@ def register_invoice_tools(mcp):
             
         return api._make_request("POST", send_url, json_data=send_data)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Send Overdue Payment Reminder",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
     async def send_invoice_overdue_reminder(
         ctx: Context,
         invoice_id: str,
@@ -430,7 +471,15 @@ def register_invoice_tools(mcp):
             
         return api._make_request("POST", send_url, json_data=send_data)
 
-    @mcp.tool() 
+    @mcp.tool(
+        title="Link Transaction to Invoice",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def link_transaction(
         ctx: Context,
         invoice_id: str,
@@ -463,7 +512,15 @@ def register_invoice_tools(mcp):
         
         return api._make_request("POST", link_url, json_data=link_data)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get E-Invoice XML",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_einvoice_xml(
         ctx: Context,
         invoice_id: str
@@ -504,7 +561,15 @@ def register_invoice_tools(mcp):
                 logger.error(f"Response: {e.response.text}")
             return {"error": f"Failed to get e-invoice XML: {str(e)}"}
 
-    @mcp.tool()
+    @mcp.tool(
+        title="List Invoices",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def list_invoices(
         ctx: Context,
         status: Optional[str] = None,

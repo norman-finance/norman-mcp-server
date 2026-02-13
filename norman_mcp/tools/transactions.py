@@ -4,6 +4,7 @@ from urllib.parse import urljoin
 from datetime import datetime
 from pydantic import Field
 
+from mcp.types import ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
 
@@ -12,7 +13,15 @@ logger = logging.getLogger(__name__)
 def register_transaction_tools(mcp):
     """Register all transaction-related tools with the MCP server."""
     
-    @mcp.tool()
+    @mcp.tool(
+        title="Search Transactions",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def search_transactions(
         ctx: Context,
         description: Optional[str] = Field(description="Text to search for in transaction descriptions"),
@@ -84,7 +93,15 @@ def register_transaction_tools(mcp):
         
         return api._make_request("GET", transactions_url, params=params)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Create Transaction",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
     async def create_transaction(
         ctx: Context,
         amount: float = Field(description="Transaction amount (positive for income, negative for expense)"),
@@ -144,7 +161,15 @@ def register_transaction_tools(mcp):
         
         return api._make_request("POST", transactions_url, json_data=transaction_data)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Update Transaction",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def update_transaction(
         ctx: Context,
         transaction_id: str = Field(description="Public ID of the transaction to update"),
@@ -193,7 +218,15 @@ def register_transaction_tools(mcp):
             
         return api._make_request("PATCH", transaction_url, json_data=update_data)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Categorize Transaction",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def categorize_transaction(
         ctx: Context,
         transaction_amount: float = Field(description="Amount of the transaction"),
@@ -226,7 +259,15 @@ def register_transaction_tools(mcp):
         
         return api._make_request("POST", detect_url, json_data=request_data)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Change Transaction Verification Status",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def change_transaction_verification(
         ctx: Context,
         transaction_id: str = Field(description="Public ID of the transaction to update"),
