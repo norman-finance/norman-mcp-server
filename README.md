@@ -1,4 +1,4 @@
-# <div align="center">[Norman Finance](http://norman.finance?utm_source=mcp_server) MCP Server</div>
+# <div align="center">[Norman](http://norman.finance?utm_source=mcp_server) MCP Server</div>
 <div align="center"><img width="140px" src="https://github.com/user-attachments/assets/d2cb1df3-69f1-460e-b675-beb677577b06"></div>
 
 This [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server enables AI to interact with the Norman Finance API, allowing access to accounting, invoices, companies, clients, taxes, and more through a standardized protocol.
