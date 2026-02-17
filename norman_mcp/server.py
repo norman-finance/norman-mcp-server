@@ -16,6 +16,7 @@ from pydantic import AnyHttpUrl
 from dotenv import load_dotenv
 import httpx
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
@@ -86,8 +87,9 @@ def _flexible_validate_redirect_uri(self, redirect_uri):
             "http://[::1]:",                  # RFC 8252 loopback IPv6
             "http://[::1]/",
             "https://mcp.norman.finance/",    # Production domain
-            "https://chatgpt.com/",           # OpenAI Apps
-            "cursor://anysphere.cursor",      # Cursor IDE (exact vendor prefix)
+                    "https://chatgpt.com/",           # OpenAI Apps
+                    "https://oauth.n8n.cloud/",       # n8n Cloud
+                    "cursor://anysphere.cursor",      # Cursor IDE (exact vendor prefix)
         ]
         if any(uri_str.startswith(p) for p in allowed_patterns):
             return redirect_uri
