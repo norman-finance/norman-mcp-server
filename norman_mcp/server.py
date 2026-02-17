@@ -104,7 +104,45 @@ def _flexible_validate_redirect_uri(self, redirect_uri):
 
 OAuthClientInformationFull.validate_redirect_uri = _flexible_validate_redirect_uri
 
+# Patch ClientAuthenticator to also extract client_id from Basic Auth header.
+# Some clients (e.g. n8n) send client_id only in the Authorization header,
+# but the MCP SDK only checks the form body.
+import base64 as _b64
+from urllib.parse import unquote as _unquote
+from starlette.datastructures import FormData as _FormData
+from mcp.server.auth.middleware.client_auth import ClientAuthenticator, AuthenticationError
 
+_original_authenticate_request = ClientAuthenticator.authenticate_request
+
+async def _patched_authenticate_request(self, request):
+    """Extract client_id from Basic Auth header if not in form body."""
+    form_data = await request.form()
+    client_id = form_data.get("client_id")
+
+    if not client_id:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Basic "):
+            try:
+                decoded = _b64.b64decode(auth_header[6:]).decode("utf-8")
+                if ":" in decoded:
+                    basic_client_id, basic_client_secret = decoded.split(":", 1)
+                    basic_client_id = _unquote(basic_client_id)
+                    basic_client_secret = _unquote(basic_client_secret)
+
+                    mutable = dict(form_data.multi_items())
+                    mutable_dict = dict(mutable)
+                    mutable_dict["client_id"] = basic_client_id
+                    if basic_client_secret:
+                        mutable_dict["client_secret"] = basic_client_secret
+
+                    patched_form = _FormData(mutable_dict)
+                    request._form = patched_form
+            except Exception:
+                pass
+
+    return await _original_authenticate_request(self, request)
+
+ClientAuthenticator.authenticate_request = _patched_authenticate_request
 
 
 async def authenticate_with_credentials(api_client):
