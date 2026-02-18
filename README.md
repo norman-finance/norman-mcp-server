@@ -1,4 +1,4 @@
-# <div align="center">[Norman Finance](http://norman.finance?utm_source=mcp_server) MCP Server</div>
+# <div align="center">[Norman](http://norman.finance?utm_source=mcp_server) MCP Server</div>
 <div align="center"><img width="140px" src="https://github.com/user-attachments/assets/d2cb1df3-69f1-460e-b675-beb677577b06"></div>
 
 This [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server enables AI to interact with the Norman Finance API, allowing access to accounting, invoices, companies, clients, taxes, and more through a standardized protocol.
@@ -6,12 +6,19 @@ This [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server ena
 > [!NOTE]
 > 
 > The Norman Finance MCP Server is currently in Beta. We welcome your feedback and encourage you to report any bugs by opening an issue [here](https://github.com/norman-finance/norman-mcp-server/issues).
-
-<a href="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server">
-  <img width="250" height="135" src="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server/badge" alt="Norman Finance Server MCP server" />
+  <table>
+      <td align="center">
+       <a href="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server">
+  <img width="250" height="auto" src="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server/badge" alt="Norman Finance Server MCP server" />
 </a>
-<br/>
-
+      </td>
+      <td align="center">
+        <a href="https://mseep.ai/app/norman-finance-norman-mcp-server">
+  <img src="https://mseep.net/pr/norman-finance-norman-mcp-server-badge.png" alt="MseeP.ai Security Assessment Badge" />
+</a>
+      </td>
+    </tr>
+  </table>
 
 ## Features
 
@@ -77,6 +84,13 @@ The remote MCP is recommended because it utilizes OAuth 2.1 authentication with 
 
 ## Installation
 
+### Cursor
+
+To add the Norman MCP server to Cursor, copy and paste the following deeplink into your browser:
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en-US/install-mcp?name=norman-finance&config=eyJ1cmwiOiJodHRwczovL21jcC5ub3JtYW4uZmluYW5jZS9tY3AifQ%3D%3D)
+
+---
+
 ### [Claude.ai Integrations](https://www.anthropic.com/news/integrations)
 Adding the Norman MCP Server to Claude.ai:
 
@@ -129,6 +143,7 @@ This gives you access to the Norman MCP server plus 6 built-in skills:
 | `/norman-finance:expense-report` | Detailed expense breakdown by category, top vendors, and trends |
 | `/norman-finance:tax-deduction-finder` | Scan transactions for missed tax deductions and suggest corrections |
 | `/norman-finance:monthly-reconciliation` | Full monthly close: transactions, invoices, receipts, and taxes |
+---
 
 ### Adding to Claude Desktop
 
