@@ -119,12 +119,18 @@ Adding the Norman MCP Server to Claude.ai:
 
 Norman is available as a [Claude Code plugin](https://code.claude.com/docs/en/plugins) with built-in skills for common finance workflows.
 
-**Install the plugin:**
+**Add the marketplace and install:**
+```bash
+/plugin marketplace add norman-finance/norman-mcp-server
+/plugin install norman-finance@norman-finance
+```
+
+**Or install directly from GitHub:**
 ```bash
 claude /plugin install github:norman-finance/norman-mcp-server
 ```
 
-**Or load it locally for development:**
+**Or load locally for development:**
 ```bash
 claude --plugin-dir ./norman-mcp-server
 ```
