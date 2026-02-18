@@ -1,0 +1,12 @@
+{
+  "name": "norman-finance",
+  "description": "AI-powered bookkeeping and tax filing automation for entrepreneurs at the heart of the European economy. Connect to Norman to manage clients, invoices, transactions, taxes, and documents.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Norman Finance",
+    "url": "https://norman.finance"
+  },
+  "homepage": "https://norman.finance",
+  "repository": "https://github.com/norman-finance/norman-mcp-server",
+  "license": "MIT"
+}

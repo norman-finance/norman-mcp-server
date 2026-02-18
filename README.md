@@ -76,11 +76,11 @@ Before using this MCP server, you need to:
 2. Have your email and password ready for authentication
 
 ## Remote MCP Server
-Norman now offers a hosted remote MCP server at:
+Norman offers a hosted remote MCP server at:
 
 > https://mcp.norman.finance/mcp
 
-The remote MCP is recommended because it utilizes OAuth authentication, enabling you to log in directly with your Norman account without the need to create or manage access tokens manually.
+The remote MCP is recommended because it utilizes OAuth 2.1 authentication with PKCE, enabling you to log in directly with your Norman account without the need to create or manage access tokens manually.
 
 ## Installation
 
@@ -115,6 +115,34 @@ Adding the Norman MCP Server to Claude.ai:
 4. <img width="400" alt="image" src="https://github.com/user-attachments/assets/5edfac9c-1fbd-4443-a831-d93bee3b8e15" />
 5. After connecting, use the same menu to turn on specific Norman tools.
 
+### Claude Code Plugin
+
+Norman is available as a [Claude Code plugin](https://code.claude.com/docs/en/plugins) with built-in skills for common finance workflows.
+
+**Install the plugin:**
+```bash
+claude /plugin install github:norman-finance/norman-mcp-server
+```
+
+**Or load it locally for development:**
+```bash
+claude --plugin-dir ./norman-mcp-server
+```
+
+This gives you access to the Norman MCP server plus 6 built-in skills:
+
+| Skill | Description |
+|---|---|
+| `/norman-finance:financial-overview` | Complete dashboard with balance, transactions, invoices, and tax status |
+| `/norman-finance:create-invoice` | Step-by-step invoice creation and sending |
+| `/norman-finance:manage-clients` | List, create, and update client records |
+| `/norman-finance:tax-report` | Review, preview, and file tax reports with the Finanzamt |
+| `/norman-finance:categorize-transactions` | Categorize and verify bank transactions |
+| `/norman-finance:find-receipts` | Find missing receipts from Gmail/email and attach them to transactions |
+| `/norman-finance:overdue-reminders` | Find overdue invoices and send payment reminders (Mahnungen) |
+| `/norman-finance:expense-report` | Detailed expense breakdown by category, top vendors, and trends |
+| `/norman-finance:tax-deduction-finder` | Scan transactions for missed tax deductions and suggest corrections |
+| `/norman-finance:monthly-reconciliation` | Full monthly close: transactions, invoices, receipts, and taxes |
 ---
 
 ### Adding to Claude Desktop
@@ -136,6 +164,20 @@ To run the Norman Finance MCP server with Claude Desktop, you can use the instru
     "norman-mcp-server": {
       "command": "npx",
       "args": ["mcp-remote", "https://mcp.norman.finance/mcp"]
+    }
+  }
+}
+```
+### Adding to Cursor IDE
+
+Cursor supports MCP servers natively. Add Norman via Settings > MCP Servers, or add to your project's `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "norman-finance": {
+      "type": "streamable-http",
+      "url": "https://mcp.norman.finance/mcp"
     }
   }
 }
