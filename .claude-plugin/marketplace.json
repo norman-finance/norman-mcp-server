@@ -11,7 +11,7 @@
   "plugins": [
     {
       "name": "norman-finance",
-      "source": ".",
+      "source": "./",
       "description": "Connect to Norman Finance to manage clients, invoices, transactions, taxes, and documents from your AI chat.",
       "version": "1.0.0",
       "author": {
