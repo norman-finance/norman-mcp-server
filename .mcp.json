@@ -1,9 +1,8 @@
 {
   "mcpServers": {
     "norman-finance": {
-      "type": "streamable-http",
-      "url": "https://mcp.norman.finance/mcp",
-      "note": "OAuth authentication will be handled automatically. You will be prompted to log in with your Norman account."
+      "type": "http",
+      "url": "https://mcp.norman.finance/mcp"
     }
   }
 }
