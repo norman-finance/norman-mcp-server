@@ -1,0 +1,46 @@
+{
+  "name": "norman-finance",
+  "owner": {
+    "name": "Norman Finance",
+    "email": "support@norman.finance"
+  },
+  "metadata": {
+    "description": "AI-powered bookkeeping and tax filing automation for entrepreneurs at the heart of the European economy.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "norman-finance",
+      "source": ".",
+      "description": "Connect to Norman Finance to manage clients, invoices, transactions, taxes, and documents from your AI chat.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Norman Finance"
+      },
+      "homepage": "https://norman.finance",
+      "repository": "https://github.com/norman-finance/norman-mcp-server",
+      "license": "MIT",
+      "keywords": [
+        "finance",
+        "bookkeeping",
+        "accounting",
+        "invoicing",
+        "taxes",
+        "german",
+        "freelancer",
+        "mcp",
+        "oauth"
+      ],
+      "category": "finance",
+      "tags": [
+        "buchhaltung",
+        "rechnungen",
+        "steuern",
+        "finanzamt",
+        "umsatzsteuer",
+        "kleinunternehmer",
+        "freiberufler"
+      ]
+    }
+  ]
+}

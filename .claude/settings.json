@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "norman-finance": {
+      "source": {
+        "source": "github",
+        "repo": "norman-finance/norman-mcp-server"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "norman-finance@norman-finance": true
+  }
+}
