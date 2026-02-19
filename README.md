@@ -140,6 +140,14 @@ https://mcp.norman.finance/mcp
 </details>
 
 <details>
+<summary><strong>Replit</strong></summary>
+<br/>
+
+[![Add to Replit](https://replit.com/badge?caption=Add%20to%20Replit)](https://replit.com/integrations?mcp=eyJkaXNwbGF5TmFtZSI6Ik5vcm1hbiBNQ1AgU2VydmVyIiwiYmFzZVVybCI6Imh0dHBzOi8vbWNwLm5vcm1hbi5maW5hbmNlL21jcCJ9)
+</details>
+
+
+<details>
 <summary><strong>n8n</strong></summary>
 <br/>
 
