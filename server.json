@@ -1,0 +1,47 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "finance.norman/mcp-server",
+  "title": "Norman MCP Server",
+  "description": "AI-powered bookkeeping and tax filing for entrepreneurs at the heart of the European economy.",
+  "version": "0.1.7",
+  "repository": {
+    "url": "https://github.com/norman-finance/norman-mcp-server",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.norman.finance/mcp"
+    }
+  ],
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "norman-mcp-server",
+      "version": "0.1.7",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "NORMAN_EMAIL",
+          "description": "Your Norman account email",
+          "isRequired": true,
+          "isSecret": false
+        },
+        {
+          "name": "NORMAN_PASSWORD",
+          "description": "Your Norman account password",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "NORMAN_ENVIRONMENT",
+          "description": "API environment: 'production' or 'sandbox'",
+          "isRequired": false,
+          "default": "production"
+        }
+      ]
+    }
+  ]
+}

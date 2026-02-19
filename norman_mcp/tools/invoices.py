@@ -10,6 +10,37 @@ from norman_mcp import config
 
 logger = logging.getLogger(__name__)
 
+
+def _enrich_invoice_response(data: dict, api=None, company_id: str | None = None) -> dict:
+    """Replace private reportUrl with a presigned downloadUrl (1-hour TTL)."""
+    if not isinstance(data, dict):
+        return data
+
+    def _enrich_single(item: dict) -> None:
+        pid = item.get("publicId")
+        if pid and item.get("reportUrl") and api and company_id:
+            try:
+                pdf_endpoint = urljoin(
+                    config.api_base_url,
+                    f"api/v1/companies/{company_id}/invoices/{pid}/pdf/",
+                )
+                resp = api._make_request("GET", pdf_endpoint)
+                if resp.get("url"):
+                    item["downloadUrl"] = resp["url"]
+            except Exception:
+                logger.debug("Could not fetch presigned PDF URL for invoice %s", pid)
+
+    if data.get("publicId"):
+        _enrich_single(data)
+
+    if "results" in data and isinstance(data["results"], list):
+        for item in data["results"]:
+            if isinstance(item, dict):
+                _enrich_single(item)
+
+    return data
+
+
 def register_invoice_tools(mcp):
     """Register all invoice-related tools with the MCP server."""
     
@@ -93,7 +124,7 @@ def register_invoice_tools(mcp):
             delivery_date: Delivery date for goods (YYYY-MM-DD) by default it's today, should be provided if invoice_type is GOODS
 
         Returns:
-            Information about the created invoice and always include the generated invoice pdf url from reportUrl field
+            Information about the created invoice. Use downloadUrl for a direct temporary PDF download link (valid for 1 hour).
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -101,7 +132,6 @@ def register_invoice_tools(mcp):
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
         
-        # Use current date if not provided
         if not issued:
             issued = datetime.now().strftime("%Y-%m-%d")
         
@@ -110,7 +140,6 @@ def register_invoice_tools(mcp):
             f"api/v1/companies/{company_id}/invoices/"
         )
         
-        # Get next invoice number if not provided
         if not invoice_number:
             next_invoice_url = urljoin(
                 config.api_base_url, 
@@ -119,7 +148,6 @@ def register_invoice_tools(mcp):
             next_invoice_data = api._make_request("GET", next_invoice_url)
             invoice_number = next_invoice_data.get("nextInvoiceNumber")
         
-        # Prepare invoice data
         invoice_data = {
             "client": client_id,
             "invoiceNumber": invoice_number,
@@ -136,7 +164,6 @@ def register_invoice_tools(mcp):
             "companyEmail": config.NORMAN_EMAIL
         }
         
-        # Add optional fields if provided
         invoice_data["dueTo"] = due_to if due_to else (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
         invoice_data["paymentTerms"] = payment_terms if payment_terms else ""
         invoice_data["notes"] = notes if notes else ""
@@ -157,7 +184,8 @@ def register_invoice_tools(mcp):
         if invoice_type == "GOODS":
             invoice_data["deliveryDate"] = delivery_date if delivery_date else datetime.now().strftime("%Y-%m-%d")
 
-        return api._make_request("POST", invoices_url, json_data=invoice_data)
+        result = api._make_request("POST", invoices_url, json_data=invoice_data)
+        return _enrich_invoice_response(result, api=api, company_id=company_id)
 
     @mcp.tool(
         title="Create Recurring Invoice",
@@ -245,7 +273,7 @@ def register_invoice_tools(mcp):
             delivery_date: Delivery date (for GOODS type)
 
         Returns:
-            Information about the created recurring invoice setup and always include the generated invoice pdf url from reportUrl field
+            Information about the created recurring invoice. Use downloadUrl for a direct temporary PDF download link (valid for 1 hour).
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -261,7 +289,6 @@ def register_invoice_tools(mcp):
             f"api/v1/companies/{company_id}/recurring-invoices/"
         )
 
-        # Get next invoice number if not provided
         if not invoice_number:
             next_invoice_url = urljoin(
                 config.api_base_url,
@@ -270,7 +297,6 @@ def register_invoice_tools(mcp):
             next_invoice_data = api._make_request("GET", next_invoice_url)
             invoice_number = next_invoice_data.get("nextInvoiceNumber")
 
-        # Prepare recurring invoice data
         invoice_data = {
             "client": client_id,
             "invoiceNumber": invoice_number,
@@ -322,7 +348,8 @@ def register_invoice_tools(mcp):
         if invoice_type == "GOODS":
             invoice_data["deliveryDate"] = delivery_date if delivery_date else starts_from_date
 
-        return api._make_request("POST", recurring_invoices_url, json_data=invoice_data)
+        result = api._make_request("POST", recurring_invoices_url, json_data=invoice_data)
+        return _enrich_invoice_response(result, api=api, company_id=company_id)
 
     @mcp.tool(
         title="Get Invoice Details",
@@ -357,7 +384,8 @@ def register_invoice_tools(mcp):
             f"api/v1/companies/{company_id}/invoices/{invoice_id}/"
         )
         
-        return api._make_request("GET", invoice_url)
+        result = api._make_request("GET", invoice_url)
+        return _enrich_invoice_response(result, api=api, company_id=company_id)
 
     @mcp.tool(
         title="Send Invoice via Email",
@@ -615,4 +643,5 @@ def register_invoice_tools(mcp):
         if name:
             params["name"] = name
         
-        return api._make_request("GET", invoices_url, params=params) 
+        result = api._make_request("GET", invoices_url, params=params)
+        return _enrich_invoice_response(result)
