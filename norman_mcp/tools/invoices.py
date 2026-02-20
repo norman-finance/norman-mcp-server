@@ -1,10 +1,12 @@
+import json
 from typing import Dict, Any, Optional, List
 from urllib.parse import urljoin
 from datetime import datetime, timedelta
 import logging
 import requests
 
-from mcp.types import ToolAnnotations
+from pydantic import Field
+from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
 
@@ -645,3 +647,56 @@ def register_invoice_tools(mcp):
         
         result = api._make_request("GET", invoices_url, params=params)
         return _enrich_invoice_response(result)
+
+    @mcp.tool(
+        title="Get Invoice Preview",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def get_invoice_preview(
+        ctx: Context,
+        invoice_id: str = Field(description="Public ID of the invoice to preview"),
+    ) -> CallToolResult:
+        """
+        Get a visual preview of an invoice.
+
+        Returns an inline JPEG image of the first page of the invoice PDF,
+        rendered directly in clients that support MCP ImageContent. Also
+        includes a downloadUrl for the full PDF.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+
+        if not company_id:
+            return CallToolResult(content=[
+                TextContent(type="text", text='{"error": "No company available. Please authenticate first."}')
+            ])
+
+        preview_url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/invoices/{invoice_id}/preview/",
+        )
+
+        try:
+            result = api._make_request("GET", preview_url)
+        except Exception as e:
+            logger.error("Failed to get invoice preview: %s", e)
+            return CallToolResult(content=[
+                TextContent(type="text", text=json.dumps({"error": f"Failed to get invoice preview: {e}"}))
+            ])
+
+        content: list = []
+        preview_b64 = result.get("previewImage")
+        if preview_b64:
+            mime = result.get("mimeType", "image/jpeg")
+            content.append(ImageContent(type="image", data=preview_b64, mimeType=mime))
+
+        meta = {k: v for k, v in result.items() if k != "previewImage"}
+        meta["invoiceId"] = invoice_id
+        content.append(TextContent(type="text", text=json.dumps(meta, ensure_ascii=False)))
+
+        return CallToolResult(content=content)
