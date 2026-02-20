@@ -89,15 +89,31 @@ def download_file(url: str) -> Optional[str]:
         logger.error(f"Error downloading file from {url}: {str(e)}")
         return None
 
+def _strip_base64_prefix(raw: str) -> str:
+    """Remove data-URI prefix (e.g. 'data:application/pdf;base64,') if present."""
+    if raw.startswith("data:") and "," in raw:
+        return raw.split(",", 1)[1]
+    return raw
+
+
 def save_base64_to_temp(content_b64: str, file_name: str) -> Optional[str]:
     """Decode base64 content and write to a temporary file. Returns the path."""
     try:
-        data = base64.b64decode(content_b64)
+        cleaned = _strip_base64_prefix(content_b64)
+        cleaned = re.sub(r"\s+", "", cleaned)
+        data = base64.b64decode(cleaned, validate=True)
+        if len(data) == 0:
+            logger.error("Base64 decoded to empty content")
+            return None
         temp_dir = tempfile.mkdtemp(prefix="norman_")
         temp_path = os.path.join(temp_dir, file_name)
         with open(temp_path, "wb") as f:
             f.write(data)
+        logger.info(f"Saved base64 file ({len(data)} bytes) to {temp_path}")
         return temp_path
+    except base64.binascii.Error as e:
+        logger.error(f"Invalid base64 content: {e}")
+        return None
     except Exception as e:
         logger.error(f"Error decoding base64 content: {e}")
         return None

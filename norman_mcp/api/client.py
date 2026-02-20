@@ -236,15 +236,26 @@ class NormanAPI:
             json_data = sanitized_json
         
         try:
-            response = requests.request(
-                method=method,
-                url=url,
-                headers=headers,
-                params=params,
-                json=json_data,
-                files=files,
-                timeout=config.NORMAN_API_TIMEOUT
-            )
+            if files and json_data:
+                response = requests.request(
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    params=params,
+                    data=json_data,
+                    files=files,
+                    timeout=config.NORMAN_API_TIMEOUT
+                )
+            else:
+                response = requests.request(
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    params=params,
+                    json=json_data,
+                    files=files,
+                    timeout=config.NORMAN_API_TIMEOUT
+                )
             response.raise_for_status()
             
             # Attempt to parse JSON response, but handle non-JSON responses gracefully
