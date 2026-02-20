@@ -135,13 +135,15 @@ def register_document_tools(mcp):
     )
     async def upload_bulk_attachments(
         ctx: Context,
-        file_paths: Optional[List[str]] = Field(default=None, description="List of local paths or URLs to files to upload."),
-        files_base64: Optional[List[Dict[str, str]]] = Field(default=None, description="List of files as base64. Each item: {\"file_name\": \"receipt.pdf\", \"content\": \"<base64 string>\"}. Use this for remote MCP clients."),
+        files_base64: Optional[List[Dict[str, str]]] = Field(default=None, description="PREFERRED: List of files as base64. Each item: {\"file_name\": \"receipt.pdf\", \"content\": \"<base64 string>\"}. Always use this for remote/cloud MCP — the server cannot access your local filesystem."),
+        file_paths: Optional[List[str]] = Field(default=None, description="List of HTTP(S) URLs to publicly accessible files. Do NOT pass local filesystem paths; use files_base64 instead."),
         cashflow_type: Optional[str] = Field(description="Optional cashflow type for the transactions (INCOME or EXPENSE). If not provided, then try to detect it from the file")
     ) -> Dict[str, Any]:
         """
-        Upload multiple file attachments in bulk. Provide either file_paths
-        (local paths or URLs) or files_base64 (for remote MCP clients).
+        Upload multiple file attachments in bulk. Use files_base64
+        (recommended for all remote MCP connections). Alternatively pass
+        public HTTP(S) URLs via file_paths. Local filesystem paths will NOT
+        work because the server runs remotely.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -199,6 +201,13 @@ def register_document_tools(mcp):
                         logger.info(f"File downloaded to: {actual_path}")
                     
                     if not os.path.exists(actual_path):
+                        if not is_url(path):
+                            return {
+                                "error": f"File not found: {actual_path}. "
+                                "The MCP server cannot access your local filesystem. "
+                                "Please read files, base64-encode them, and pass via "
+                                "files_base64 instead of file_paths."
+                            }
                         logger.warning(f"File not found: {actual_path}")
                         continue
                     
@@ -329,9 +338,9 @@ def register_document_tools(mcp):
     )
     async def create_attachment(
         ctx: Context,
-        file_path: Optional[str] = Field(default=None, description="Local path or URL to file to upload. For remote MCP, prefer file_content_base64 instead."),
-        file_content_base64: Optional[str] = Field(default=None, description="Base64-encoded file content. Use this when sending files over remote MCP (streamable HTTP). The client should read the file and base64-encode it."),
-        file_name: Optional[str] = Field(default=None, description="Filename (e.g. 'receipt.pdf'). Required when using file_content_base64."),
+        file_content_base64: Optional[str] = Field(default=None, description="PREFERRED: Base64-encoded file content. Read the file, base64-encode it, and pass here. Always use this for remote/cloud MCP connections — the server cannot access your local filesystem."),
+        file_name: Optional[str] = Field(default=None, description="Original filename with extension (e.g. 'invoice.pdf'). Required when using file_content_base64."),
+        file_path: Optional[str] = Field(default=None, description="URL to a publicly accessible file. Only works for HTTP(S) URLs. Do NOT pass local filesystem paths — the remote server cannot read them; use file_content_base64 instead."),
         transactions: Optional[List[str]] = Field(description="List of transaction IDs to link"),
         attachment_type: Optional[str] = Field(description="Type of attachment (invoice, receipt)"),
         amount: Optional[float] = Field(description="Amount related to attachment"),
@@ -350,8 +359,10 @@ def register_document_tools(mcp):
         additional_metadata: Optional[Dict[str, Any]] = Field(description="Additional metadata for attachment")
     ) -> Dict[str, Any]:
         """
-        Create a new attachment. Provide either file_path (local path or URL)
-        or file_content_base64 + file_name (for remote MCP clients).
+        Create a new attachment with a file. Use file_content_base64 + file_name
+        (recommended for all remote MCP connections). Alternatively pass a
+        public HTTP(S) URL via file_path. Local filesystem paths will NOT work
+        because the server runs remotely.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -404,10 +415,16 @@ def register_document_tools(mcp):
                 actual_file_path = temp_file_path
                 logger.info(f"File downloaded to: {actual_file_path}")
             
-            # Check if file exists and is readable
             if not os.path.exists(actual_file_path):
+                if not file_content_base64 and file_path and not is_url(file_path):
+                    return {
+                        "error": f"File not found: {actual_file_path}. "
+                        "The MCP server cannot access your local filesystem. "
+                        "Please read the file, base64-encode it, and pass it via "
+                        "file_content_base64 + file_name instead."
+                    }
                 return {"error": f"File not found: {actual_file_path}"}
-                
+
             if not os.access(actual_file_path, os.R_OK):
                 return {"error": f"Permission denied when accessing file: {actual_file_path}"}
                 
