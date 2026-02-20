@@ -15,6 +15,35 @@ from norman_mcp.security.utils import validate_file_path, validate_input
 
 logger = logging.getLogger(__name__)
 
+
+def _enrich_attachment_download_urls(data: dict, api=None, company_id: str | None = None) -> dict:
+    """Add presigned downloadUrl for attachment files."""
+    if not isinstance(data, dict):
+        return data
+
+    def _enrich_single(item: dict) -> None:
+        pk = item.get("publicId") or item.get("pk")
+        if pk and item.get("file") and api and company_id:
+            try:
+                dl_endpoint = urljoin(
+                    config.api_base_url,
+                    f"api/v1/companies/{company_id}/attachments/{pk}/download/",
+                )
+                dl_resp = api._make_request("GET", dl_endpoint)
+                if dl_resp.get("url"):
+                    item["downloadUrl"] = dl_resp["url"]
+            except Exception:
+                pass
+
+    if data.get("publicId") or data.get("pk"):
+        _enrich_single(data)
+    if "results" in data and isinstance(data["results"], list):
+        for item in data["results"]:
+            if isinstance(item, dict):
+                _enrich_single(item)
+    return data
+
+
 def is_url(path: str) -> bool:
     """Check if the given path is a URL."""
     try:
@@ -237,7 +266,7 @@ def register_document_tools(mcp):
             brand_name: Filter by brand name (case insensitive partial match)
             
         Returns:
-            List of attachments matching the filters. Use field "file" that contains direct links to the file in the response and make the link clickable along with the other fields.
+            List of attachments matching the filters. Use downloadUrl for direct temporary file download links.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -262,7 +291,8 @@ def register_document_tools(mcp):
         if brand_name:
             params["brand_name"] = brand_name
             
-        return api._make_request("GET", attachments_url, params=params)
+        result = api._make_request("GET", attachments_url, params=params)
+        return _enrich_attachment_download_urls(result, api=api, company_id=company_id)
 
     @mcp.tool(
         title="Create Attachment",
@@ -413,10 +443,8 @@ def register_document_tools(mcp):
                 
             response = api._make_request("POST", attachments_url, json_data=data, files=files)
             
-            # Close the file handle
             files["file"].close()
             
-            # Clean up temporary file if we downloaded one
             if temp_file_path and os.path.exists(temp_file_path):
                 try:
                     os.remove(temp_file_path)
@@ -425,7 +453,7 @@ def register_document_tools(mcp):
                 except Exception as e:
                     logger.warning(f"Failed to remove temporary file: {str(e)}")
                     
-            return response
+            return _enrich_attachment_download_urls(response, api=api, company_id=company_id)
         except FileNotFoundError:
             return {"error": f"File not found: {file_path}"}
         except PermissionError:

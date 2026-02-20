@@ -226,3 +226,5 @@ Ready-to-use skills compatible with **Claude Code**, **OpenClaw**, and the [Agen
    <br/><br/>
    <sub>Make business effortless</sub>
 </p>
+
+<!-- mcp-name: finance.norman/mcp-server -->

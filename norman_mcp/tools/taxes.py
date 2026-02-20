@@ -3,16 +3,31 @@ import requests
 from typing import Dict, Any, Optional
 from urllib.parse import urljoin
 from pydantic import Field
-from mcp.server.fastmcp.utilities.types import Image
 from mcp.types import ToolAnnotations
-import io
-from pdf2image import convert_from_bytes
-from PIL import Image as PILImage
 
 from norman_mcp.context import Context
 from norman_mcp import config
 
 logger = logging.getLogger(__name__)
+
+
+def _enrich_report_download_url(data: dict, api=None, report_id: str | None = None) -> dict:
+    """Add a presigned downloadUrl for the submitted tax report PDF."""
+    if not isinstance(data, dict):
+        return data
+    if api and report_id and data.get("reportFile"):
+        try:
+            dl_endpoint = urljoin(
+                config.api_base_url,
+                f"api/v1/taxes/reports/{report_id}/download/",
+            )
+            dl_resp = api._make_request("GET", dl_endpoint)
+            if dl_resp.get("url"):
+                data["downloadUrl"] = dl_resp["url"]
+        except Exception:
+            logger.debug("Could not fetch presigned download URL for report %s", report_id)
+    return data
+
 
 def register_tax_tools(mcp):
     """Register all tax-related tools with the MCP server."""
@@ -63,7 +78,8 @@ def register_tax_tools(mcp):
             f"api/v1/taxes/reports/{report_id}/"
         )
         
-        return api._make_request("GET", report_url)
+        result = api._make_request("GET", report_url)
+        return _enrich_report_download_url(result, api=api, report_id=report_id)
 
     @mcp.tool(
         title="Validate Tax Number",
@@ -112,75 +128,38 @@ def register_tax_tools(mcp):
     async def generate_finanzamt_preview(
         ctx: Context,
         report_id: str = Field(description="Public ID of the tax report to generate a preview for")
-    ) -> Image:
+    ) -> Dict[str, Any]:
         """
-        Generate a test Finanzamt preview for a tax report and return it as an image.
-        
-        Args:
-            report_id: Public ID of the tax report
-            
-        Returns:
-            The tax report preview as an image in PNG format
+        Generate a test Finanzamt preview for a tax report.
+
+        Returns a JSON object with:
+        - downloadUrl: presigned URL to download the full PDF (valid for 1 hour)
+        - previewImage: base64-encoded PNG of the first page (for inline preview)
+        - mimeType: always "image/png"
         """
         api = ctx.request_context.lifespan_context["api"]
-        
-        # Validate report_id
+
         if not report_id or not isinstance(report_id, str) or not report_id.strip():
             raise ValueError("Invalid report ID")
-        
+
         preview_url = urljoin(
             config.api_base_url,
-            f"api/v1/taxes/reports/{report_id}/generate-preview/"
+            f"api/v1/taxes/reports/{report_id}/generate-preview-url/",
         )
 
         try:
-            response = requests.post(
-                preview_url,
-                headers={"Authorization": f"Bearer {api.access_token}"},
-                timeout=config.NORMAN_API_TIMEOUT
-            )
-            response.raise_for_status()
-            
-            # The response contains raw PDF bytes
-            if isinstance(response.content, bytes) and len(response.content) > 0:
-                # Convert PDF to image
-                images = convert_from_bytes(response.content, dpi=150)
-                
-                # Get the first page as PIL Image
-                first_page = images[0]
-                
-                # Convert to RGB and resize if needed to keep file size manageable
-                first_page = first_page.convert('RGB')
-                
-                # Calculate new dimensions while maintaining aspect ratio
-                width, height = first_page.size
-                max_dim = 1000
-                if width > max_dim or height > max_dim:
-                    if width > height:
-                        new_width = max_dim
-                        new_height = int(height * (max_dim / width))
-                    else:
-                        new_height = max_dim
-                        new_width = int(width * (max_dim / height))
-                    first_page = first_page.resize((new_width, new_height), PILImage.LANCZOS)
-                
-                # Save as PNG to bytes buffer
-                buffer = io.BytesIO()
-                first_page.save(buffer, format="PNG", optimize=True)
-                buffer.seek(0)
-                
-                # Return as Image
-                return Image(data=buffer.getvalue(), format="png")
-            else:
-                raise ValueError("Preview generation failed or invalid response format")
+            result = api._make_request("POST", preview_url)
+            if not result.get("downloadUrl"):
+                raise ValueError("Preview generation failed: no download URL returned")
+            return result
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to generate tax report preview: {str(e)}")
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"Response: {e.response.text}")
-            raise ValueError(f"Failed to generate tax report preview: {str(e)}")
+            logger.error("Failed to generate tax report preview: %s", e)
+            if hasattr(e, "response") and e.response is not None:
+                logger.error("Response: %s", e.response.text)
+            raise ValueError(f"Failed to generate tax report preview: {e}")
         except Exception as e:
-            logger.error(f"Error generating tax report preview: {str(e)}")
-            raise ValueError(f"Error generating tax report preview: {str(e)}")
+            logger.error("Error generating tax report preview: %s", e)
+            raise ValueError(f"Error generating tax report preview: {e}")
 
     @mcp.tool(
         title="Submit Tax Report to Finanzamt",
@@ -213,7 +192,8 @@ def register_tax_tools(mcp):
         )
         
         try:
-            return api._make_request("POST", submit_url)
+            result = api._make_request("POST", submit_url)
+            return _enrich_report_download_url(result, api=api, report_id=report_id)
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 403:
                 return {
