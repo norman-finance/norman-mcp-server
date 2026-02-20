@@ -690,8 +690,21 @@ def register_document_tools(mcp):
 
         resp = requests.get(presigned_url, timeout=30)
         resp.raise_for_status()
-        image_b64 = base64.b64encode(resp.content).decode()
-        mime = _EXT_TO_MIME.get(ext, "image/png")
+
+        try:
+            from PIL import Image
+            from io import BytesIO
+            img = Image.open(BytesIO(resp.content))
+            max_dim = 1200
+            if max(img.size) > max_dim:
+                img.thumbnail((max_dim, max_dim), Image.LANCZOS)
+            buf = BytesIO()
+            img.convert("RGB").save(buf, format="JPEG", quality=75, optimize=True)
+            image_b64 = base64.b64encode(buf.getvalue()).decode()
+            mime = "image/jpeg"
+        except Exception:
+            image_b64 = base64.b64encode(resp.content).decode()
+            mime = _EXT_TO_MIME.get(ext, "image/png")
 
         meta = {
             "attachmentId": attachment_id,
