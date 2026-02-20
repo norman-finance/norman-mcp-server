@@ -8,11 +8,14 @@ authentication to Norman's OAuth server. It:
 4. Issues MCP tokens that map to Norman tokens
 """
 
+import json as _json
 import os
 import logging
 import time
 import secrets
+import threading
 import httpx
+from pathlib import Path
 from urllib.parse import urljoin, urlencode
 from typing import Any, Dict, Optional
 
@@ -47,43 +50,146 @@ def get_norman_oauth_client_secret() -> str | None:
     return os.environ.get("NORMAN_OAUTH_CLIENT_SECRET")
 
 
+_STATE_FILE = os.environ.get(
+    "MCP_OAUTH_STATE_FILE",
+    str(Path.home() / ".norman-mcp" / "oauth_state.json"),
+)
+
+
 class NormanOAuthProvider(OAuthAuthorizationServerProvider):
     """OAuth provider that delegates authentication to Norman's OAuth server."""
 
     def __init__(self, server_url: AnyHttpUrl):
-        """Initialize the Norman OAuth provider.
-        
-        Args:
-            server_url: The URL of the MCP server (used for callbacks)
-        """
         self.server_url = server_url
-        
-        # Norman OAuth endpoints
+
         self.norman_authorize_url = urljoin(config.api_base_url, "api/v1/oauth/authorize/")
         self.norman_token_url = urljoin(config.api_base_url, "api/v1/oauth/token/")
-        
-        # MCP Server's callback URL (Norman redirects here after auth)
         self.callback_url = urljoin(str(server_url), "/oauth/callback")
-        
+
         logger.info(f"Norman OAuth Provider initialized:")
         logger.info(f"  - Norman Authorize: {self.norman_authorize_url}")
         logger.info(f"  - Norman Token: {self.norman_token_url}")
         logger.info(f"  - MCP Callback: {self.callback_url}")
-        
+
         # Storage for OAuth entities
         self.clients: Dict[str, OAuthClientInformationFull] = {}
         self.auth_codes: Dict[str, AuthorizationCode] = {}
         self.tokens: Dict[str, AccessToken] = {}
         self.refresh_tokens: Dict[str, RefreshToken] = {}
-        
-        # Maps state to client information needed for callback
+
         self.state_mapping: Dict[str, Dict[str, Any]] = {}
-        
-        # Maps MCP tokens to Norman API tokens
         self.token_mapping: Dict[str, str] = {}
-        
-        # Pre-register the Norman OAuth client if configured
+
+        self._persist_lock = threading.Lock()
+        self._load_state()
         self._register_norman_client()
+
+    # ------------------------------------------------------------------
+    # Persistence helpers
+    # ------------------------------------------------------------------
+
+    def _state_path(self) -> Path:
+        return Path(_STATE_FILE)
+
+    def _save_state(self) -> None:
+        """Persist clients, refresh tokens, and token mappings to disk."""
+        with self._persist_lock:
+            try:
+                path = self._state_path()
+                path.parent.mkdir(parents=True, exist_ok=True)
+
+                clients_ser = {}
+                for cid, c in self.clients.items():
+                    clients_ser[cid] = {
+                        "client_id": c.client_id,
+                        "client_name": c.client_name,
+                        "client_secret": c.client_secret,
+                        "redirect_uris": [str(u) for u in c.redirect_uris],
+                        "token_endpoint_auth_method": c.token_endpoint_auth_method,
+                        "grant_types": c.grant_types,
+                        "response_types": c.response_types,
+                        "scope": c.scope,
+                    }
+
+                refresh_ser = {}
+                for rid, r in self.refresh_tokens.items():
+                    refresh_ser[rid] = {
+                        "token": r.token,
+                        "client_id": r.client_id,
+                        "scopes": r.scopes,
+                        "expires_at": r.expires_at,
+                    }
+
+                tokens_ser = {}
+                for tid, t in self.tokens.items():
+                    tokens_ser[tid] = {
+                        "token": t.token,
+                        "client_id": t.client_id,
+                        "scopes": t.scopes,
+                        "expires_at": t.expires_at,
+                    }
+
+                data = {
+                    "clients": clients_ser,
+                    "refresh_tokens": refresh_ser,
+                    "tokens": tokens_ser,
+                    "token_mapping": self.token_mapping,
+                }
+
+                tmp = path.with_suffix(".tmp")
+                tmp.write_text(_json.dumps(data, indent=2))
+                tmp.replace(path)
+                logger.debug("OAuth state persisted to %s", path)
+            except Exception:
+                logger.warning("Failed to persist OAuth state", exc_info=True)
+
+    def _load_state(self) -> None:
+        """Load persisted state from disk on startup."""
+        path = self._state_path()
+        if not path.exists():
+            logger.info("No persisted OAuth state found at %s", path)
+            return
+        try:
+            data = _json.loads(path.read_text())
+            now = time.time()
+
+            for cid, c in data.get("clients", {}).items():
+                self.clients[cid] = OAuthClientInformationFull(
+                    client_id=c["client_id"],
+                    client_name=c.get("client_name"),
+                    client_secret=c.get("client_secret"),
+                    redirect_uris=c.get("redirect_uris", []),
+                    token_endpoint_auth_method=c.get("token_endpoint_auth_method", "none"),
+                    grant_types=c.get("grant_types", ["authorization_code", "refresh_token"]),
+                    response_types=c.get("response_types", ["code"]),
+                    scope=c.get("scope", "read write"),
+                )
+
+            for rid, r in data.get("refresh_tokens", {}).items():
+                if r.get("expires_at", 0) > now:
+                    self.refresh_tokens[rid] = RefreshToken(
+                        token=r["token"],
+                        client_id=r["client_id"],
+                        scopes=r.get("scopes", []),
+                        expires_at=r.get("expires_at", 0),
+                    )
+
+            for tid, t in data.get("tokens", {}).items():
+                if t.get("expires_at", 0) > now:
+                    self.tokens[tid] = AccessToken(
+                        token=t["token"],
+                        client_id=t["client_id"],
+                        scopes=t.get("scopes", []),
+                        expires_at=t.get("expires_at", 0),
+                    )
+
+            self.token_mapping = data.get("token_mapping", {})
+            logger.info(
+                "Restored OAuth state: %d clients, %d refresh tokens, %d access tokens",
+                len(self.clients), len(self.refresh_tokens), len(self.tokens),
+            )
+        except Exception:
+            logger.warning("Failed to load OAuth state from %s", path, exc_info=True)
 
     def _register_norman_client(self) -> None:
         """Pre-register the Norman OAuth client from environment variables."""
@@ -153,7 +259,8 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             )
             self.clients[client_id] = client
             logger.debug(f"Registered redirect_uris: {[str(u) for u in client.redirect_uris]}")
-            
+            self._save_state()
+
         return client
     
     def add_redirect_uri(self, client_id: str, redirect_uri: str) -> None:
@@ -173,12 +280,11 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 scope=client.scope,
             )
             logger.info(f"Added redirect URI for client {client_id[:8]}: {redirect_uri}")
+            self._save_state()
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         """Register a new OAuth client via Dynamic Client Registration."""
-        # Ensure client has proper scopes for Norman API access
         if not client_info.scope or "read" not in client_info.scope:
-            # Create a new client with proper scopes
             client_info = OAuthClientInformationFull(
                 client_id=client_info.client_id,
                 client_name=client_info.client_name,
@@ -187,10 +293,11 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 token_endpoint_auth_method=client_info.token_endpoint_auth_method or "none",
                 grant_types=client_info.grant_types or ["authorization_code", "refresh_token"],
                 response_types=client_info.response_types or ["code"],
-                scope="read write",  # Ensure scopes are set
+                scope="read write",
             )
         self.clients[client_info.client_id] = client_info
         logger.info(f"Registered client: {client_info.client_id} with scope: {client_info.scope}")
+        self._save_state()
 
     async def authorize(
         self, client: OAuthClientInformationFull, params: AuthorizationParams
@@ -316,6 +423,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 redirect_url = construct_redirect_uri(redirect_uri, code=mcp_code, state=state)
                 logger.info(f"Redirecting to client: {redirect_url[:50]}...")
                 
+                self._save_state()
                 return redirect_url
                 
         except httpx.RequestError as e:
@@ -382,7 +490,8 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             del self.token_mapping[f"refresh_{authorization_code.code}"]
         
         logger.info(f"✅ Issued MCP token: {mcp_token[:15]}...")
-        
+        self._save_state()
+
         return OAuthToken(
             access_token=mcp_token,
             token_type="bearer",
@@ -398,11 +507,11 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         if not access_token:
             return None
         
-        # Check expiration
         if access_token.expires_at and access_token.expires_at < time.time():
             del self.tokens[token]
             if token in self.token_mapping:
                 del self.token_mapping[token]
+            self._save_state()
             return None
         
         # Set Norman token in context when validating
@@ -477,7 +586,8 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                     self.token_mapping[refresh_token.token] = new_norman_refresh
                 
                 logger.info(f"✅ Refreshed MCP token: {new_mcp_token[:15]}...")
-                
+                self._save_state()
+
                 return OAuthToken(
                     access_token=new_mcp_token,
                     token_type="bearer",
@@ -492,17 +602,21 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
 
     async def revoke_token(self, token: str, token_type_hint: Optional[str] = None) -> None:
         """Revoke a token."""
+        changed = False
         if token in self.tokens:
             if token in self.token_mapping:
                 del self.token_mapping[token]
             del self.tokens[token]
             logger.info(f"Revoked access token: {token[:10]}...")
-            
+            changed = True
         elif token in self.refresh_tokens:
             if token in self.token_mapping:
                 del self.token_mapping[token]
             del self.refresh_tokens[token]
             logger.info(f"Revoked refresh token: {token[:10]}...")
+            changed = True
+        if changed:
+            self._save_state()
 
     def get_norman_token(self, mcp_token: str) -> Optional[str]:
         """Get the Norman API token for a given MCP token."""

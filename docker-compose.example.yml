@@ -25,6 +25,11 @@ services:
       # Optional: OpenAI Apps domain verification token
       # Set this if you need to verify domain ownership for OpenAI Apps
       - OPENAI_APPS_VERIFICATION_TOKEN=${OPENAI_APPS_VERIFICATION_TOKEN:-}
+
+      # Persistent OAuth state file (survives container restarts)
+      - MCP_OAUTH_STATE_FILE=/data/oauth_state.json
+    volumes:
+      - mcp-data:/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/.well-known/oauth-authorization-server"]
@@ -32,3 +37,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+volumes:
+  mcp-data:
