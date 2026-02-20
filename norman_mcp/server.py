@@ -277,6 +277,13 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
         for route in create_norman_auth_routes(oauth_provider):
             server._custom_starlette_routes.append(route)
     
+    # File upload endpoint — accepts multipart form data and stores the file
+    # temporarily so that tools can reference it by file_ref instead of base64
+    # (avoids blowing up the LLM context window).
+    from norman_mcp.files.upload import create_file_upload_routes
+    for route in create_file_upload_routes():
+        server._custom_starlette_routes.append(route)
+
     # Register domain verification route for OpenAI Apps
     from starlette.routing import Route
     from starlette.responses import PlainTextResponse
