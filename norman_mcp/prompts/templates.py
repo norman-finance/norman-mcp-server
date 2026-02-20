@@ -1,9 +1,71 @@
-from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any
+import re
+from pathlib import Path
+from typing import List, Optional
 from mcp.server.fastmcp.prompts import base
+
+import yaml
+
+
+def _load_skills() -> list[dict]:
+    """Load all SKILL.md files and parse frontmatter + body."""
+    skills_dir = Path(__file__).resolve().parents[2] / "skills"
+    if not skills_dir.is_dir():
+        return []
+
+    skills = []
+    for skill_md in sorted(skills_dir.glob("*/SKILL.md")):
+        text = skill_md.read_text(encoding="utf-8")
+        match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.+)", text, re.DOTALL)
+        if not match:
+            continue
+        try:
+            meta = yaml.safe_load(match.group(1))
+        except yaml.YAMLError:
+            continue
+        skills.append({
+            "name": meta.get("name", skill_md.parent.name),
+            "description": meta.get("description", ""),
+            "argument_hint": meta.get("argument-hint"),
+            "body": match.group(2).strip(),
+        })
+    return skills
+
+
+def _make_skill_prompt(skill_name: str, description: str, instructions: str, has_args: bool):
+    """Create a prompt function from a skill definition."""
+    fn_name = skill_name.replace("-", "_")
+
+    if has_args:
+        def prompt_fn(user_input: str = "") -> list[base.Message]:
+            messages = [base.UserMessage(user_input)] if user_input else []
+            messages.append(base.AssistantMessage(instructions))
+            return messages
+    else:
+        def prompt_fn() -> list[base.Message]:
+            return [base.AssistantMessage(instructions)]
+
+    prompt_fn.__name__ = fn_name
+    prompt_fn.__qualname__ = fn_name
+    prompt_fn.__doc__ = description
+    return prompt_fn
+
+
+def _register_skill_prompts(mcp):
+    """Register each SKILL.md as an MCP prompt."""
+    for skill in _load_skills():
+        fn = _make_skill_prompt(
+            skill["name"],
+            skill["description"],
+            skill["body"],
+            skill["argument_hint"] is not None,
+        )
+        title = skill["name"].replace("-", " ").title()
+        mcp.prompt(title=title)(fn)
+
 
 def register_prompts(mcp):
     """Register all prompt templates with the MCP server."""
+    _register_skill_prompts(mcp)
     
     @mcp.prompt()
     def create_transaction_prompt(amount: float, description: str, cashflow_type: str = "EXPENSE") -> str:

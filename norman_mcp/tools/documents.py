@@ -1,3 +1,5 @@
+import base64
+import json
 import logging
 import os
 import re
@@ -8,7 +10,7 @@ import requests
 from urllib.parse import urlparse
 from pydantic import Field
 
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
 from norman_mcp.security.utils import validate_file_path, validate_input
@@ -87,6 +89,20 @@ def download_file(url: str) -> Optional[str]:
         logger.error(f"Error downloading file from {url}: {str(e)}")
         return None
 
+def save_base64_to_temp(content_b64: str, file_name: str) -> Optional[str]:
+    """Decode base64 content and write to a temporary file. Returns the path."""
+    try:
+        data = base64.b64decode(content_b64)
+        temp_dir = tempfile.mkdtemp(prefix="norman_")
+        temp_path = os.path.join(temp_dir, file_name)
+        with open(temp_path, "wb") as f:
+            f.write(data)
+        return temp_path
+    except Exception as e:
+        logger.error(f"Error decoding base64 content: {e}")
+        return None
+
+
 def validate_file_path(file_path: str) -> bool:
     """Validate that a file path is safe to use."""
     # Allow URLs as they'll be handled separately
@@ -119,18 +135,13 @@ def register_document_tools(mcp):
     )
     async def upload_bulk_attachments(
         ctx: Context,
-        file_paths: List[str] = Field(description="List of paths or URLs to files to upload"),
+        file_paths: Optional[List[str]] = Field(default=None, description="List of local paths or URLs to files to upload."),
+        files_base64: Optional[List[Dict[str, str]]] = Field(default=None, description="List of files as base64. Each item: {\"file_name\": \"receipt.pdf\", \"content\": \"<base64 string>\"}. Use this for remote MCP clients."),
         cashflow_type: Optional[str] = Field(description="Optional cashflow type for the transactions (INCOME or EXPENSE). If not provided, then try to detect it from the file")
     ) -> Dict[str, Any]:
         """
-        Upload multiple file attachments in bulk.
-        
-        Args:
-            file_paths: List of paths or URLs to files to upload
-            cashflow_type: Optional cashflow type for the transactions (INCOME or EXPENSE). If not provided, then try to detect it from the file
-            
-        Returns:
-            Response from the bulk upload request
+        Upload multiple file attachments in bulk. Provide either file_paths
+        (local paths or URLs) or files_base64 (for remote MCP clients).
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -138,7 +149,9 @@ def register_document_tools(mcp):
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
         
-        # Validate cashflow_type
+        if not file_paths and not files_base64:
+            return {"error": "Provide either file_paths or files_base64"}
+        
         if cashflow_type and cashflow_type not in ["INCOME", "EXPENSE"]:
             return {"error": "cashflow_type must be either 'INCOME' or 'EXPENSE'"}
             
@@ -147,42 +160,53 @@ def register_document_tools(mcp):
             "api/v1/accounting/transactions/upload-documents/"
         )
         
-        temp_files = []  # Track temp files for cleanup
-        opened_files = []  # Track opened file handles for cleanup
+        temp_files = []
+        opened_files = []
         
         try:
             files = []
             valid_paths = []
             
-            # Process all file paths before proceeding
-            for path in file_paths:
-                if not validate_file_path(path):
-                    logger.warning(f"Invalid or unsafe file path: {path}")
-                    continue
-                
-                actual_path = path
-                
-                # Handle URLs by downloading them first
-                if is_url(path):
-                    logger.info(f"Downloading file from URL: {path}")
-                    downloaded_path = download_file(path)
-                    if not downloaded_path:
-                        logger.warning(f"Failed to download file from URL: {path}")
+            # Process base64 files first
+            if files_base64:
+                for item in files_base64:
+                    name = item.get("file_name", "upload")
+                    content = item.get("content", "")
+                    if not content:
                         continue
-                    actual_path = downloaded_path
-                    temp_files.append(actual_path)
-                    logger.info(f"File downloaded to: {actual_path}")
-                
-                # Validate the file exists and is accessible
-                if not os.path.exists(actual_path):
-                    logger.warning(f"File not found: {actual_path}")
-                    continue
-                
-                if not os.access(actual_path, os.R_OK):
-                    logger.warning(f"Permission denied when accessing file: {actual_path}")
-                    continue
+                    tmp = save_base64_to_temp(content, name)
+                    if tmp:
+                        valid_paths.append(tmp)
+                        temp_files.append(tmp)
+            
+            # Process file paths / URLs
+            if file_paths:
+                for path in file_paths:
+                    if not validate_file_path(path):
+                        logger.warning(f"Invalid or unsafe file path: {path}")
+                        continue
                     
-                valid_paths.append(actual_path)
+                    actual_path = path
+                    
+                    if is_url(path):
+                        logger.info(f"Downloading file from URL: {path}")
+                        downloaded_path = download_file(path)
+                        if not downloaded_path:
+                            logger.warning(f"Failed to download file from URL: {path}")
+                            continue
+                        actual_path = downloaded_path
+                        temp_files.append(actual_path)
+                        logger.info(f"File downloaded to: {actual_path}")
+                    
+                    if not os.path.exists(actual_path):
+                        logger.warning(f"File not found: {actual_path}")
+                        continue
+                    
+                    if not os.access(actual_path, os.R_OK):
+                        logger.warning(f"Permission denied when accessing file: {actual_path}")
+                        continue
+                        
+                    valid_paths.append(actual_path)
                 
             if not valid_paths:
                 return {"error": "No valid files found for upload"}
@@ -305,7 +329,9 @@ def register_document_tools(mcp):
     )
     async def create_attachment(
         ctx: Context,
-        file_path: str = Field(description="Path or URL to file to upload"),
+        file_path: Optional[str] = Field(default=None, description="Local path or URL to file to upload. For remote MCP, prefer file_content_base64 instead."),
+        file_content_base64: Optional[str] = Field(default=None, description="Base64-encoded file content. Use this when sending files over remote MCP (streamable HTTP). The client should read the file and base64-encode it."),
+        file_name: Optional[str] = Field(default=None, description="Filename (e.g. 'receipt.pdf'). Required when using file_content_base64."),
         transactions: Optional[List[str]] = Field(description="List of transaction IDs to link"),
         attachment_type: Optional[str] = Field(description="Type of attachment (invoice, receipt)"),
         amount: Optional[float] = Field(description="Amount related to attachment"),
@@ -324,29 +350,8 @@ def register_document_tools(mcp):
         additional_metadata: Optional[Dict[str, Any]] = Field(description="Additional metadata for attachment")
     ) -> Dict[str, Any]:
         """
-        Create a new attachment.
-        
-        Args:
-            file_path: Path to file or URL to upload
-            transactions: List of transaction IDs to link
-            attachment_type: Type of attachment (invoice, receipt)
-            amount: Amount related to attachment
-            amount_exchanged: Exchanged amount in different currency
-            attachment_number: Unique number for attachment
-            brand_name: Brand name associated with attachment
-            currency: Currency of amount (default EUR)
-            currency_exchanged: Exchanged currency (default EUR)
-            description: Description of attachment
-            supplier_country: Country of supplier (DE, INSIDE_EU, OUTSIDE_EU)
-            value_date: Date of value
-            vat_sum_amount: VAT sum amount
-            vat_sum_amount_exchanged: Exchanged VAT sum amount
-            vat_rate: VAT rate percentage
-            sale_type: Type of sale
-            additional_metadata: Additional metadata for attachment
-            
-        Returns:
-            Created attachment information
+        Create a new attachment. Provide either file_path (local path or URL)
+        or file_content_base64 + file_name (for remote MCP clients).
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -354,8 +359,13 @@ def register_document_tools(mcp):
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
         
-        # Validate file path
-        if not validate_file_path(file_path):
+        if not file_path and not file_content_base64:
+            return {"error": "Provide either file_path or file_content_base64"}
+        
+        if file_content_base64 and not file_name:
+            return {"error": "file_name is required when using file_content_base64"}
+        
+        if file_path and not validate_file_path(file_path):
             return {"error": "Invalid or unsafe file path"}
             
         # Validate attachment_type    
@@ -379,8 +389,14 @@ def register_document_tools(mcp):
             temp_file_path = None
             actual_file_path = file_path
             
-            # Check if file_path is a URL and download it if needed
-            if is_url(file_path):
+            # Option 1: base64-encoded content (preferred for remote MCP)
+            if file_content_base64:
+                temp_file_path = save_base64_to_temp(file_content_base64, file_name)
+                if not temp_file_path:
+                    return {"error": "Failed to decode base64 file content"}
+                actual_file_path = temp_file_path
+            # Option 2: URL — download first
+            elif is_url(file_path):
                 logger.info(f"Downloading file from URL: {file_path}")
                 temp_file_path = download_file(file_path)
                 if not temp_file_path:
@@ -508,4 +524,80 @@ def register_document_tools(mcp):
             "transaction": transaction_id
         }
         
-        return api._make_request("POST", link_url, json_data=link_data) 
+        return api._make_request("POST", link_url, json_data=link_data)
+
+    _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".tif"}
+    _EXT_TO_MIME = {
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+        ".tiff": "image/tiff", ".tif": "image/tiff",
+    }
+
+    @mcp.tool(
+        title="Get Attachment Preview",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def get_attachment_preview(
+        ctx: Context,
+        attachment_id: str = Field(description="Public ID of the attachment to preview"),
+    ) -> CallToolResult:
+        """
+        Download an attachment and return it as an inline image.
+
+        Works for image attachments (PNG, JPEG, GIF, WebP). For PDFs and
+        other non-image files, returns the download URL instead.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+
+        if not company_id:
+            return CallToolResult(content=[
+                TextContent(type="text", text='{"error": "No company available. Please authenticate first."}')
+            ])
+
+        detail_url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/attachments/{attachment_id}/",
+        )
+        detail = api._make_request("GET", detail_url)
+        file_field = detail.get("file") or ""
+        ext = os.path.splitext(file_field)[1].lower() if file_field else ""
+
+        dl_endpoint = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/attachments/{attachment_id}/download/",
+        )
+        dl_resp = api._make_request("GET", dl_endpoint)
+        presigned_url = dl_resp.get("url", "")
+
+        if ext not in _IMAGE_EXTENSIONS or not presigned_url:
+            meta = {
+                "attachmentId": attachment_id,
+                "fileName": detail.get("fileName") or os.path.basename(file_field),
+                "downloadUrl": presigned_url,
+                "note": "File is not an image; use downloadUrl to access it.",
+            }
+            return CallToolResult(content=[
+                TextContent(type="text", text=json.dumps(meta, ensure_ascii=False))
+            ])
+
+        resp = requests.get(presigned_url, timeout=30)
+        resp.raise_for_status()
+        image_b64 = base64.b64encode(resp.content).decode()
+        mime = _EXT_TO_MIME.get(ext, "image/png")
+
+        meta = {
+            "attachmentId": attachment_id,
+            "fileName": detail.get("fileName") or os.path.basename(file_field),
+            "downloadUrl": presigned_url,
+        }
+
+        return CallToolResult(content=[
+            ImageContent(type="image", data=image_b64, mimeType=mime),
+            TextContent(type="text", text=json.dumps(meta, ensure_ascii=False)),
+        ])

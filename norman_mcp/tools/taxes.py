@@ -1,9 +1,10 @@
+import json
 import logging
 import requests
 from typing import Dict, Any, Optional
 from urllib.parse import urljoin
 from pydantic import Field
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 
 from norman_mcp.context import Context
 from norman_mcp import config
@@ -128,14 +129,13 @@ def register_tax_tools(mcp):
     async def generate_finanzamt_preview(
         ctx: Context,
         report_id: str = Field(description="Public ID of the tax report to generate a preview for")
-    ) -> Dict[str, Any]:
+    ) -> CallToolResult:
         """
         Generate a test Finanzamt preview for a tax report.
 
-        Returns a JSON object with:
-        - downloadUrl: presigned URL to download the full PDF (valid for 1 hour)
-        - previewImage: base64-encoded PNG of the first page (for inline preview)
-        - mimeType: always "image/png"
+        Returns the preview as an inline PNG image (first page) plus a
+        downloadUrl for the full PDF. The image is rendered directly in
+        clients that support MCP ImageContent.
         """
         api = ctx.request_context.lifespan_context["api"]
 
@@ -151,7 +151,23 @@ def register_tax_tools(mcp):
             result = api._make_request("POST", preview_url)
             if not result.get("downloadUrl"):
                 raise ValueError("Preview generation failed: no download URL returned")
-            return result
+
+            content: list = []
+            preview_b64 = result.get("previewImage")
+            if preview_b64:
+                content.append(ImageContent(
+                    type="image",
+                    data=preview_b64,
+                    mimeType="image/png",
+                ))
+
+            meta = {k: v for k, v in result.items() if k != "previewImage"}
+            content.append(TextContent(
+                type="text",
+                text=json.dumps(meta, ensure_ascii=False),
+            ))
+
+            return CallToolResult(content=content)
         except requests.exceptions.RequestException as e:
             logger.error("Failed to generate tax report preview: %s", e)
             if hasattr(e, "response") and e.response is not None:
