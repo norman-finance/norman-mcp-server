@@ -139,7 +139,50 @@ def validate_input(input_str: str) -> str:
 
 def register_document_tools(mcp):
     """Register all document-related tools with the MCP server."""
-    
+
+    @mcp.tool(
+        title="Request File Upload URL",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def request_file_upload(
+        ctx: Context,
+    ) -> Dict[str, Any]:
+        """
+        Get the URL for uploading a file directly to the MCP server.
+
+        Call this BEFORE create_attachment when the user wants to attach a
+        file (image, PDF, receipt) but the file has no public URL.  The
+        returned upload_url accepts a multipart POST with a 'file' field.
+        After uploading, pass the returned file_ref to create_attachment.
+
+        This avoids encoding large files as base64 (which would exceed the
+        LLM context window).
+        """
+        from norman_mcp.config.settings import config as app_config
+        public_url = os.environ.get(
+            "NORMAN_MCP_PUBLIC_URL", "https://mcp.norman.finance"
+        )
+        upload_url = f"{public_url.rstrip('/')}/files/upload"
+
+        return {
+            "upload_url": upload_url,
+            "method": "POST",
+            "content_type": "multipart/form-data",
+            "field_name": "file",
+            "max_size_mb": 50,
+            "expires_in_seconds": 1800,
+            "instructions": (
+                "Upload the file with: "
+                f"curl -X POST {upload_url} -F file=@/path/to/file.pdf "
+                "— then pass the returned file_ref to create_attachment."
+            ),
+        }
+
     @mcp.tool(
         title="Upload Bulk Attachments",
         annotations=ToolAnnotations(
@@ -151,15 +194,17 @@ def register_document_tools(mcp):
     )
     async def upload_bulk_attachments(
         ctx: Context,
-        files_base64: Optional[List[Dict[str, str]]] = Field(default=None, description="PREFERRED: List of files as base64. Each item: {\"file_name\": \"receipt.pdf\", \"content\": \"<base64 string>\"}. Always use this for remote/cloud MCP — the server cannot access your local filesystem."),
-        file_paths: Optional[List[str]] = Field(default=None, description="List of HTTP(S) URLs to publicly accessible files. Do NOT pass local filesystem paths; use files_base64 instead."),
+        file_urls: Optional[List[str]] = Field(default=None, description="BEST OPTION: List of HTTP(S) URLs. The server downloads each file directly — nothing goes through the LLM context."),
+        file_refs: Optional[List[str]] = Field(default=None, description="List of file_ref tokens from prior POST /files/upload calls."),
+        files_base64: Optional[List[Dict[str, str]]] = Field(default=None, description="LAST RESORT — only for tiny files (<50 KB each). Each item: {\"file_name\": \"receipt.pdf\", \"content\": \"<base64>\"}. Do NOT use for images or PDFs."),
+        file_paths: Optional[List[str]] = Field(default=None, description="Deprecated alias for file_urls."),
         cashflow_type: Optional[str] = Field(description="Optional cashflow type for the transactions (INCOME or EXPENSE). If not provided, then try to detect it from the file")
     ) -> Dict[str, Any]:
         """
-        Upload multiple file attachments in bulk. Use files_base64
-        (recommended for all remote MCP connections). Alternatively pass
-        public HTTP(S) URLs via file_paths. Local filesystem paths will NOT
-        work because the server runs remotely.
+        Upload multiple file attachments in bulk.
+
+        Priority: file_urls > file_refs > files_base64.
+        Do NOT base64-encode images or PDFs — it will exceed the context window.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -167,25 +212,48 @@ def register_document_tools(mcp):
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
         
-        if not file_paths and not files_base64:
-            return {"error": "Provide either file_paths or files_base64"}
-        
+        if not file_urls and not file_refs and not files_base64 and not file_paths:
+            return {"error": "Provide file_urls (preferred), file_refs, or files_base64."}
+
         if cashflow_type and cashflow_type not in ["INCOME", "EXPENSE"]:
             return {"error": "cashflow_type must be either 'INCOME' or 'EXPENSE'"}
-            
+
         upload_url = urljoin(
             config.api_base_url,
             "api/v1/accounting/transactions/upload-documents/"
         )
-        
+
         temp_files = []
         opened_files = []
-        
+
         try:
             files = []
             valid_paths = []
-            
-            # Process base64 files first
+
+            # Priority 1: file_urls
+            all_urls = list(file_urls or []) + [p for p in (file_paths or []) if is_url(p)]
+            for url in all_urls:
+                if not is_url(url):
+                    logger.warning("Skipping non-URL: %s", url)
+                    continue
+                downloaded = download_file(url)
+                if downloaded:
+                    valid_paths.append(downloaded)
+                    temp_files.append(downloaded)
+                else:
+                    logger.warning("Failed to download: %s", url)
+
+            # Priority 2: file_refs
+            if file_refs:
+                from norman_mcp.files.upload import resolve_ref
+                for ref in file_refs:
+                    path = resolve_ref(ref)
+                    if path:
+                        valid_paths.append(path)
+                    else:
+                        logger.warning("file_ref not found or expired: %s", ref)
+
+            # Priority 3: base64
             if files_base64:
                 for item in files_base64:
                     name = item.get("file_name", "upload")
@@ -196,42 +264,6 @@ def register_document_tools(mcp):
                     if tmp:
                         valid_paths.append(tmp)
                         temp_files.append(tmp)
-            
-            # Process file paths / URLs
-            if file_paths:
-                for path in file_paths:
-                    if not validate_file_path(path):
-                        logger.warning(f"Invalid or unsafe file path: {path}")
-                        continue
-                    
-                    actual_path = path
-                    
-                    if is_url(path):
-                        logger.info(f"Downloading file from URL: {path}")
-                        downloaded_path = download_file(path)
-                        if not downloaded_path:
-                            logger.warning(f"Failed to download file from URL: {path}")
-                            continue
-                        actual_path = downloaded_path
-                        temp_files.append(actual_path)
-                        logger.info(f"File downloaded to: {actual_path}")
-                    
-                    if not os.path.exists(actual_path):
-                        if not is_url(path):
-                            return {
-                                "error": f"File not found: {actual_path}. "
-                                "The MCP server cannot access your local filesystem. "
-                                "Please read files, base64-encode them, and pass via "
-                                "files_base64 instead of file_paths."
-                            }
-                        logger.warning(f"File not found: {actual_path}")
-                        continue
-                    
-                    if not os.access(actual_path, os.R_OK):
-                        logger.warning(f"Permission denied when accessing file: {actual_path}")
-                        continue
-                        
-                    valid_paths.append(actual_path)
                 
             if not valid_paths:
                 return {"error": "No valid files found for upload"}
@@ -354,9 +386,10 @@ def register_document_tools(mcp):
     )
     async def create_attachment(
         ctx: Context,
-        file_content_base64: Optional[str] = Field(default=None, description="PREFERRED: Base64-encoded file content. Read the file, base64-encode it, and pass here. Always use this for remote/cloud MCP connections — the server cannot access your local filesystem."),
+        file_url: Optional[str] = Field(default=None, description="BEST OPTION: HTTP(S) URL to a publicly accessible file. The server downloads it directly — nothing goes through the LLM context. Use this whenever the file has a URL."),
+        file_ref: Optional[str] = Field(default=None, description="Reference token from a prior POST /files/upload call. Use when the client uploaded the file directly to the MCP server."),
+        file_content_base64: Optional[str] = Field(default=None, description="LAST RESORT — only for tiny files (<50 KB). Do NOT use for images, PDFs, or scanned documents — the base64 string will exceed the context window. Prefer file_url or file_ref."),
         file_name: Optional[str] = Field(default=None, description="Original filename with extension (e.g. 'invoice.pdf'). Required when using file_content_base64."),
-        file_path: Optional[str] = Field(default=None, description="URL to a publicly accessible file. Only works for HTTP(S) URLs. Do NOT pass local filesystem paths — the remote server cannot read them; use file_content_base64 instead."),
         transactions: Optional[List[str]] = Field(description="List of transaction IDs to link"),
         attachment_type: Optional[str] = Field(description="Type of attachment (invoice, receipt)"),
         amount: Optional[float] = Field(description="Amount related to attachment"),
@@ -375,71 +408,105 @@ def register_document_tools(mcp):
         additional_metadata: Optional[Dict[str, Any]] = Field(description="Additional metadata for attachment")
     ) -> Dict[str, Any]:
         """
-        Create a new attachment with a file. Use file_content_base64 + file_name
-        (recommended for all remote MCP connections). Alternatively pass a
-        public HTTP(S) URL via file_path. Local filesystem paths will NOT work
-        because the server runs remotely.
+        Create a new attachment with a file.
+
+        Args:
+            file_path: Path to file or URL to upload
+            transactions: List of transaction IDs to link
+            attachment_type: Type of attachment (invoice, receipt)
+            amount: Amount related to attachment
+            amount_exchanged: Exchanged amount in different currency
+            attachment_number: Unique number for attachment
+            brand_name: Brand name associated with attachment
+            currency: Currency of amount (default EUR)
+            currency_exchanged: Exchanged currency (default EUR)
+            description: Description of attachment
+            supplier_country: Country of supplier (DE, INSIDE_EU, OUTSIDE_EU)
+            value_date: Date of value
+            vat_sum_amount: VAT sum amount
+            vat_sum_amount_exchanged: Exchanged VAT sum amount
+            vat_rate: VAT rate percentage
+            sale_type: Type of sale
+            additional_metadata: Additional metadata for attachment
+
+        Priority order for providing the file:
+        1. file_url   — URL to the file (server downloads it, nothing in context)
+        2. file_ref   — token from POST /files/upload (direct binary upload)
+        3. file_content_base64 — ONLY for very small files (<50 KB)
+
+        IMPORTANT: Do NOT base64-encode images, PDFs or any large file — it will
+        exceed the LLM context window. Use file_url or ask the user to upload
+        the file through Norman's web app at app.norman.finance instead.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
-        
+
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
-        
-        if not file_path and not file_content_base64:
-            return {"error": "Provide either file_path or file_content_base64"}
-        
+
+        if not file_url and not file_ref and not file_content_base64:
+            return {
+                "error": "Provide one of: file_url (preferred), file_ref, "
+                "or file_content_base64 (small files only)."
+            }
+
         if file_content_base64 and not file_name:
             return {"error": "file_name is required when using file_content_base64"}
-        
-        if file_path and not validate_file_path(file_path):
-            return {"error": "Invalid or unsafe file path"}
-            
-        # Validate attachment_type    
+
         if attachment_type and attachment_type not in ["invoice", "receipt", "contract", "other"]:
             return {"error": "attachment_type must be one of: invoice, receipt, contract, other"}
-        
-        # Validate supplier_country
+
         if supplier_country and supplier_country not in ["DE", "INSIDE_EU", "OUTSIDE_EU"]:
             return {"error": "supplier_country must be one of: DE, INSIDE_EU, OUTSIDE_EU"}
-            
-        # Validate sale_type
+
         if sale_type and sale_type not in ["GOODS", "SERVICES"]:
             return {"error": "sale_type must be one of: GOODS, SERVICES"}
-            
+
         attachments_url = urljoin(
             config.api_base_url,
             f"api/v1/companies/{company_id}/attachments/"
         )
-        
+
         try:
             temp_file_path = None
-            actual_file_path = file_path
-            
-            # Option 1: base64-encoded content (preferred for remote MCP)
-            if file_content_base64:
+            actual_file_path = None
+
+            # Priority 1: file_url — download from URL
+            if file_url:
+                if not is_url(file_url):
+                    return {
+                        "error": f"file_url must be a valid HTTP(S) URL. Got: {file_url}. "
+                        "The MCP server cannot access local filesystem paths."
+                    }
+                logger.info("Downloading file from URL: %s", file_url)
+                temp_file_path = download_file(file_url)
+                if not temp_file_path:
+                    return {"error": f"Failed to download file from URL: {file_url}"}
+                actual_file_path = temp_file_path
+
+            # Priority 2: file_ref — previously uploaded via POST /files/upload
+            elif file_ref:
+                from norman_mcp.files.upload import resolve_ref
+                actual_file_path = resolve_ref(file_ref)
+                if not actual_file_path:
+                    return {
+                        "error": f"file_ref '{file_ref}' not found or expired. "
+                        "Upload the file again via POST /files/upload."
+                    }
+
+            # Priority 3: base64 — small files only
+            elif file_content_base64:
                 temp_file_path = save_base64_to_temp(file_content_base64, file_name)
                 if not temp_file_path:
                     return {"error": "Failed to decode base64 file content"}
                 actual_file_path = temp_file_path
-            # Option 2: URL — download first
-            elif is_url(file_path):
-                logger.info(f"Downloading file from URL: {file_path}")
-                temp_file_path = download_file(file_path)
-                if not temp_file_path:
-                    return {"error": f"Failed to download file from URL: {file_path}"}
-                actual_file_path = temp_file_path
-                logger.info(f"File downloaded to: {actual_file_path}")
-            
-            if not os.path.exists(actual_file_path):
-                if not file_content_base64 and file_path and not is_url(file_path):
-                    return {
-                        "error": f"File not found: {actual_file_path}. "
-                        "The MCP server cannot access your local filesystem. "
-                        "Please read the file, base64-encode it, and pass it via "
-                        "file_content_base64 + file_name instead."
-                    }
-                return {"error": f"File not found: {actual_file_path}"}
+
+            if not actual_file_path or not os.path.exists(actual_file_path):
+                return {
+                    "error": "File not found. The MCP server cannot access your local "
+                    "filesystem. Provide a file_url (HTTP link) or upload via "
+                    "POST /files/upload and pass the file_ref."
+                }
 
             if not os.access(actual_file_path, os.R_OK):
                 return {"error": f"Permission denied when accessing file: {actual_file_path}"}
@@ -504,9 +571,9 @@ def register_document_tools(mcp):
                     
             return _enrich_attachment_download_urls(response, api=api, company_id=company_id)
         except FileNotFoundError:
-            return {"error": f"File not found: {file_path}"}
+            return {"error": "File not found. Provide a file_url or upload via POST /files/upload."}
         except PermissionError:
-            return {"error": f"Permission denied when accessing file: {file_path}"}
+            return {"error": "Permission denied when accessing the file."}
         except Exception as e:
             # Clean up temporary file if there was an error
             if temp_file_path and os.path.exists(temp_file_path):
