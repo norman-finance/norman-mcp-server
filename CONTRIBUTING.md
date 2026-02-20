@@ -50,6 +50,7 @@ python -m norman_mcp
 
 ## Project Structure
 
+
 ```
 norman-mcp-server/
 ├── norman_mcp/
