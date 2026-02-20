@@ -141,45 +141,47 @@ def register_document_tools(mcp):
     """Register all document-related tools with the MCP server."""
 
     @mcp.tool(
-        title="Request File Upload URL",
+        title="Create File Upload Link",
         annotations=ToolAnnotations(
-            readOnlyHint=True,
+            readOnlyHint=False,
             destructiveHint=False,
-            idempotentHint=True,
+            idempotentHint=False,
             openWorldHint=False,
         ),
     )
     async def request_file_upload(
         ctx: Context,
+        description: Optional[str] = Field(
+            default=None,
+            description="Short description shown to the user on the upload page, e.g. 'Receipt for Meta Ads January 2025'.",
+        ),
     ) -> Dict[str, Any]:
         """
-        Get the URL for uploading a file directly to the MCP server.
+        Generate a short-lived upload link that the USER opens in their browser.
 
-        Call this BEFORE create_attachment when the user wants to attach a
-        file (image, PDF, receipt) but the file has no public URL.  The
-        returned upload_url accepts a multipart POST with a 'file' field.
-        After uploading, pass the returned file_ref to create_attachment.
+        Call this BEFORE create_attachment when the user wants to attach a file
+        (image, PDF, receipt) and you cannot provide a public file_url.
+        The link opens a drag-and-drop upload page. After the user uploads,
+        the page shows a file_ref token. Use that file_ref in create_attachment.
 
-        This avoids encoding large files as base64 (which would exceed the
-        LLM context window).
+        IMPORTANT: Do NOT try to upload the file yourself (curl, base64, etc.).
+        Just give the link to the user and wait for them to upload.
         """
-        from norman_mcp.config.settings import config as app_config
+        from norman_mcp.files.upload import create_upload_token
+
         public_url = os.environ.get(
             "NORMAN_MCP_PUBLIC_URL", "https://mcp.norman.finance"
         )
-        upload_url = f"{public_url.rstrip('/')}/files/upload"
+        token = create_upload_token(description)
+        upload_page_url = f"{public_url.rstrip('/')}/files/upload/{token}"
 
         return {
-            "upload_url": upload_url,
-            "method": "POST",
-            "content_type": "multipart/form-data",
-            "field_name": "file",
-            "max_size_mb": 50,
+            "upload_url": upload_page_url,
             "expires_in_seconds": 1800,
             "instructions": (
-                "Upload the file with: "
-                f"curl -X POST {upload_url} -F file=@/path/to/file.pdf "
-                "— then pass the returned file_ref to create_attachment."
+                f"Please open this link in your browser and drop the file: {upload_page_url} "
+                "— after uploading, the page will show a file_ref code. "
+                "Give it back to me so I can attach the file."
             ),
         }
 
@@ -411,7 +413,6 @@ def register_document_tools(mcp):
         Create a new attachment with a file.
 
         Args:
-            file_path: Path to file or URL to upload
             transactions: List of transaction IDs to link
             attachment_type: Type of attachment (invoice, receipt)
             amount: Amount related to attachment
@@ -429,14 +430,15 @@ def register_document_tools(mcp):
             sale_type: Type of sale
             additional_metadata: Additional metadata for attachment
 
-        Priority order for providing the file:
-        1. file_url   — URL to the file (server downloads it, nothing in context)
-        2. file_ref   — token from POST /files/upload (direct binary upload)
-        3. file_content_base64 — ONLY for very small files (<50 KB)
+        How to provide the file (pick one):
+        1. file_url  — best if the file has a public HTTP(S) URL
+        2. file_ref  — call request_file_upload first to get an upload link,
+           ask the user to open it in their browser and drop the file,
+           then pass the file_ref here
+        3. file_content_base64 — ONLY for tiny files under 50 KB
 
-        IMPORTANT: Do NOT base64-encode images, PDFs or any large file — it will
-        exceed the LLM context window. Use file_url or ask the user to upload
-        the file through Norman's web app at app.norman.finance instead.
+        NEVER base64-encode images, PDFs, or scans — they will blow up the
+        context window. Use file_url or request_file_upload instead.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
