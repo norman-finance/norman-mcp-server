@@ -93,7 +93,11 @@ def register_prompts(mcp):
             f"Description: {description}\n\n"
             f"Please confirm the transaction details before submitting. "
             f"You can also add more information such as VAT rate, transaction date, "
-            f"or assign a specific category."
+            f"or assign a specific category.\n\n"
+            f"**For SME companies (GmbH/UG):** Use company categories from the DATEV chart "
+            f"of accounts (list_company_categories) instead of freelance categories. "
+            f"You can also set payment_date and payment_type (BANK_TRANSFER, CASH, CREDIT_CARD, "
+            f"PAYPAL, DIRECT_DEBIT, OTHER)."
         )
 
     @mcp.prompt()
@@ -221,6 +225,34 @@ def register_prompts(mcp):
             f"- Date\n"
             f"- VAT information\n\n"
             f"{'The documents will be marked as ' + cashflow_type.lower() + '.' if cashflow_type else ''}"
+        )
+
+    @mcp.prompt()
+    def sme_bookkeeping_prompt() -> str:
+        """
+        Prompt that explains SME bookkeeping context for GmbH/UG companies.
+        Covers DATEV chart of accounts, accrual accounting, payment tracking, and DATEV export.
+        """
+        return (
+            "## SME Bookkeeping Context\n\n"
+            "This company is a German SME (GmbH or UG) and uses **accrual-based accounting** "
+            "(Soll-Versteuerung) with a DATEV standard chart of accounts.\n\n"
+            "### Key Differences from Freelancer Bookkeeping\n"
+            "- **Categories**: Uses DATEV chart of accounts (SKR03 or SKR04) with numeric codes "
+            "(e.g. '4200 - Telefonkosten'). Use `list_company_categories` to see available categories.\n"
+            "- **Payment Tracking**: Each transaction can have a `payment_date` (when paid) and "
+            "`payment_type` (BANK_TRANSFER, CASH, CREDIT_CARD, PAYPAL, DIRECT_DEBIT, OTHER).\n"
+            "- **Tax Logic**: VAT and tax obligations are based on the invoice/document date "
+            "(valueDate), NOT the payment date.\n"
+            "- **DATEV Export**: Finalized transactions can be exported as a DATEV EXTF package "
+            "(ZIP with CSV + documents) to send to the tax advisor.\n"
+            "- **Chart of Accounts**: The company's CoA template (SKR03 or SKR04) can be viewed "
+            "and switched in settings.\n\n"
+            "### Available Tools for SME\n"
+            "- `list_company_categories` — browse DATEV categories\n"
+            "- `list_coa_templates` — see available CoA templates\n"
+            "- `trigger_datev_export` — generate DATEV export for tax advisor\n"
+            "- `create_transaction` / `update_transaction` — with company_category_id, payment_date, payment_type\n"
         )
 
     @mcp.prompt()

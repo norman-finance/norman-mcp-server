@@ -108,27 +108,19 @@ def register_transaction_tools(mcp):
         description: str = Field(description="Transaction description"),
         cashflow_type: str = Field(description="Cashflow type of the transaction (INCOME, EXPENSE)"),
         supplier_country: str = Field(description="Country of the supplier (DE, INSIDE_EU, OUTSIDE_EU)"),
-        category_id: Optional[str] = Field(description="Category ID of the transaction (If not provided, the transaction will be categorized automatically using AI)"),
+        category_id: Optional[str] = Field(description="Freelance category ID (for non-SME companies). If not provided, auto-categorized via AI."),
+        company_category_id: Optional[str] = Field(description="SME company category ID from the DATEV chart of accounts (for GmbH/UG companies). Use list_company_categories to find the right ID."),
         vat_rate: Optional[int] = Field(description="VAT rate (0, 7, 19)"),
         sale_type: Optional[str] = Field(description="Sale type (GOODS, SERVICES)"),
-        date: Optional[str] = Field(description="Transaction date in YYYY-MM-DD format (defaults to today)"),
+        date: Optional[str] = Field(description="Transaction date (document/invoice date) in YYYY-MM-DD format (defaults to today)"),
+        payment_date: Optional[str] = Field(description="Date when payment was made/received in YYYY-MM-DD format. Used for SME accrual accounting."),
+        payment_type: Optional[str] = Field(description="Payment method: BANK, CASH, NOT_PAID"),
     ) -> Dict[str, Any]:
         """
         Create a new manual transaction.
-        
-        Args:
-            amount: Transaction amount (positive for income, negative for expense)
-            description: Transaction description
-            category: Transaction category
-            date: Transaction date in YYYY-MM-DD format (defaults to today)
-            vat_rate: VAT rate (0, 7, 19)
-            sale_type: Sale type (GOODS, SERVICES)
-            supplier_country: Country of the supplier (DE, INSIDE_EU, OUTSIDE_EU)
-            cashflow_type: Cashflow type of the transaction (INCOME, EXPENSE)
-            category_id: Category ID of the transaction (If not provided, the transaction will be categorized automatically using AI)
-            
-        Returns:
-            Information about the created transaction
+
+        For SME companies (GmbH/UG), use company_category_id instead of category_id,
+        and optionally set payment_date and payment_type for accrual accounting.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -136,7 +128,6 @@ def register_transaction_tools(mcp):
         if cashflow_type not in ["INCOME", "EXPENSE"]:
             return {"error": "cashflow_type must be either 'INCOME' or 'EXPENSE'"}
         
-        # Use current date if not provided
         if not date:
             date = datetime.now().strftime("%Y-%m-%d")
         
@@ -146,7 +137,7 @@ def register_transaction_tools(mcp):
         )
         
         transaction_data = {
-            "amount": abs(amount) if cashflow_type == "INCOME" else -abs(amount),  # Ensure positive amount for expenses
+            "amount": abs(amount) if cashflow_type == "INCOME" else -abs(amount),
             "description": description,
             "cashflowType": cashflow_type,
             "valueDate": date,
@@ -158,6 +149,12 @@ def register_transaction_tools(mcp):
         
         if category_id:
             transaction_data["category_id"] = category_id
+        if company_category_id:
+            transaction_data["companyCategory"] = company_category_id
+        if payment_date:
+            transaction_data["paymentDate"] = payment_date
+        if payment_type:
+            transaction_data["paymentType"] = payment_type
         
         return api._make_request("POST", transactions_url, json_data=transaction_data)
 
@@ -175,15 +172,18 @@ def register_transaction_tools(mcp):
         transaction_id: str = Field(description="Public ID of the transaction to update"),
         amount: Optional[float] = Field(description="Transaction amount (positive for income, negative for expense)"),
         description: Optional[str] = Field(description="Transaction description"),
-        category: Optional[str] = Field(description="Transaction category"),
-        date: Optional[str] = Field(description="Transaction date in YYYY-MM-DD format (defaults to today)"),
+        category: Optional[str] = Field(description="Freelance category name or ID"),
+        date: Optional[str] = Field(description="Transaction date (document/invoice date) in YYYY-MM-DD format"),
         vat_rate: Optional[int] = Field(description="VAT rate (0, 7, 19)"),
         sale_type: Optional[str] = Field(description="Sale type (GOODS, SERVICES)"),
         supplier_country: Optional[str] = Field(description="Country of the supplier (DE, INSIDE_EU, OUTSIDE_EU)"),
         cashflow_type: Optional[str] = Field(description="Cashflow type of the transaction (INCOME, EXPENSE)"),
-        category_id: Optional[str] = Field(description="Category ID of the transaction (If not provided, the transaction will be categorized automatically using AI)"),
+        category_id: Optional[str] = Field(description="Freelance category ID"),
+        company_category_id: Optional[str] = Field(description="SME company category ID from DATEV chart of accounts (for GmbH/UG)"),
+        payment_date: Optional[str] = Field(description="Date when payment was made/received in YYYY-MM-DD format"),
+        payment_type: Optional[str] = Field(description="Payment method: BANK, CASH, NOT_PAID"),
     ) -> Dict[str, Any]:
-        """Update an existing transaction."""
+        """Update an existing transaction. For SME companies, use company_category_id and payment fields."""
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -195,7 +195,6 @@ def register_transaction_tools(mcp):
             f"api/v1/companies/{company_id}/accounting/transactions/{transaction_id}/"
         )
         
-        # Prepare update data
         update_data = {}
         if amount is not None:
             update_data["amount"] = abs(amount) if cashflow_type == "INCOME" else -abs(amount)
@@ -215,6 +214,12 @@ def register_transaction_tools(mcp):
             update_data["cashflowType"] = cashflow_type
         if category_id is not None:
             update_data["category"] = category_id
+        if company_category_id is not None:
+            update_data["companyCategory"] = company_category_id
+        if payment_date is not None:
+            update_data["paymentDate"] = payment_date
+        if payment_type is not None:
+            update_data["paymentType"] = payment_type
             
         return api._make_request("PATCH", transaction_url, json_data=update_data)
 
