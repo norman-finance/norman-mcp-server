@@ -16,7 +16,11 @@
    <br/><br/>
    <strong>Claude</strong> &nbsp;·&nbsp; <strong>ChatGPT</strong> &nbsp;·&nbsp; <strong>Cursor</strong> &nbsp;·&nbsp; <strong>n8n</strong> &nbsp;·&nbsp; <strong>Any MCP Client</strong>
 </div>
+<br/>
+<div align="center">
 
+   <a href="https://github.com/user-attachments/assets/10718781-34f2-4640-9253-be4c82de6159"></a>
+</div>
 <br/>
 
 ---
