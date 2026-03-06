@@ -11,7 +11,15 @@ metadata:
         - norman-finance
 ---
 
-Help the user categorize and organize their bank transactions:
+Help the user categorize and organize their bank transactions.
+
+## First: determine account type
+
+Call `get_company_details` and check `isSme`:
+- **Freelance** (`isSme: false`): Use `categorize_transaction` — AI detects the freelance category automatically.
+- **SME / GmbH / UG** (`isSme: true`): Use `list_company_categories` to find DATEV categories by code. If the right category isn't provisioned, use `search_skr_by_code` or `suggest_skr_category` to search the full SKR catalog, then `create_company_category` to add it.
+
+## Workflow
 
 1. **Fetch uncategorized transactions**: Call `search_transactions` to find transactions that need attention. Look for unverified or uncategorized entries.
 
@@ -21,7 +29,9 @@ Help the user categorize and organize their bank transactions:
    - The amount and pattern (recurring = likely subscription)
    - Similar past transactions
 
-3. **Update transactions**: Use `categorize_transaction` to assign the correct bookkeeping category (SKR04 chart of accounts for German businesses).
+3. **Assign the category**:
+   - **Freelance**: Use `categorize_transaction` with the transaction details — it returns the AI-suggested freelance category.
+   - **SME**: Use `update_transaction` with `company_category_id` to assign a DATEV category. If the needed category isn't in `list_company_categories`, search the full SKR03/SKR04 catalog with `search_skr_by_code` (by number) or `suggest_skr_category` (by description, uses AI). Then `create_company_category` to add it.
 
 4. **Invoice matching**: When a transaction looks like an incoming payment:
    - Call `list_invoices` to find matching unpaid invoices (by amount or client)
