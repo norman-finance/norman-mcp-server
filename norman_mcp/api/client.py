@@ -288,9 +288,17 @@ class NormanAPI:
                 return {"error": "Rate limit exceeded. Please try again later.", "status_code": 429}
             else:
                 logger.error(f"HTTP error: {str(e)}")
+                error_detail = None
                 if hasattr(e, 'response') and e.response is not None:
                     logger.error(f"Response: {e.response.text}")
-                return {"error": f"Request failed: {str(e)}", "status_code": e.response.status_code}
+                    try:
+                        error_detail = e.response.json()
+                    except (ValueError, AttributeError):
+                        error_detail = e.response.text
+                result = {"error": f"Request failed: {str(e)}", "status_code": e.response.status_code}
+                if error_detail:
+                    result["detail"] = error_detail
+                return result
         except requests.exceptions.ConnectionError:
             logger.error(f"Connection error when accessing {url}")
             return {"error": "Connection error. Please check your network connection."}
