@@ -14,7 +14,7 @@
    </p>
    <code>https://mcp.norman.finance/mcp</code>
    <br/><br/>
-   <strong>Claude</strong> &nbsp;·&nbsp; <strong>ChatGPT</strong> &nbsp;·&nbsp; <strong>Cursor</strong> &nbsp;·&nbsp; <strong>n8n</strong> &nbsp;·&nbsp; <strong>Any MCP Client</strong>
+   <strong>Claude</strong> &nbsp;·&nbsp; <strong>ChatGPT</strong> &nbsp;·&nbsp; <strong>Cursor</strong> &nbsp;·&nbsp; <strong>OpenClaw</strong> &nbsp;·&nbsp; <strong>n8n</strong> &nbsp;·&nbsp; <strong>Any MCP Client</strong>
 </div>
 <br/>
 <div align="center">
@@ -150,6 +150,48 @@ https://mcp.norman.finance/mcp
 [![Add to Replit](https://replit.com/badge?caption=Add%20to%20Replit)](https://replit.com/integrations?mcp=eyJkaXNwbGF5TmFtZSI6Ik5vcm1hbiBNQ1AgU2VydmVyIiwiYmFzZVVybCI6Imh0dHBzOi8vbWNwLm5vcm1hbi5maW5hbmNlL21jcCJ9)
 </details>
 
+<details>
+<summary><strong>OpenClaw</strong></summary>
+<br/>
+
+**Option 1 — Skills only (quickest)**
+
+```bash
+git clone https://github.com/norman-finance/norman-mcp-server.git
+cp -r norman-mcp-server/skills/* ~/.openclaw/skills/
+openclaw gateway restart
+```
+
+**Option 2 — Full MCP server (all 50+ tools)**
+
+```bash
+pip install norman-mcp-server
+```
+
+Add to `~/.openclaw/openclaw.json` under `mcpServers`:
+
+```json
+{
+  "norman": {
+    "command": "norman-mcp",
+    "args": ["--transport", "stdio"],
+    "transport": "stdio",
+    "env": {
+      "NORMAN_EMAIL": "${NORMAN_EMAIL}",
+      "NORMAN_PASSWORD": "${NORMAN_PASSWORD}",
+      "NORMAN_ENVIRONMENT": "production"
+    }
+  }
+}
+```
+
+Then restart and verify:
+
+```bash
+openclaw gateway restart
+openclaw mcp list
+```
+</details>
 
 <details>
 <summary><strong>n8n</strong></summary>
@@ -203,7 +245,7 @@ Ready-to-use skills compatible with **Claude Code**, **OpenClaw**, and the [Agen
 >
 > **Claude Code (local)** &nbsp;—&nbsp; `claude --plugin-dir ./norman-mcp-server`
 >
-> **OpenClaw** &nbsp;—&nbsp; `cp -r skills/<skill-name> ~/.openclaw/skills/`
+> **OpenClaw** &nbsp;—&nbsp; `cp -r skills/* ~/.openclaw/skills/ && openclaw gateway restart`
 
 <br/>
 
