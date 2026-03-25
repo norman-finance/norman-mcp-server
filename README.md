@@ -150,7 +150,17 @@ https://mcp.norman.finance/mcp
 <summary><strong>OpenClaw</strong></summary>
 <br/>
 
-**Option 1 — Skills only (quickest)**
+**Option 1 — Remote with OAuth**
+
+Run in OpenClaw:
+
+```
+mcp add https://mcp.norman.finance/mcp
+```
+
+You'll be prompted to log in with your Norman account on first use.
+
+**Option 2 — Skills only**
 
 ```bash
 git clone https://github.com/norman-finance/norman-mcp-server.git
@@ -158,35 +168,17 @@ cp -r norman-mcp-server/skills/* ~/.openclaw/skills/
 openclaw gateway restart
 ```
 
-**Option 2 — Full MCP server (all 50+ tools)**
+**Option 3 — Local stdio**
 
 ```bash
 pip install norman-mcp-server
 ```
 
-Add to `~/.openclaw/openclaw.json` under `mcpServers`:
-
-```json
-{
-  "norman": {
-    "command": "norman-mcp",
-    "args": ["--transport", "stdio"],
-    "transport": "stdio",
-    "env": {
-      "NORMAN_EMAIL": "${NORMAN_EMAIL}",
-      "NORMAN_PASSWORD": "${NORMAN_PASSWORD}",
-      "NORMAN_ENVIRONMENT": "production"
-    }
-  }
-}
-```
-
-Then restart and verify:
-
 ```bash
-openclaw gateway restart
-openclaw mcp list
+openclaw mcp add norman -- norman-mcp --transport stdio
 ```
+
+Set your credentials as environment variables (`NORMAN_EMAIL`, `NORMAN_PASSWORD`) before starting the gateway.
 </details>
 
 <details>
