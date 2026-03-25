@@ -75,27 +75,31 @@ from mcp.shared.auth import OAuthClientInformationFull, InvalidRedirectUriError
 _original_validate_redirect_uri = OAuthClientInformationFull.validate_redirect_uri
 
 def _flexible_validate_redirect_uri(self, redirect_uri):
-    """Accept redirect URIs dynamically for MCP clients that use random ports."""
+    """Accept redirect URIs dynamically for MCP clients.
+
+    Security model:
+    - HTTPS URIs: always accepted (PKCE is enforced by MCP SDK via S256)
+    - Custom schemes (cursor://, etc.): always accepted (native app deep links)
+    - HTTP loopback (localhost/127.0.0.1/[::1]): accepted per RFC 8252 §7.3
+    - HTTP non-loopback: rejected (insecure transport to remote host)
+    """
     if redirect_uri is not None:
         uri_str = str(redirect_uri)
-        # RFC 8252 Section 7.3: Loopback redirects with dynamic ports are safe
-        # when combined with PKCE (which the MCP SDK enforces via S256).
-        # Non-loopback URIs are restricted to an explicit allowlist.
-        allowed_patterns = [
-            "http://localhost:",              # RFC 8252 loopback IPv4 name
-            "http://localhost/",
-            "http://127.0.0.1:",              # RFC 8252 loopback IPv4 address
-            "http://127.0.0.1/",
-            "http://[::1]:",                  # RFC 8252 loopback IPv6
-            "http://[::1]/",
-            "https://mcp.norman.finance/",    # Production domain
-                    "https://chatgpt.com/",           # OpenAI Apps
-                    "https://oauth.n8n.cloud/",       # n8n Cloud
-                    "cursor://anysphere.cursor",      # Cursor IDE (exact vendor prefix)
-        ]
-        if any(uri_str.startswith(p) for p in allowed_patterns):
+        # HTTPS is always safe — PKCE prevents code interception
+        if uri_str.startswith("https://"):
             return redirect_uri
-        # Fall back to standard validation for other URIs
+        # Custom schemes for native apps (e.g. cursor://anysphere.cursor)
+        if "://" in uri_str and not uri_str.startswith("http://"):
+            return redirect_uri
+        # RFC 8252 §7.3: HTTP loopback with dynamic ports is safe with PKCE
+        loopback_prefixes = [
+            "http://localhost:", "http://localhost/",
+            "http://127.0.0.1:", "http://127.0.0.1/",
+            "http://[::1]:", "http://[::1]/",
+        ]
+        if any(uri_str.startswith(p) for p in loopback_prefixes):
+            return redirect_uri
+        # Reject plain HTTP to non-loopback hosts
         return _original_validate_redirect_uri(self, redirect_uri)
     elif self.redirect_uris is not None and len(self.redirect_uris) == 1:
         return self.redirect_uris[0]
