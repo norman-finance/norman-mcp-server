@@ -251,16 +251,17 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
         server_url = AnyHttpUrl(public_url)
         oauth_provider = NormanOAuthProvider(server_url=server_url)
         
+        from norman_mcp.auth.provider import SUPPORTED_SCOPES
         auth_settings = AuthSettings(
             issuer_url=server_url,
             resource_server_url=server_url,
             client_registration_options=ClientRegistrationOptions(
                 enabled=True,
-                valid_scopes=["read", "write"],
-                default_scopes=["read", "write"],
+                valid_scopes=SUPPORTED_SCOPES,
+                default_scopes=SUPPORTED_SCOPES,
             ),
             required_scopes=[],
-            scopes_supported=["read", "write"],
+            scopes_supported=SUPPORTED_SCOPES,
         )
     
     server = FastMCP(

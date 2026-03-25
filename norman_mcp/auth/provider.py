@@ -22,6 +22,11 @@ from typing import Any, Dict, Optional
 from pydantic import AnyHttpUrl, AnyUrl
 from starlette.exceptions import HTTPException
 
+# Scopes we accept: our own read/write plus MCP-standard scopes that
+# clients like OpenClaw, mcporter, etc. may request.
+SUPPORTED_SCOPES = ["read", "write", "mcp:tools", "mcp:resources", "mcp:prompts"]
+DEFAULT_SCOPE = " ".join(SUPPORTED_SCOPES)
+
 from mcp.server.auth.provider import (
     AccessToken,
     AuthorizationCode,
@@ -162,7 +167,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                     token_endpoint_auth_method=c.get("token_endpoint_auth_method", "none"),
                     grant_types=c.get("grant_types", ["authorization_code", "refresh_token"]),
                     response_types=c.get("response_types", ["code"]),
-                    scope=c.get("scope", "read write"),
+                    scope=c.get("scope", DEFAULT_SCOPE),
                 )
 
             for rid, r in data.get("refresh_tokens", {}).items():
@@ -220,7 +225,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 token_endpoint_auth_method="none",
                 grant_types=["authorization_code", "refresh_token"],
                 response_types=["code"],
-                scope="read write",
+                scope=DEFAULT_SCOPE,
             )
             self.clients[client_id] = client
             logger.info(f"Pre-registered Norman OAuth client: {client_id[:20]}...")
@@ -255,7 +260,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 token_endpoint_auth_method="none",
                 grant_types=["authorization_code", "refresh_token"],
                 response_types=["code"],
-                scope="read write",
+                scope=DEFAULT_SCOPE,
             )
             self.clients[client_id] = client
             logger.debug(f"Registered redirect_uris: {[str(u) for u in client.redirect_uris]}")
@@ -284,7 +289,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         """Register a new OAuth client via Dynamic Client Registration."""
-        if not client_info.scope or "read" not in client_info.scope:
+        if not client_info.scope or not any(s in client_info.scope for s in SUPPORTED_SCOPES):
             client_info = OAuthClientInformationFull(
                 client_id=client_info.client_id,
                 client_name=client_info.client_name,
@@ -293,7 +298,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 token_endpoint_auth_method=client_info.token_endpoint_auth_method or "none",
                 grant_types=client_info.grant_types or ["authorization_code", "refresh_token"],
                 response_types=client_info.response_types or ["code"],
-                scope="read write",
+                scope=DEFAULT_SCOPE,
             )
         self.clients[client_info.client_id] = client_info
         logger.info(f"Registered client: {client_info.client_id} with scope: {client_info.scope}")
@@ -319,7 +324,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             "code_challenge_method": "S256",  # PKCE always uses S256
             "redirect_uri_provided_explicitly": params.redirect_uri_provided_explicitly,
             "client_id": client.client_id,
-            "scopes": list(params.scopes) if params.scopes else ["read", "write"],
+            "scopes": list(params.scopes) if params.scopes else SUPPORTED_SCOPES,
         }
         
         # Build Norman OAuth authorization URL
