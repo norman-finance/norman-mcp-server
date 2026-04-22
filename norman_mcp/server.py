@@ -121,9 +121,19 @@ from mcp.server.auth.middleware.client_auth import ClientAuthenticator, Authenti
 _original_authenticate_request = ClientAuthenticator.authenticate_request
 
 async def _patched_authenticate_request(self, request):
-    """Extract client_id from Basic Auth header if not in form body."""
+    """Recover client_id when the client omits it from the POST body.
+
+    OpenAI's Apps platform (platform.openai.com/apps-manage) and some ChatGPT
+    connector flows POST to /token with only `code`/`refresh_token` + PKCE and
+    do not include `client_id` anywhere — violating RFC 6749 but widespread
+    enough to need a workaround. We fall back in this order:
+      1. Basic Auth header (n8n and similar)
+      2. Look up the stored authorization_code or refresh_token — each is
+         bound to a single client_id at issue time, so this is safe.
+    """
     form_data = await request.form()
     client_id = form_data.get("client_id")
+    client_secret_from_basic = None
 
     if not client_id:
         auth_header = request.headers.get("Authorization", "")
@@ -132,19 +142,33 @@ async def _patched_authenticate_request(self, request):
                 decoded = _b64.b64decode(auth_header[6:]).decode("utf-8")
                 if ":" in decoded:
                     basic_client_id, basic_client_secret = decoded.split(":", 1)
-                    basic_client_id = _unquote(basic_client_id)
-                    basic_client_secret = _unquote(basic_client_secret)
-
-                    mutable = dict(form_data.multi_items())
-                    mutable_dict = dict(mutable)
-                    mutable_dict["client_id"] = basic_client_id
-                    if basic_client_secret:
-                        mutable_dict["client_secret"] = basic_client_secret
-
-                    patched_form = _FormData(mutable_dict)
-                    request._form = patched_form
+                    client_id = _unquote(basic_client_id)
+                    client_secret_from_basic = _unquote(basic_client_secret) or None
             except Exception:
                 pass
+
+    if not client_id:
+        grant_type = form_data.get("grant_type")
+        provider = getattr(self, "provider", None)
+        if grant_type == "authorization_code":
+            code = form_data.get("code")
+            auth_codes = getattr(provider, "auth_codes", None) or {}
+            auth_code = auth_codes.get(str(code)) if code else None
+            if auth_code is not None:
+                client_id = auth_code.client_id
+        elif grant_type == "refresh_token":
+            rt = form_data.get("refresh_token")
+            refresh_tokens = getattr(provider, "refresh_tokens", None) or {}
+            refresh = refresh_tokens.get(str(rt)) if rt else None
+            if refresh is not None:
+                client_id = refresh.client_id
+
+    if client_id and form_data.get("client_id") != client_id:
+        mutable_dict = dict(form_data.multi_items())
+        mutable_dict["client_id"] = client_id
+        if client_secret_from_basic and not mutable_dict.get("client_secret"):
+            mutable_dict["client_secret"] = client_secret_from_basic
+        request._form = _FormData(mutable_dict)
 
     return await _original_authenticate_request(self, request)
 
@@ -250,7 +274,9 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
     if use_oauth:
         server_url = AnyHttpUrl(public_url)
         oauth_provider = NormanOAuthProvider(server_url=server_url)
-        
+        from norman_mcp.context import set_oauth_provider
+        set_oauth_provider(oauth_provider)
+
         from norman_mcp.auth.provider import SUPPORTED_SCOPES
         auth_settings = AuthSettings(
             issuer_url=server_url,

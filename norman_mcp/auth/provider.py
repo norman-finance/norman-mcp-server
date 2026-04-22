@@ -476,7 +476,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         # Check for refresh token
         norman_refresh = self.token_mapping.get(f"refresh_{authorization_code.code}")
         refresh_token_id = None
-        
+
         if norman_refresh:
             refresh_token_id = f"mcp_refresh_{secrets.token_hex(16)}"
             self.refresh_tokens[refresh_token_id] = RefreshToken(
@@ -486,6 +486,10 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 expires_at=int(time.time()) + 30 * 86400,  # 30 days
             )
             self.token_mapping[refresh_token_id] = norman_refresh
+            # Also index by access token so we can transparently refresh the
+            # Norman access token when it expires mid-session (see
+            # NormanAPI._make_request 401 handler).
+            self.token_mapping[f"refresh_for_{mcp_token}"] = norman_refresh
         
         # Clean up used authorization code
         del self.auth_codes[authorization_code.code]
@@ -585,10 +589,13 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 )
                 
                 self.token_mapping[new_mcp_token] = new_norman_token
-                
+
                 # Update refresh token if new one provided
                 if new_norman_refresh:
                     self.token_mapping[refresh_token.token] = new_norman_refresh
+                self.token_mapping[f"refresh_for_{new_mcp_token}"] = (
+                    new_norman_refresh or self.token_mapping.get(refresh_token.token)
+                )
                 
                 logger.info(f"✅ Refreshed MCP token: {new_mcp_token[:15]}...")
                 self._save_state()
@@ -626,3 +633,58 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
     def get_norman_token(self, mcp_token: str) -> Optional[str]:
         """Get the Norman API token for a given MCP token."""
         return self.token_mapping.get(mcp_token)
+
+    def refresh_norman_token_sync(self, mcp_token: str) -> Optional[str]:
+        """Refresh the Norman access token for an MCP access token (sync).
+
+        Called from NormanAPI._make_request (which uses `requests`) when
+        Norman returns 401 mid-session: we swap in a fresh Norman access
+        token so the MCP client does not need to reconnect. Returns the
+        new Norman access token, or None if refresh is impossible
+        (no stored refresh token, or refresh call failed).
+        """
+        import requests as _requests
+
+        norman_refresh = self.token_mapping.get(f"refresh_for_{mcp_token}")
+        if not norman_refresh:
+            logger.warning("No Norman refresh token stored for mcp_token %s...", mcp_token[:12])
+            return None
+
+        token_payload = {
+            "grant_type": "refresh_token",
+            "refresh_token": norman_refresh,
+            "client_id": get_norman_oauth_client_id(),
+        }
+        client_secret = get_norman_oauth_client_secret()
+        if client_secret:
+            token_payload["client_secret"] = client_secret
+
+        try:
+            response = _requests.post(
+                self.norman_token_url,
+                data=token_payload,
+                timeout=config.NORMAN_API_TIMEOUT,
+            )
+        except _requests.exceptions.RequestException as e:
+            logger.error("Network error during Norman refresh: %s", e)
+            return None
+
+        if response.status_code != 200:
+            logger.error(
+                "Norman refresh failed for mcp_token %s...: %s",
+                mcp_token[:12], response.status_code,
+            )
+            return None
+
+        data = response.json()
+        new_norman_token = data.get("access_token")
+        new_norman_refresh = data.get("refresh_token")
+        if not new_norman_token:
+            return None
+
+        self.token_mapping[mcp_token] = new_norman_token
+        if new_norman_refresh:
+            self.token_mapping[f"refresh_for_{mcp_token}"] = new_norman_refresh
+        self._save_state()
+        logger.info("✅ Refreshed Norman token for mcp_token %s...", mcp_token[:12])
+        return new_norman_token
