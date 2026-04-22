@@ -84,6 +84,13 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
 
         self.state_mapping: Dict[str, Dict[str, Any]] = {}
         self.token_mapping: Dict[str, str] = {}
+        # Per-MCP-token company id cache. Populated by the API client the
+        # first time a company id is fetched for a user, and consulted by
+        # load_access_token to seed the per-request ContextVar so that
+        # subsequent requests see the company id without a refetch. Also
+        # updated by switch_company to persist user selections across
+        # requests (ContextVars are per-request only).
+        self.token_to_company_id: Dict[str, str] = {}
 
         self._persist_lock = threading.Lock()
         self._load_state()
@@ -139,6 +146,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                     "refresh_tokens": refresh_ser,
                     "tokens": tokens_ser,
                     "token_mapping": self.token_mapping,
+                    "token_to_company_id": self.token_to_company_id,
                 }
 
                 tmp = path.with_suffix(".tmp")
@@ -189,6 +197,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                     )
 
             self.token_mapping = data.get("token_mapping", {})
+            self.token_to_company_id = data.get("token_to_company_id", {})
             logger.info(
                 "Restored OAuth state: %d clients, %d refresh tokens, %d access tokens",
                 len(self.clients), len(self.refresh_tokens), len(self.tokens),
@@ -389,11 +398,9 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 
                 if not norman_token:
                     raise HTTPException(400, "No access token in Norman response")
-                
-                # Store Norman token in global context
-                from norman_mcp.context import set_api_token
-                set_api_token(norman_token)
-                
+
+                # Note: per-request ContextVars are seeded by load_access_token
+                # on each incoming request, so we don't need to set it here.
                 logger.info(f"✅ Norman token obtained: {norman_token[:15]}...")
                 
                 # Generate MCP authorization code for the client
@@ -510,26 +517,84 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         )
 
     async def load_access_token(self, token: str) -> Optional[AccessToken]:
-        """Load and validate an access token."""
+        """Load and validate an access token and seed per-request context."""
         access_token = self.tokens.get(token)
-        
+
         if not access_token:
             return None
-        
+
         if access_token.expires_at and access_token.expires_at < time.time():
             del self.tokens[token]
             if token in self.token_mapping:
                 del self.token_mapping[token]
+            if token in self.token_to_company_id:
+                del self.token_to_company_id[token]
             self._save_state()
             return None
-        
-        # Set Norman token in context when validating
+
+        # Seed per-request ContextVars so the tool handler sees the right
+        # Norman token and company id for THIS user. ContextVars are
+        # isolated per async task, so concurrent users don't leak state.
+        from norman_mcp.context import (
+            set_api_company_id,
+            set_api_token,
+            set_api_token_source,
+        )
+
         norman_token = self.token_mapping.get(token)
         if norman_token:
-            from norman_mcp.context import set_api_token
             set_api_token(norman_token)
-        
+            set_api_token_source("oauth")
+
+        cached_company_id = self.token_to_company_id.get(token)
+        if not cached_company_id and norman_token:
+            # First request for this session: look up the user's company so
+            # tools that read api.company_id work without a prior set_token().
+            cached_company_id = await self._fetch_company_id(norman_token)
+            if cached_company_id:
+                self.token_to_company_id[token] = cached_company_id
+                self._save_state()
+
+        if cached_company_id:
+            set_api_company_id(cached_company_id)
+
         return access_token
+
+    async def _fetch_company_id(self, norman_token: str) -> Optional[str]:
+        """Resolve the user's primary company id from the Norman API."""
+        companies_url = urljoin(config.api_base_url, "api/v1/companies/")
+        try:
+            async with httpx.AsyncClient() as http_client:
+                response = await http_client.get(
+                    companies_url,
+                    headers={
+                        "Authorization": f"Bearer {norman_token}",
+                        "User-Agent": "NormanMCPServer/0.1.0",
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    timeout=config.NORMAN_API_TIMEOUT,
+                )
+                if response.status_code != 200:
+                    logger.warning(
+                        "Company lookup failed (%s) for norman token %s...",
+                        response.status_code, norman_token[:8],
+                    )
+                    return None
+                companies = response.json().get("results", [])
+                if not companies:
+                    return None
+                return companies[0].get("publicId")
+        except Exception as e:
+            logger.warning("Company lookup raised: %s", e)
+            return None
+
+    def set_company_for_token(self, mcp_token: str, company_id: Optional[str]) -> None:
+        """Persist the active company id against an MCP token across requests."""
+        if company_id:
+            self.token_to_company_id[mcp_token] = company_id
+        else:
+            self.token_to_company_id.pop(mcp_token, None)
+        self._save_state()
 
     async def load_refresh_token(
         self, client: OAuthClientInformationFull, refresh_token: str
@@ -618,6 +683,8 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         if token in self.tokens:
             if token in self.token_mapping:
                 del self.token_mapping[token]
+            if token in self.token_to_company_id:
+                del self.token_to_company_id[token]
             del self.tokens[token]
             logger.info(f"Revoked access token: {token[:10]}...")
             changed = True
