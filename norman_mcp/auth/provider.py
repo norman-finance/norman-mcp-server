@@ -158,13 +158,26 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             data = _json.loads(path.read_text())
             now = time.time()
 
+            migrated = False
             for cid, c in data.get("clients", {}).items():
+                # Migration: an older version of `get_client` auto-registered
+                # public clients with a random `client_secret` while setting
+                # `token_endpoint_auth_method="none"`. That combination makes
+                # every /token call fail with "Client secret is required"
+                # (see ClientAuthenticator). Strip the stored secret from
+                # method=none clients so they behave as public clients again.
+                auth_method = c.get("token_endpoint_auth_method", "none")
+                stored_secret = c.get("client_secret")
+                if auth_method == "none" and stored_secret:
+                    logger.info("Migrating public client %s... — dropping stale client_secret", cid[:12])
+                    stored_secret = None
+                    migrated = True
                 self.clients[cid] = OAuthClientInformationFull(
                     client_id=c["client_id"],
                     client_name=c.get("client_name"),
-                    client_secret=c.get("client_secret"),
+                    client_secret=stored_secret,
                     redirect_uris=c.get("redirect_uris", []),
-                    token_endpoint_auth_method=c.get("token_endpoint_auth_method", "none"),
+                    token_endpoint_auth_method=auth_method,
                     grant_types=c.get("grant_types", ["authorization_code", "refresh_token"]),
                     response_types=c.get("response_types", ["code"]),
                     scope=c.get("scope", DEFAULT_SCOPE),
@@ -193,6 +206,9 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 "Restored OAuth state: %d clients, %d refresh tokens, %d access tokens",
                 len(self.clients), len(self.refresh_tokens), len(self.tokens),
             )
+            if migrated:
+                # Persist the scrubbed secrets so the next restart doesn't log the migration again.
+                self._save_state()
         except Exception:
             logger.warning("Failed to load OAuth state from %s", path, exc_info=True)
 
@@ -252,10 +268,16 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 "https://mcp.norman.finance/callback",
                 "https://chatgpt.com/connector_platform_oauth_redirect"
             ]
+            # Public client: no client_secret, authenticated via PKCE.
+            # Setting a random secret here is a trap — the MCP SDK's
+            # ClientAuthenticator requires `request_client_secret` whenever
+            # `client.client_secret` is truthy, regardless of
+            # `token_endpoint_auth_method="none"`, so any public-client
+            # /token call would 401 with "Client secret is required".
             client = OAuthClientInformationFull(
                 client_id=client_id,
                 client_name=f"Client {client_id[:8]}",
-                client_secret=secrets.token_hex(32),
+                client_secret=None,
                 redirect_uris=default_redirect_uris,  # type: ignore
                 token_endpoint_auth_method="none",
                 grant_types=["authorization_code", "refresh_token"],
