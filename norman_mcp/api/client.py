@@ -273,10 +273,37 @@ class NormanAPI:
         except requests.exceptions.HTTPError as e:
             # Handle token expiration
             if e.response.status_code == 401:
-                logger.info("Token expired, refreshing...")
-                self.authenticate()
-                # Retry the request once
-                return self._make_request(method, url, params, json_data, files)
+                if self.token_source == "env":
+                    logger.info("Env token expired, re-authenticating...")
+                    try:
+                        self.authenticate()
+                    except Exception as auth_err:
+                        logger.error(f"Re-auth failed: {auth_err}")
+                        return {
+                            "error": "Authentication failed. Check NORMAN_EMAIL/NORMAN_PASSWORD.",
+                            "status_code": 401,
+                        }
+                    return self._make_request(method, url, params, json_data, files)
+
+                # OAuth mode: try to refresh the Norman token transparently
+                # using the refresh token we stored at code-exchange time.
+                new_norman_token = self._refresh_oauth_norman_token()
+                if new_norman_token:
+                    self.access_token = new_norman_token
+                    self.token_source = "global"
+                    return self._make_request(method, url, params, json_data, files)
+
+                logger.warning("Cannot refresh Norman token; client must reconnect")
+                self.access_token = None
+                from norman_mcp.context import set_api_token
+                set_api_token(None)
+                return {
+                    "error": (
+                        "Your Norman session expired. Please disconnect and reconnect "
+                        "the Norman connector in your AI client to re-authenticate."
+                    ),
+                    "status_code": 401,
+                }
             elif e.response.status_code == 403:
                 logger.error("Access forbidden. Check your account permissions.")
                 return {"error": "Access forbidden. Check your account permissions.", "status_code": 403}
@@ -312,7 +339,33 @@ class NormanAPI:
             logger.error(f"Unexpected error making request to {url}: {str(e)}")
             return {"error": f"Unexpected error: {str(e)}"}
 
+    def _refresh_oauth_norman_token(self) -> Optional[str]:
+        """Refresh the Norman access token for the current MCP request (OAuth).
+
+        Returns the new Norman access token or None if refresh isn't possible.
+        Also updates the global `_api_token` so subsequent requests in this
+        session see the new token.
+        """
+        try:
+            from norman_mcp.context import get_oauth_provider, set_api_token
+            provider = get_oauth_provider()
+            if provider is None:
+                return None
+
+            access_token = get_access_token()
+            mcp_token = access_token.token if access_token else None
+            if not mcp_token:
+                return None
+
+            new_norman_token = provider.refresh_norman_token_sync(mcp_token)
+            if new_norman_token:
+                set_api_token(new_norman_token)
+            return new_norman_token
+        except Exception as e:
+            logger.error(f"Transparent Norman refresh failed: {e}")
+            return None
+
     def set_company(self, company_id: str) -> None:
         """Manually set a company ID for this API client."""
         logger.info(f"Manually setting company ID to: {company_id}")
-        self.company_id = company_id 
+        self.company_id = company_id

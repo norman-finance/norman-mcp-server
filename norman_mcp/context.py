@@ -6,8 +6,18 @@ from mcp.server.fastmcp import Context
 
 """Context variables for the Norman MCP server."""
 
-# Global variable to store the OAuth provider across modules
-oauth_provider = None 
+# Global variable to store the OAuth provider across modules.
+# Set by server.create_app after the provider is constructed.
+oauth_provider = None
+
+def set_oauth_provider(provider):
+    """Set the global OAuth provider reference."""
+    global oauth_provider
+    oauth_provider = provider
+
+def get_oauth_provider():
+    """Get the global OAuth provider reference (may be None before startup)."""
+    return oauth_provider
 
 # Global variable to store the API client
 _api_client = None
