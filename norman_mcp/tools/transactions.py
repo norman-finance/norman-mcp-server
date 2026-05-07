@@ -24,17 +24,17 @@ def register_transaction_tools(mcp):
     )
     async def search_transactions(
         ctx: Context,
-        description: Optional[str] = Field(description="Text to search for in transaction descriptions"),
-        from_date: Optional[str] = Field(description="Start date in YYYY-MM-DD format"),
-        to_date: Optional[str] = Field(description="End date in YYYY-MM-DD format"),
-        min_amount: Optional[float] = Field(description="Minimum transaction amount"),
-        max_amount: Optional[float] = Field(description="Maximum transaction amount"),
-        category: Optional[str] = Field(description="Transaction category"),
-        no_invoice: Optional[bool] = Field(description="Whether to exclude invoices"),
-        no_receipt: Optional[bool] = Field(description="Whether to exclude receipts"),
-        status: Optional[str] = Field(description="Status of the transaction (UNVERIFIED, VERIFIED)"),
-        cashflow_type: Optional[str] = Field(description="Cashflow type of the transaction (INCOME, EXPENSE)"),
-        limit: Optional[int] = Field(description="Maximum number of results to return (default 100)")
+        description: Optional[str] = Field(default=None, description="Text to search for in transaction descriptions"),
+        from_date: Optional[str] = Field(default=None, description="Start date in YYYY-MM-DD format"),
+        to_date: Optional[str] = Field(default=None, description="End date in YYYY-MM-DD format"),
+        min_amount: Optional[float] = Field(default=None, description="Minimum transaction amount"),
+        max_amount: Optional[float] = Field(default=None, description="Maximum transaction amount"),
+        category: Optional[str] = Field(default=None, description="Transaction category"),
+        no_invoice: Optional[bool] = Field(default=None, description="Whether to exclude invoices"),
+        no_receipt: Optional[bool] = Field(default=None, description="Whether to exclude receipts"),
+        status: Optional[str] = Field(default=None, description="Status of the transaction (UNVERIFIED, VERIFIED)"),
+        cashflow_type: Optional[str] = Field(default=None, description="Cashflow type of the transaction (INCOME, EXPENSE)"),
+        limit: Optional[int] = Field(default=None, description="Maximum number of results to return (default 100)")
     ) -> Dict[str, Any]:
         """
         Search for transactions matching specified criteria.
@@ -108,13 +108,13 @@ def register_transaction_tools(mcp):
         description: str = Field(description="Transaction description"),
         cashflow_type: str = Field(description="Cashflow type of the transaction (INCOME, EXPENSE)"),
         supplier_country: str = Field(description="Country of the supplier (DE, INSIDE_EU, OUTSIDE_EU)"),
-        category_id: Optional[str] = Field(description="Freelance category ID (for non-SME companies). If not provided, auto-categorized via AI."),
-        company_category_id: Optional[str] = Field(description="SME company category ID from the DATEV chart of accounts (for GmbH/UG companies). Use list_company_categories to find the right ID."),
-        vat_rate: Optional[int] = Field(description="VAT rate (0, 7, 19)"),
-        sale_type: Optional[str] = Field(description="Sale type (GOODS, SERVICES)"),
-        date: Optional[str] = Field(description="Transaction date (document/invoice date) in YYYY-MM-DD format (defaults to today)"),
-        payment_date: Optional[str] = Field(description="Date when payment was made/received in YYYY-MM-DD format. Used for SME accrual accounting."),
-        payment_type: Optional[str] = Field(description="Payment method: BANK, CASH, NOT_PAID"),
+        category_id: Optional[str] = Field(default=None, description="Freelance category ID (for non-SME companies). If not provided, auto-categorized via AI."),
+        company_category_id: Optional[str] = Field(default=None, description="SME company category ID from the DATEV chart of accounts (for GmbH/UG companies). Use list_company_categories to find the right ID."),
+        vat_rate: Optional[int] = Field(default=None, description="VAT rate (0, 7, 19)"),
+        sale_type: Optional[str] = Field(default=None, description="Sale type (GOODS, SERVICES)"),
+        date: Optional[str] = Field(default=None, description="Transaction date (document/invoice date) in YYYY-MM-DD format (defaults to today)"),
+        payment_date: Optional[str] = Field(default=None, description="Date when payment was made/received in YYYY-MM-DD format. Used for SME accrual accounting."),
+        payment_type: Optional[str] = Field(default=None, description="Payment method: BANK, CASH, NOT_PAID"),
     ) -> Dict[str, Any]:
         """
         Create a new manual transaction.
@@ -170,18 +170,18 @@ def register_transaction_tools(mcp):
     async def update_transaction(
         ctx: Context,
         transaction_id: str = Field(description="Public ID of the transaction to update"),
-        amount: Optional[float] = Field(description="Transaction amount (positive for income, negative for expense)"),
-        description: Optional[str] = Field(description="Transaction description"),
-        category: Optional[str] = Field(description="Freelance category name or ID"),
-        date: Optional[str] = Field(description="Transaction date (document/invoice date) in YYYY-MM-DD format"),
-        vat_rate: Optional[int] = Field(description="VAT rate (0, 7, 19)"),
-        sale_type: Optional[str] = Field(description="Sale type (GOODS, SERVICES)"),
-        supplier_country: Optional[str] = Field(description="Country of the supplier (DE, INSIDE_EU, OUTSIDE_EU)"),
-        cashflow_type: Optional[str] = Field(description="Cashflow type of the transaction (INCOME, EXPENSE)"),
-        category_id: Optional[str] = Field(description="Freelance category ID"),
-        company_category_id: Optional[str] = Field(description="SME company category ID from DATEV chart of accounts (for GmbH/UG)"),
-        payment_date: Optional[str] = Field(description="Date when payment was made/received in YYYY-MM-DD format"),
-        payment_type: Optional[str] = Field(description="Payment method: BANK, CASH, NOT_PAID"),
+        amount: Optional[float] = Field(default=None, description="Transaction amount (positive for income, negative for expense)"),
+        description: Optional[str] = Field(default=None, description="Transaction description"),
+        category: Optional[str] = Field(default=None, description="Freelance category name or ID"),
+        date: Optional[str] = Field(default=None, description="Transaction date (document/invoice date) in YYYY-MM-DD format"),
+        vat_rate: Optional[int] = Field(default=None, description="VAT rate (0, 7, 19)"),
+        sale_type: Optional[str] = Field(default=None, description="Sale type (GOODS, SERVICES)"),
+        supplier_country: Optional[str] = Field(default=None, description="Country of the supplier (DE, INSIDE_EU, OUTSIDE_EU)"),
+        cashflow_type: Optional[str] = Field(default=None, description="Cashflow type of the transaction (INCOME, EXPENSE)"),
+        category_id: Optional[str] = Field(default=None, description="Freelance category ID"),
+        company_category_id: Optional[str] = Field(default=None, description="SME company category ID from DATEV chart of accounts (for GmbH/UG)"),
+        payment_date: Optional[str] = Field(default=None, description="Date when payment was made/received in YYYY-MM-DD format"),
+        payment_type: Optional[str] = Field(default=None, description="Payment method: BANK, CASH, NOT_PAID"),
     ) -> Dict[str, Any]:
         """Update an existing transaction. For SME companies, use company_category_id and payment fields."""
         api = ctx.request_context.lifespan_context["api"]
