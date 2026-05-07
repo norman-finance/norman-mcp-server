@@ -275,11 +275,11 @@ def register_tax_tools(mcp):
     async def update_tax_setting(
         ctx: Context,
         setting_id: str = Field(description="Public ID of the tax setting to update"),
-        tax_type: Optional[str] = Field(description="Type of tax (e.g. 'sales')"),
-        vat_type: Optional[str] = Field(description="VAT type (e.g. 'vat_subject')"),
-        vat_percent: Optional[float] = Field(description="VAT percentage"),
-        start_tax_report_date: Optional[str] = Field(description="Start date for tax reporting (YYYY-MM-DD)"),
-        reporting_frequency: Optional[str] = Field(description="Frequency of reporting (e.g. 'monthly')")
+        tax_type: Optional[str] = Field(default=None, description="Type of tax (e.g. 'sales')"),
+        vat_type: Optional[str] = Field(default=None, description="VAT type (e.g. 'vat_subject')"),
+        vat_percent: Optional[float] = Field(default=None, description="VAT percentage"),
+        start_tax_report_date: Optional[str] = Field(default=None, description="Start date for tax reporting (YYYY-MM-DD)"),
+        reporting_frequency: Optional[str] = Field(default=None, description="Frequency of reporting (e.g. 'monthly')")
     ) -> Dict[str, Any]:
         """
         Update a tax setting. Always generate a preview of the tax report @generate_finanzamt_preview before submitting it to the Finanzamt.

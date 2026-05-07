@@ -200,7 +200,7 @@ def register_document_tools(mcp):
         file_refs: Optional[List[str]] = Field(default=None, description="List of file_ref tokens from prior POST /files/upload calls."),
         files_base64: Optional[List[Dict[str, str]]] = Field(default=None, description="LAST RESORT — only for tiny files (<50 KB each). Each item: {\"file_name\": \"receipt.pdf\", \"content\": \"<base64>\"}. Do NOT use for images or PDFs."),
         file_paths: Optional[List[str]] = Field(default=None, description="Deprecated alias for file_urls."),
-        cashflow_type: Optional[str] = Field(description="Optional cashflow type for the transactions (INCOME or EXPENSE). If not provided, then try to detect it from the file")
+        cashflow_type: Optional[str] = Field(default=None, description="Optional cashflow type for the transactions (INCOME or EXPENSE). If not provided, then try to detect it from the file")
     ) -> Dict[str, Any]:
         """
         Upload multiple file attachments in bulk.
@@ -332,11 +332,11 @@ def register_document_tools(mcp):
     )
     async def list_attachments(
         ctx: Context,
-        file_name: Optional[str] = Field(description="Filter by file name (case insensitive partial match)"),
-        linked: Optional[bool] = Field(description="Filter by whether attachment is linked to transactions"),
-        attachment_type: Optional[str] = Field(description="Filter by attachment type (invoice, receipt, contract, other)"),
-        description: Optional[str] = Field(description="Filter by description (case insensitive partial match)"),
-        brand_name: Optional[str] = Field(description="Filter by brand name (case insensitive partial match)")
+        file_name: Optional[str] = Field(default=None, description="Filter by file name (case insensitive partial match)"),
+        linked: Optional[bool] = Field(default=None, description="Filter by whether attachment is linked to transactions"),
+        attachment_type: Optional[str] = Field(default=None, description="Filter by attachment type (invoice, receipt, contract, other)"),
+        description: Optional[str] = Field(default=None, description="Filter by description (case insensitive partial match)"),
+        brand_name: Optional[str] = Field(default=None, description="Filter by brand name (case insensitive partial match)")
     ) -> Dict[str, Any]:
         """
         Get list of attachments with optional filters.
@@ -392,22 +392,22 @@ def register_document_tools(mcp):
         file_ref: Optional[str] = Field(default=None, description="Reference token from a prior POST /files/upload call. Use when the client uploaded the file directly to the MCP server."),
         file_content_base64: Optional[str] = Field(default=None, description="LAST RESORT — only for tiny files (<50 KB). Do NOT use for images, PDFs, or scanned documents — the base64 string will exceed the context window. Prefer file_url or file_ref."),
         file_name: Optional[str] = Field(default=None, description="Original filename with extension (e.g. 'invoice.pdf'). Required when using file_content_base64."),
-        transactions: Optional[List[str]] = Field(description="List of transaction IDs to link"),
-        attachment_type: Optional[str] = Field(description="Type of attachment (invoice, receipt)"),
-        amount: Optional[float] = Field(description="Amount related to attachment"),
-        amount_exchanged: Optional[float] = Field(description="Exchanged amount in different currency"),
-        attachment_number: Optional[str] = Field(description="Unique number for attachment"),
-        brand_name: Optional[str] = Field(description="Brand name associated with attachment"),
+        transactions: Optional[List[str]] = Field(default=None, description="List of transaction IDs to link"),
+        attachment_type: Optional[str] = Field(default=None, description="Type of attachment (invoice, receipt)"),
+        amount: Optional[float] = Field(default=None, description="Amount related to attachment"),
+        amount_exchanged: Optional[float] = Field(default=None, description="Exchanged amount in different currency"),
+        attachment_number: Optional[str] = Field(default=None, description="Unique number for attachment"),
+        brand_name: Optional[str] = Field(default=None, description="Brand name associated with attachment"),
         currency: str = "EUR",
         currency_exchanged: str = "EUR",
-        description: Optional[str] = Field(description="Description of attachment"),
-        supplier_country: Optional[str] = Field(description="Country of supplier (DE, INSIDE_EU, OUTSIDE_EU)"),
-        value_date: Optional[str] = Field(description="Date of value"),
-        vat_sum_amount: Optional[float] = Field(description="VAT sum amount"),
-        vat_sum_amount_exchanged: Optional[float] = Field(description="Exchanged VAT sum amount"),
-        vat_rate: Optional[int] = Field(description="VAT rate percentage"),
-        sale_type: Optional[str] = Field(description="Type of sale"),
-        additional_metadata: Optional[Dict[str, Any]] = Field(description="Additional metadata for attachment")
+        description: Optional[str] = Field(default=None, description="Description of attachment"),
+        supplier_country: Optional[str] = Field(default=None, description="Country of supplier (DE, INSIDE_EU, OUTSIDE_EU)"),
+        value_date: Optional[str] = Field(default=None, description="Date of value"),
+        vat_sum_amount: Optional[float] = Field(default=None, description="VAT sum amount"),
+        vat_sum_amount_exchanged: Optional[float] = Field(default=None, description="Exchanged VAT sum amount"),
+        vat_rate: Optional[int] = Field(default=None, description="VAT rate percentage"),
+        sale_type: Optional[str] = Field(default=None, description="Type of sale"),
+        additional_metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata for attachment")
     ) -> Dict[str, Any]:
         """
         Create a new attachment with a file.
