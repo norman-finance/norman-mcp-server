@@ -164,7 +164,10 @@ def register_bill_tools(mcp):
     )
     async def pay_bill(
         ctx: Context,
-        bill_id: str
+        bill_id: str,
+        account_id: str,
+        execution_date: Optional[str] = None,
+        purpose: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Initiate a SEPA payment for a bill. ⚠️ This starts a REAL payment flow.
@@ -174,6 +177,9 @@ def register_bill_tools(mcp):
 
         Args:
             bill_id: ID of the bill to pay
+            account_id: ID of the bank account to pay from (required by the backend)
+            execution_date: Optional payment execution date in YYYY-MM-DD format
+            purpose: Optional payment purpose / reference text
 
         Returns:
             Payment order details including paymentOrderId and webformUrl
@@ -183,7 +189,12 @@ def register_bill_tools(mcp):
             return {"error": "No company available. Please authenticate first."}
 
         pay_url = urljoin(config.api_base_url, f"api/v1/accounting/bills/{bill_id}/pay/")
-        return api._make_request("POST", pay_url, json_data={})
+        payload: Dict[str, Any] = {"accountId": account_id}
+        if execution_date is not None:
+            payload["executionDate"] = execution_date
+        if purpose is not None:
+            payload["purpose"] = purpose
+        return api._make_request("POST", pay_url, json_data=payload)
 
     @mcp.tool(
         title="Delete Bill",
