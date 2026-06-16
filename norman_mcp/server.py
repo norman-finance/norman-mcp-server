@@ -24,6 +24,8 @@ from mcp.server.auth.routes import validate_issuer_url
 
 from norman_mcp.api.client import NormanAPI
 from norman_mcp.tools.clients import register_client_tools
+from norman_mcp.tools.vendors import register_vendor_tools
+from norman_mcp.tools.bills import register_bill_tools
 from norman_mcp.tools.invoices import register_invoice_tools
 from norman_mcp.tools.offers import register_offer_tools
 from norman_mcp.tools.taxes import register_tax_tools
@@ -352,6 +354,8 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
     
     # Register tools, prompts, and resources
     register_client_tools(server)
+    register_vendor_tools(server)
+    register_bill_tools(server)
     register_invoice_tools(server)
     register_offer_tools(server)
     register_tax_tools(server)
