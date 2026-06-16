@@ -7,26 +7,35 @@ from urllib.parse import urlparse
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# HTML/JS injection patterns only. We deliberately do NOT strip SQL keywords or
+# characters like '@'. These values are passed to the Norman API as JSON bodies /
+# query parameters — never interpolated into SQL — so a SQL-keyword blocklist
+# provides no real protection while silently corrupting legitimate input:
+#   "PENDING" -> "PING" (strips "end"), "OpenAI" -> "AI" (strips "open"),
+#   "foo@example.com" -> "fooexample.com" (strips "@"), and "create"/"update"/
+#   "delete"/"table" vanish entirely. That broke, e.g., the bills status=PENDING filter.
+_SCRIPT_INJECTION_RE = re.compile(
+    r'<script|javascript:|onclick|onload|onerror|onmouseover|'
+    r'alert\(|confirm\(|prompt\(|eval\(|setTimeout\(|setInterval\(',
+    re.IGNORECASE,
+)
+
+
 def validate_input(input_str: Optional[str]) -> Optional[str]:
-    """Validate and sanitize input strings to prevent injection attacks."""
+    """Sanitize input strings, stripping only obvious HTML/JS injection patterns.
+
+    Normal text — including SQL-keyword substrings (``end``, ``open``, ``create``,
+    ``update``, ``select``) and ``@`` — is returned unchanged, since these are sent
+    as JSON/query params, not raw SQL.
+    """
     if input_str is None:
         return None
-        
-    # Remove any suspicious patterns that might indicate injection attempts
-    # This prevents SQL injection, command injection, etc.
-    dangerous_patterns = [
-        r'--|;|\/\*|\*\/|@@|@|char|nchar|varchar|nvarchar|alter|begin|cast|create|cursor|declare|delete|drop|end|exec|execute|fetch|insert|kill|open|select|sys|sysobjects|syscolumns|table|update',
-        r'<script|javascript:|onclick|onload|onerror|onmouseover|alert\(|confirm\(|prompt\(|eval\(|setTimeout\(|setInterval\(',
-    ]
-    
-    sanitized = input_str
-    for pattern in dangerous_patterns:
-        if re.search(pattern, sanitized, re.IGNORECASE):
-            logger.warning(f"Potential injection attack detected in input: {input_str}")
-            # Replace potential injection patterns with empty string
-            sanitized = re.sub(pattern, '', sanitized, flags=re.IGNORECASE)
-    
-    return sanitized
+
+    if _SCRIPT_INJECTION_RE.search(input_str):
+        logger.warning("Potential script-injection pattern detected in input; sanitizing.")
+        return _SCRIPT_INJECTION_RE.sub('', input_str)
+
+    return input_str
 
 def validate_file_path(file_path: str) -> bool:
     """Validate a file path to prevent path traversal attacks."""
