@@ -38,6 +38,7 @@ from mcp.server.auth.provider import (
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 
 from norman_mcp.config.settings import config
+from norman_mcp.security.redirects import is_allowed_redirect_uri
 
 logger = logging.getLogger(__name__)
 
@@ -292,6 +293,9 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
     
     def add_redirect_uri(self, client_id: str, redirect_uri: str) -> None:
         """Add a redirect URI to an existing client (for dynamic registration)."""
+        if not is_allowed_redirect_uri(redirect_uri):
+            logger.warning(f"Refusing to add disallowed redirect URI for {client_id[:8]}: {redirect_uri}")
+            return
         client = self.clients.get(client_id)
         if client and redirect_uri not in [str(uri) for uri in client.redirect_uris]:
             # Create new client with updated redirect URIs
@@ -310,7 +314,28 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             self._save_state()
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
-        """Register a new OAuth client via Dynamic Client Registration."""
+        """Register a new OAuth client via Dynamic Client Registration.
+
+        Open DCR is intentional (MCP clients self-register), but we drop any
+        redirect URI that is not on the server allow-list so an attacker cannot
+        persist a code-exfiltration target. The authoritative check still runs
+        per /authorize request via validate_redirect_uri.
+        """
+        allowed_uris = [u for u in (client_info.redirect_uris or []) if is_allowed_redirect_uri(str(u))]
+        dropped = [str(u) for u in (client_info.redirect_uris or []) if not is_allowed_redirect_uri(str(u))]
+        if dropped:
+            logger.warning(f"DCR for {client_info.client_id}: dropping disallowed redirect_uris: {dropped}")
+        if list(allowed_uris) != list(client_info.redirect_uris or []):
+            client_info = OAuthClientInformationFull(
+                client_id=client_info.client_id,
+                client_name=client_info.client_name,
+                client_secret=client_info.client_secret,
+                redirect_uris=allowed_uris,
+                token_endpoint_auth_method=client_info.token_endpoint_auth_method or "none",
+                grant_types=client_info.grant_types or ["authorization_code", "refresh_token"],
+                response_types=client_info.response_types or ["code"],
+                scope=client_info.scope,
+            )
         if not client_info.scope or not any(s in client_info.scope for s in SUPPORTED_SCOPES):
             client_info = OAuthClientInformationFull(
                 client_id=client_info.client_id,

@@ -2,7 +2,8 @@
 
 import norman_mcp
 from unittest.mock import patch
-from norman_mcp.server import Config, NormanAPI
+from norman_mcp.config.settings import Config
+from norman_mcp.server import NormanAPI
 
 
 def test_version():
