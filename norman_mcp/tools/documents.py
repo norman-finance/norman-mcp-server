@@ -640,18 +640,31 @@ def register_document_tools(mcp):
     async def delete_attachment(
         ctx: Context,
         attachment_id: str = Field(description="ID of the attachment to delete"),
+        confirm: bool = Field(
+            default=False,
+            description=(
+                "Documents under legal retention (GoBD, ~10 years) cannot be deleted "
+                "without confirmation — the API returns 409 with requiresConfirmation. "
+                "Set true to confirm and override the retention guard. Only do this on "
+                "the user's explicit instruction to delete a retained document."
+            ),
+        ),
     ) -> Dict[str, Any]:
         """
         Delete an attachment. Useful for removing an orphan receipt/invoice that has
         no linked transaction (e.g. a stale self-statement left behind after the real
-        invoice was attached). Permanent — only call once the user has confirmed the
-        attachment should be removed.
+        invoice was attached). Permanent.
+
+        Documents subject to retention return a 409 whose `detail.requiresConfirmation`
+        is true (with a `retentionUntil` date). To proceed, re-call with `confirm=true`.
+        Only call once the user has confirmed the attachment should be removed.
 
         Args:
             attachment_id: ID of the attachment to delete
+            confirm: set true to override the legal-retention guard on a retained document
 
         Returns:
-            Confirmation of deletion
+            Confirmation of deletion, or the 409 retention warning if confirm is not set
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -662,7 +675,8 @@ def register_document_tools(mcp):
             config.api_base_url,
             f"api/v1/companies/{company_id}/attachments/{attachment_id}/",
         )
-        result = api._make_request("DELETE", attachment_url)
+        params = {"confirm": "true"} if confirm else None
+        result = api._make_request("DELETE", attachment_url, params=params)
         if result is None or result == "":
             return {"message": f"Attachment {attachment_id} deleted successfully."}
         return result
