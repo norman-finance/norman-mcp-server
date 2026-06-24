@@ -43,6 +43,18 @@
 
 <br/>
 
+### 💬 Try asking
+
+Once connected, talk to your books in plain language:
+
+- *"Prepare and file my UStVA for last month."*
+- *"Send a €1,200 invoice to ACME for consulting."*
+- *"What did I spend on software this quarter?"*
+- *"Find tax deductions I might have missed."*
+- *"Which invoices are overdue? Send reminders."*
+
+<br/>
+
 <details open>
 <summary>
 <h3>👀 See it in action</h3>
