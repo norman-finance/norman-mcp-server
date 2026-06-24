@@ -628,6 +628,45 @@ def register_document_tools(mcp):
         
         return api._make_request("POST", link_url, json_data=link_data)
 
+    @mcp.tool(
+        title="Delete Attachment",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def delete_attachment(
+        ctx: Context,
+        attachment_id: str = Field(description="ID of the attachment to delete"),
+    ) -> Dict[str, Any]:
+        """
+        Delete an attachment. Useful for removing an orphan receipt/invoice that has
+        no linked transaction (e.g. a stale self-statement left behind after the real
+        invoice was attached). Permanent — only call once the user has confirmed the
+        attachment should be removed.
+
+        Args:
+            attachment_id: ID of the attachment to delete
+
+        Returns:
+            Confirmation of deletion
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        attachment_url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/attachments/{attachment_id}/",
+        )
+        result = api._make_request("DELETE", attachment_url)
+        if result is None or result == "":
+            return {"message": f"Attachment {attachment_id} deleted successfully."}
+        return result
+
     _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".tif"}
     _EXT_TO_MIME = {
         ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
