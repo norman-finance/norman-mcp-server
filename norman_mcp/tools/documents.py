@@ -651,13 +651,13 @@ def register_document_tools(mcp):
         ),
     ) -> Dict[str, Any]:
         """
-        Delete an attachment. Useful for removing an orphan receipt/invoice that has
-        no linked transaction (e.g. a stale self-statement left behind after the real
-        invoice was attached). Permanent.
+        Delete an attachment — e.g. an orphan receipt/invoice with no linked transaction
+        (a stale self-statement left behind after the real invoice was attached).
 
-        Documents subject to retention return a 409 whose `detail.requiresConfirmation`
-        is true (with a `retentionUntil` date). To proceed, re-call with `confirm=true`.
-        Only call once the user has confirmed the attachment should be removed.
+        Retention-aware: Norman keeps documents under GoBD retention. A retained document
+        returns a 409 whose `detail.requiresConfirmation` is true (with a `retentionUntil`
+        date); re-call with `confirm=true` to override. Only call once the user has
+        confirmed the attachment should be removed.
 
         Args:
             attachment_id: ID of the attachment to delete
@@ -675,9 +675,11 @@ def register_document_tools(mcp):
             config.api_base_url,
             f"api/v1/companies/{company_id}/attachments/{attachment_id}/",
         )
-        params = {"confirm": "true"} if confirm else None
+        # Backend expects ?confirmed=true to override the GoBD retention guard.
+        params = {"confirmed": "true"} if confirm else None
         result = api._make_request("DELETE", attachment_url, params=params)
-        if result is None or result == "":
+        # _make_request returns {} on an empty 204 response — treat any falsy result as success.
+        if not result:
             return {"message": f"Attachment {attachment_id} deleted successfully."}
         return result
 
