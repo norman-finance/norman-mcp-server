@@ -628,6 +628,61 @@ def register_document_tools(mcp):
         
         return api._make_request("POST", link_url, json_data=link_data)
 
+    @mcp.tool(
+        title="Delete Attachment",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def delete_attachment(
+        ctx: Context,
+        attachment_id: str = Field(description="ID of the attachment to delete"),
+        confirm: bool = Field(
+            default=False,
+            description=(
+                "Documents under legal retention (GoBD, ~10 years) cannot be deleted "
+                "without confirmation — the API returns 409 with requiresConfirmation. "
+                "Set true to confirm and override the retention guard. Only do this on "
+                "the user's explicit instruction to delete a retained document."
+            ),
+        ),
+    ) -> Dict[str, Any]:
+        """
+        Delete an attachment — e.g. an orphan receipt/invoice with no linked transaction
+        (a stale self-statement left behind after the real invoice was attached).
+
+        Retention-aware: Norman keeps documents under GoBD retention. A retained document
+        returns a 409 whose `detail.requiresConfirmation` is true (with a `retentionUntil`
+        date); re-call with `confirm=true` to override. Only call once the user has
+        confirmed the attachment should be removed.
+
+        Args:
+            attachment_id: ID of the attachment to delete
+            confirm: set true to override the legal-retention guard on a retained document
+
+        Returns:
+            Confirmation of deletion, or the 409 retention warning if confirm is not set
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        attachment_url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/attachments/{attachment_id}/",
+        )
+        # Backend expects ?confirmed=true to override the GoBD retention guard.
+        params = {"confirmed": "true"} if confirm else None
+        result = api._make_request("DELETE", attachment_url, params=params)
+        # _make_request returns {} on an empty 204 response — treat any falsy result as success.
+        if not result:
+            return {"message": f"Attachment {attachment_id} deleted successfully."}
+        return result
+
     _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".tif"}
     _EXT_TO_MIME = {
         ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
