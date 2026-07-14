@@ -136,10 +136,10 @@ claude /plugin install github:norman-finance/norman-mcp-server
 </details>
 
 <details>
-<summary><strong>ChatGPT Apps</strong></summary>
+<summary><strong>ChatGPT Plugins</strong></summary>
 <br/>
 
-1. Install it from the official [ChatGPT Apps Directory](https://chatgpt.com/apps/norman/asdk_app_6981ec32565481919b1c5a1627b1e330).
+1. Install it from the official [ChatGPT Plugins Directory](https://chatgpt.com/plugins/plugin_asdk_app_6981ec32565481919b1c5a1627b1e330).
 
 </details>
 
