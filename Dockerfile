@@ -23,5 +23,15 @@ ENV PYTHONUNBUFFERED=1
 # Expose server port
 EXPOSE 3001
 
-# Run the server with streamable-http transport (OAuth-enabled)
-CMD ["python", "-m", "norman_mcp", "--transport", "streamable-http", "--environment", "production", "--host", "0.0.0.0", "--port", "3001"]
+# Run the server with streamable-http transport (OAuth-enabled).
+#
+# --stateless is REQUIRED for hosted connectors. In stateful mode FastMCP keeps
+# each session in memory and demands the exact Mcp-Session-Id be replayed on
+# every request after initialize. Hosted clients (claude.ai, ChatGPT) do not
+# reliably thread that session id across their conversation runtime, and a
+# redeploy/restart wipes the single replica's in-memory sessions. Symptom:
+# tools show in the connector settings (cached from the discovery sync) but
+# fail to load in conversations with "400 Bad Request: Missing session ID".
+# Stateless makes every request self-contained. Do not remove without moving
+# session state to a shared store.
+CMD ["python", "-m", "norman_mcp", "--transport", "streamable-http", "--stateless", "--environment", "production", "--host", "0.0.0.0", "--port", "3001"]
