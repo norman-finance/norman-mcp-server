@@ -406,6 +406,11 @@ def register_incorporation_tools(mcp):
 
         Get the user's explicit confirmation before calling. The Norman team coordinates the
         appointment and gets back to the user; nothing is sent to a notary automatically.
+
+        After this succeeds, present the remaining formation steps from the record's `roadmap`
+        and invite the user back into the product to continue: their Norman dashboard at
+        https://app.norman.finance/ has the formation roadmap (bank account, deposit, HRB,
+        Finanzamt, Gewerbeamt, Transparency) where they track and complete each step.
         """
         api = ctx.request_context.lifespan_context.get("api")
         payload = _clean({"notaryPublicId": notary_public_id, "message": message or None})
