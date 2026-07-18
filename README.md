@@ -39,6 +39,8 @@
 
 **Company Overview** — Check your balance, revenue, and financial health at a glance
 
+**Company Formation** — Found a German **GmbH or UG**: collect the founders' data, check the name against the Handelsregister, generate the founding documents (Musterprotokoll, Gesellschafterliste), match with a notary, and track every step through to registration
+
 **Documents** — Upload and attach receipts, invoices, and supporting files
 
 <br/>
@@ -52,6 +54,21 @@ Once connected, talk to your books in plain language:
 - *"What did I spend on software this quarter?"*
 - *"Find tax deductions I might have missed."*
 - *"Which invoices are overdue? Send reminders."*
+
+<br/>
+
+### 🏢 Starting a company
+
+Found a German **GmbH or UG (haftungsbeschränkt)** end-to-end — Norman collects the data, prepares the documents, and hands off to a notary:
+
+- *"I want to start a GmbH in Berlin — walk me through it."*
+- *"Found a UG for me and two co-founders, split the shares 60/40."*
+- *"Is 'Wunderbar Robotics' still free in the Handelsregister?"*
+- *"Reword my business purpose so it's ready for the register."*
+- *"Generate the Musterprotokoll and find me a notary who does online notarization."*
+- *"What's left before my company is officially registered?"*
+
+> Choosing GmbH/UG also sets your Norman account to the corporate **SKR04** chart of accounts, so bookkeeping and taxes are ready from day one. The documents are drafts to prepare the notary appointment — not legal advice.
 
 <br/>
 
@@ -237,6 +254,7 @@ Ready-to-use skills compatible with **Claude Code**, **OpenClaw**, and the [Agen
 | `expense-report` | Expense breakdown by category, top vendors, and trends |
 | `tax-deduction-finder` | Scan transactions for missed deductions and suggest fixes |
 | `monthly-reconciliation` | Full monthly close — transactions, invoices, receipts, and taxes |
+| `company-incorporation` | Found a German GmbH/UG — data, documents, name check, and notary hand-off |
 
 <br/>
 
