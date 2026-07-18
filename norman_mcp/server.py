@@ -34,6 +34,7 @@ from norman_mcp.tools.documents import register_document_tools
 from norman_mcp.tools.company import register_company_tools
 from norman_mcp.tools.categories import register_category_tools
 from norman_mcp.tools.tax_advisor import register_tax_advisor_tools
+from norman_mcp.tools.incorporation import register_incorporation_tools
 from norman_mcp.prompts.templates import register_prompts
 from norman_mcp.resources.endpoints import register_resources
 from norman_mcp.auth.provider import NormanOAuthProvider
@@ -364,6 +365,7 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
     register_company_tools(server)
     register_category_tools(server)
     register_tax_advisor_tools(server)
+    register_incorporation_tools(server)
     register_prompts(server)
     register_resources(server)
     
