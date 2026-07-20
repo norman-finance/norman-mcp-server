@@ -107,6 +107,11 @@ def register_incorporation_tools(mcp):
         registered_office_house_number: str | None = Field(default=None),
         registered_office_additional: str | None = Field(default=None),
         registered_office_postal_code: str | None = Field(default=None, description="5-digit German PLZ"),
+        business_address_city: str | None = Field(
+            default=None,
+            description="City of the business address (inländische Geschäftsanschrift); "
+            "leave empty if it is the same city as the Sitz",
+        ),
         registered_address_skipped: bool | None = Field(
             default=None,
             description="True if the user wants to skip the street address for now (city is still required)",
@@ -130,6 +135,7 @@ def register_incorporation_tools(mcp):
                 "registeredOfficeHouseNumber": registered_office_house_number,
                 "registeredOfficeAdditional": registered_office_additional,
                 "registeredOfficePostalCode": registered_office_postal_code,
+                "businessAddressCity": business_address_city,
                 "registeredAddressSkipped": registered_address_skipped,
             },
         )
