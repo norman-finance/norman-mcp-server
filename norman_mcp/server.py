@@ -209,12 +209,12 @@ async def authenticate_with_credentials(api_client):
             norman_token = response.json().get("access")
             if not norman_token:
                 return False
-            
+
+            # set_token writes to the per-request ContextVars (access token +
+            # company id). For stdio transport the lifespan context is the
+            # parent of every tool call, so all tool tasks inherit the values.
             api_client.set_token(norman_token)
-            
-            from norman_mcp.context import set_api_token
-            set_api_token(norman_token)
-            
+
             logger.info(f"✅ Authenticated: {norman_email}")
             return True
             
@@ -229,18 +229,20 @@ async def lifespan(app):
     logger.info("Starting Norman MCP server")
     
     api_client = NormanAPI(authenticate_on_init=False)
-    
+
     transport = getattr(app, "_transport", "sse")
     if transport == "stdio":
+        # Stdio is single-user — lifespan task writes the Norman token into
+        # ContextVars and all subsequent tool-call tasks inherit them.
         await authenticate_with_credentials(api_client)
     else:
-        from norman_mcp.context import set_api_client, get_api_token
-        token = get_api_token()
-        if token:
-            api_client.set_token(token)
+        # OAuth/HTTP transports: per-request ContextVars are seeded by
+        # NormanOAuthProvider.load_access_token on each incoming request.
+        # No startup-time token handling is needed.
+        from norman_mcp.context import set_api_client
         set_api_client(api_client)
         logger.info(f"Using {transport} transport with OAuth")
-    
+
     yield {"api": api_client}
     
     logger.info("Shutting down Norman MCP server")
