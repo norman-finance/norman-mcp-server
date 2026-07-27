@@ -85,6 +85,11 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
 
         self.state_mapping: Dict[str, Dict[str, Any]] = {}
         self.token_mapping: Dict[str, str] = {}
+        # Active company per MCP token. Keyed by the caller's own MCP token, so
+        # one user's selection can never be observed by another -- unlike the old
+        # `NormanAPI.company_id` attribute, which was shared process-wide and was
+        # both how switch_company "persisted" and how companies leaked.
+        self.token_to_company_id: Dict[str, str] = {}
 
         self._persist_lock = threading.Lock()
         self._load_state()
@@ -140,6 +145,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                     "refresh_tokens": refresh_ser,
                     "tokens": tokens_ser,
                     "token_mapping": self.token_mapping,
+                    "token_to_company_id": self.token_to_company_id,
                 }
 
                 tmp = path.with_suffix(".tmp")
@@ -203,6 +209,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                     )
 
             self.token_mapping = data.get("token_mapping", {})
+            self.token_to_company_id = data.get("token_to_company_id", {})
             logger.info(
                 "Restored OAuth state: %d clients, %d refresh tokens, %d access tokens",
                 len(self.clients), len(self.refresh_tokens), len(self.tokens),
@@ -567,15 +574,26 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             del self.tokens[token]
             if token in self.token_mapping:
                 del self.token_mapping[token]
+            if token in self.token_to_company_id:
+                del self.token_to_company_id[token]
             self._save_state()
             return None
-        
-        # Set Norman token in context when validating
+
+        # Seed the per-request context from THIS caller's own token. Both values
+        # are request-scoped ContextVars (see norman_mcp.context) -- never write
+        # caller identity anywhere process-wide.
+        from norman_mcp.context import set_api_company_id, set_api_token
+
         norman_token = self.token_mapping.get(token)
         if norman_token:
-            from norman_mcp.context import set_api_token
             set_api_token(norman_token)
-        
+
+        # Restore the company this caller last selected via switch_company. Keyed
+        # by their MCP token, so it cannot be observed by anyone else.
+        company_id = self.token_to_company_id.get(token)
+        if company_id:
+            set_api_company_id(company_id)
+
         return access_token
 
     async def load_refresh_token(
@@ -644,6 +662,11 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                     new_norman_refresh or self.token_mapping.get(refresh_token.token)
                 )
                 
+                # Known limitation: the company selected via switch_company is
+                # keyed by MCP access token, so a refresh (>=24h) drops back to
+                # the caller's default company. Carrying it over would need a
+                # session identity spanning token rotations, which the provider
+                # does not have -- deliberately not invented here.
                 logger.info(f"✅ Refreshed MCP token: {new_mcp_token[:15]}...")
                 self._save_state()
 
@@ -665,6 +688,8 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         if token in self.tokens:
             if token in self.token_mapping:
                 del self.token_mapping[token]
+            if token in self.token_to_company_id:
+                del self.token_to_company_id[token]
             del self.tokens[token]
             logger.info(f"Revoked access token: {token[:10]}...")
             changed = True
@@ -680,6 +705,33 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
     def get_norman_token(self, mcp_token: str) -> Optional[str]:
         """Get the Norman API token for a given MCP token."""
         return self.token_mapping.get(mcp_token)
+
+    def get_company_for_token(self, mcp_token: str) -> Optional[str]:
+        """Get the company this MCP token last selected, if any."""
+        return self.token_to_company_id.get(mcp_token)
+
+    def set_company_for_token(self, mcp_token: str, company_id: Optional[str]) -> None:
+        """Remember the active company for one MCP token.
+
+        Keyed by the caller's own token, so a selection is visible only to the
+        caller -- this is what lets switch_company outlive a single request
+        without reintroducing shared mutable company state.
+
+        The caller's access to `company_id` must already have been verified;
+        this only persists the choice. See tools/tax_advisor.switch_company,
+        which confirms the company is reachable before calling this.
+        """
+        if not mcp_token:
+            return
+        if company_id:
+            if self.token_to_company_id.get(mcp_token) == company_id:
+                return
+            self.token_to_company_id[mcp_token] = company_id
+        elif mcp_token in self.token_to_company_id:
+            del self.token_to_company_id[mcp_token]
+        else:
+            return
+        self._save_state()
 
     def refresh_norman_token_sync(self, mcp_token: str) -> Optional[str]:
         """Refresh the Norman access token for an MCP access token (sync).
