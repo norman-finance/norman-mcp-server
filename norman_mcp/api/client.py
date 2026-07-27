@@ -41,8 +41,13 @@ class NormanAPI:
     def company_id(self) -> Optional[str]:
         """The company id for the CURRENT request.
 
-        Resolved from the requesting user's own token, cached per request. It is
-        deliberately never a plain attribute in OAuth mode: a shared attribute
+        Resolution order, all scoped to the calling user:
+        1. The request-scoped ContextVar (seeded by `load_access_token` from the
+           caller's own saved selection, or by an earlier lookup this request).
+        2. The caller's persisted `switch_company` choice, by MCP token.
+        3. The user's first company from the API.
+
+        Deliberately never a plain attribute in OAuth mode: a shared attribute
         pinned whichever company happened to be looked up first and handed it to
         every later caller.
         """
@@ -52,6 +57,13 @@ class NormanAPI:
         cached = get_api_company_id()
         if cached:
             return cached
+
+        # A selection persisted by switch_company outlives the request that made
+        # it, so pick it up before falling back to "first company".
+        persisted = self._persisted_company_id()
+        if persisted:
+            set_api_company_id(persisted)
+            return persisted
 
         token = self._resolve_norman_token()
         if not token:
@@ -66,8 +78,42 @@ class NormanAPI:
     def company_id(self, value: Optional[str]) -> None:
         if self.token_source == "env":
             self._env_company_id = value
-        else:
-            set_api_company_id(value)
+            return
+
+        set_api_company_id(value)
+
+        # Persist for this caller's later requests. Only the explicit selection
+        # path reaches here (switch_company -> set_company); the lazy "first
+        # company" lookup above deliberately does not persist, so a default is
+        # never mistaken for a choice.
+        mcp_token = self._current_mcp_token()
+        provider = get_oauth_provider()
+        if mcp_token and provider is not None:
+            try:
+                provider.set_company_for_token(mcp_token, value)
+            except Exception as e:
+                logger.error(f"Could not persist company selection: {e}")
+
+    @staticmethod
+    def _current_mcp_token() -> Optional[str]:
+        """The MCP token of the request being served, if there is one."""
+        try:
+            access_token = get_access_token()
+        except Exception:
+            return None
+        return getattr(access_token, "token", None) if access_token else None
+
+    def _persisted_company_id(self) -> Optional[str]:
+        """The company this caller previously selected via switch_company."""
+        mcp_token = self._current_mcp_token()
+        provider = get_oauth_provider()
+        if not mcp_token or provider is None:
+            return None
+        try:
+            return provider.get_company_for_token(mcp_token)
+        except Exception as e:
+            logger.error(f"Could not read persisted company selection: {e}")
+            return None
 
     def _resolve_norman_token(self) -> Optional[str]:
         """Resolve the Norman access token for the CURRENT request.
@@ -172,15 +218,11 @@ class NormanAPI:
         # re-derives it per call from the request's own auth context.
         set_api_token(token)
 
-        # Resolve the company for THIS request's token. Previously guarded by
-        # `if not self.company_id`, which pinned the first user's company onto
-        # the shared client and handed it to everyone who came after.
-        try:
-            company_id = self._fetch_company_id(token)
-            if company_id:
-                set_api_company_id(company_id)
-        except Exception as e:
-            logger.error(f"Error setting company ID with OAuth token: {str(e)}")
+        # The company is NOT resolved here on purpose. `load_access_token` has
+        # already seeded this caller's saved switch_company selection, and an
+        # eager lookup would overwrite it with their first company. The
+        # `company_id` property resolves lazily instead -- which also spares an
+        # API round trip on requests that never need a company.
 
 
     def authenticate(self) -> None:

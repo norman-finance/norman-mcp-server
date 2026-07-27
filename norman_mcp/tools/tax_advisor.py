@@ -414,23 +414,36 @@ def register_tax_advisor_tools(mcp):
         api = ctx.request_context.lifespan_context["api"]
         previous_id = api.company_id
 
-        api.set_company(company_id)
-
+        # Confirm the caller can actually reach this company BEFORE recording the
+        # selection. The endpoint is scoped by the requesting user server-side
+        # (Company.objects.for_user), so a company they have no access to comes
+        # back as an error. Persisting first would let a caller pin an arbitrary
+        # company id onto their own session, and that id is sent as the `company`
+        # field when creating transactions.
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
         try:
             company = api._make_request("GET", company_url)
-            return {
-                "previousCompanyId": previous_id,
-                "activeCompanyId": company_id,
-                "company": {
-                    "name": company.get("name"),
-                    "accountType": company.get("accountType"),
-                    "isSme": company.get("isSme"),
-                },
-            }
         except Exception as e:
             return {
                 "previousCompanyId": previous_id,
-                "activeCompanyId": company_id,
-                "warning": f"Switched, but could not fetch company details: {e}",
+                "error": f"Could not switch to {company_id}: {e}",
             }
+
+        if not isinstance(company, dict) or company.get("error"):
+            detail = company.get("error") if isinstance(company, dict) else "unexpected response"
+            return {
+                "previousCompanyId": previous_id,
+                "error": f"Could not switch to {company_id}: {detail}",
+            }
+
+        api.set_company(company_id)
+
+        return {
+            "previousCompanyId": previous_id,
+            "activeCompanyId": company_id,
+            "company": {
+                "name": company.get("name"),
+                "accountType": company.get("accountType"),
+                "isSme": company.get("isSme"),
+            },
+        }
