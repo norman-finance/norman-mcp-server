@@ -59,8 +59,13 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
 
+      # Release bookkeeping must never gate the deploy. A transient Sentry API
+      # error (SSL reset, 5xx) used to skip "update mcp server image" entirely,
+      # so a green build sat in the registry while prod kept running the old
+      # image — including when the deploy was carrying a security fix.
       - name: draft sentry release
         uses: getsentry/action-release@v1
+        continue-on-error: true
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
@@ -85,6 +90,7 @@ jobs:
 
       - name: finalize sentry release
         uses: getsentry/action-release@v1
+        continue-on-error: true
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
