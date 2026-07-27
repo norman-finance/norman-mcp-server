@@ -7,20 +7,106 @@ from urllib.parse import urljoin
 from ..config.settings import config
 from ..security.utils import validate_input, validate_url
 from mcp.server.auth.middleware.auth_context import get_access_token
-from norman_mcp.context import oauth_provider
+from norman_mcp.context import (
+    get_api_company_id,
+    get_api_token,
+    get_oauth_provider,
+    set_api_company_id,
+    set_api_token,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 @dataclass
 class NormanAPI:
-    """API client for Norman Finance."""
+    """API client for Norman Finance.
+
+    SECURITY: in OAuth mode this object may be shared between concurrent users
+    (SSE/stateful transports reuse one instance; stateless HTTP rebuilds it per
+    request). It therefore must NOT hold per-request identity. The Norman token
+    is resolved per call by `_resolve_norman_token()` and the company id by the
+    `company_id` property -- both request-scoped. `access_token` /
+    `_env_company_id` below are only for single-tenant env/stdio mode.
+    """
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
-    company_id: Optional[str] = None
     token_source: str = "env"  # can be 'env', 'oauth', or 'direct_login'
     authenticate_on_init: bool = True  # Whether to authenticate on initialization
-    
+    # Single-tenant (env/stdio) company id only. In OAuth mode the company id is
+    # per-request and lives in a ContextVar -- see the `company_id` property.
+    _env_company_id: Optional[str] = None
+
+    @property
+    def company_id(self) -> Optional[str]:
+        """The company id for the CURRENT request.
+
+        Resolved from the requesting user's own token, cached per request. It is
+        deliberately never a plain attribute in OAuth mode: a shared attribute
+        pinned whichever company happened to be looked up first and handed it to
+        every later caller.
+        """
+        if self.token_source == "env":
+            return self._env_company_id
+
+        cached = get_api_company_id()
+        if cached:
+            return cached
+
+        token = self._resolve_norman_token()
+        if not token:
+            return None
+
+        company_id = self._fetch_company_id(token)
+        if company_id:
+            set_api_company_id(company_id)
+        return company_id
+
+    @company_id.setter
+    def company_id(self, value: Optional[str]) -> None:
+        if self.token_source == "env":
+            self._env_company_id = value
+        else:
+            set_api_company_id(value)
+
+    def _resolve_norman_token(self) -> Optional[str]:
+        """Resolve the Norman access token for the CURRENT request.
+
+        The order here is a security boundary, not a convenience:
+
+        1. The MCP auth context (`get_access_token()`) is set per request by the
+           SDK's auth middleware and is the only trustworthy caller identity in
+           a multi-tenant process. Map it to a Norman token via the provider.
+        2. The request-scoped ContextVar, for transports with no auth context
+           (stdio) and for the transparent-refresh path.
+        3. `self.access_token` -- ONLY in single-tenant env mode.
+
+        Never fall back from an authenticated request to shared instance state:
+        that is exactly how one user ends up querying with another user's token.
+        """
+        try:
+            access_token = get_access_token()
+        except Exception:  # no auth context on this transport
+            access_token = None
+
+        if access_token is not None:
+            mcp_token = getattr(access_token, "token", None)
+            provider = get_oauth_provider()
+            if provider is not None and mcp_token:
+                norman_token = provider.get_norman_token(mcp_token)
+                if norman_token:
+                    return norman_token
+            # Authenticated but unresolvable: use only the request-scoped value.
+            return get_api_token()
+
+        scoped = get_api_token()
+        if scoped:
+            return scoped
+
+        if self.token_source == "env":
+            return self.access_token
+        return None
+
     def __post_init__(self):
         """Initialize the API client by authenticating with Norman Finance."""
         # If we already have a token, use it
@@ -48,32 +134,55 @@ class NormanAPI:
             else:
                 raise
     
-    def set_token(self, token: str) -> None:
-        """Set the access token directly (used by OAuth flow)."""
+    def set_token(self, token: str, single_tenant: bool = False) -> None:
+        """Set the access token.
+
+        Args:
+            token: the Norman access token.
+            single_tenant: True for stdio/env credential login, where the whole
+                process serves exactly one user and the token may legitimately
+                live on the instance. False (default) for OAuth, where the token
+                belongs to one request only and MUST stay request-scoped -- one
+                shared instance serves every connected user there.
+        """
         if not token:
             logger.error("Attempted to set empty token!")
             return
-            
+
         # If we already have a token from direct login, don't override it with OAuth token
         if self.token_source == "direct_login":
             logger.info("Keeping existing direct login token instead of setting OAuth token")
             return
-            
-        logger.info("Setting Norman API token from OAuth flow")
-        self.access_token = token
-        self.token_source = "oauth"
-        
-        # Try to get company ID with this token only if we don't already have one
-        if not self.company_id:
+
+        if single_tenant:
+            logger.info("Setting Norman API token from credential login (single tenant)")
+            self.access_token = token
+            self.token_source = "env"
             try:
-                # Try to get company with this token
-                logger.info("Attempting to get company ID with OAuth token")
                 self._set_company_id()
             except Exception as e:
-                logger.error(f"Error setting company ID with OAuth token: {str(e)}")
-        else:
-            logger.info(f"Using existing company ID: {self.company_id}")
-    
+                logger.error(f"Error setting company ID: {str(e)}")
+            return
+
+        logger.info("Setting Norman API token from OAuth flow")
+        self.token_source = "oauth"
+
+        # Do NOT store the token on self: this object can be shared between
+        # concurrent users. Keep it request-scoped; _resolve_norman_token()
+        # re-derives it per call from the request's own auth context.
+        set_api_token(token)
+
+        # Resolve the company for THIS request's token. Previously guarded by
+        # `if not self.company_id`, which pinned the first user's company onto
+        # the shared client and handed it to everyone who came after.
+        try:
+            company_id = self._fetch_company_id(token)
+            if company_id:
+                set_api_company_id(company_id)
+        except Exception as e:
+            logger.error(f"Error setting company ID with OAuth token: {str(e)}")
+
+
     def authenticate(self) -> None:
         """Authenticate with Norman Finance API and get access token."""
         if not config.NORMAN_EMAIL or not config.NORMAN_PASSWORD:
@@ -109,16 +218,27 @@ class NormanAPI:
             raise
     
     def _set_company_id(self) -> None:
-        """Get the company ID for the authenticated user."""
+        """Resolve and store the company id for the env/stdio token."""
+        self.company_id = self._fetch_company_id(self.access_token)
+
+    def _fetch_company_id(self, token: Optional[str]) -> Optional[str]:
+        """Look up the first company for `token`'s owner.
+
+        Pure in the token: it stores nothing on `self`, so it is safe to call
+        concurrently for different users.
+        """
+        if not token:
+            return None
+
         # Use the correct URL for getting companies
         companies_url = urljoin(config.api_base_url, "api/v1/companies/")
-        
+
         try:
-            logger.info(f"Fetching company information with token: {self.access_token[:8]}...")
-            
+            logger.info(f"Fetching company information with token: {token[:8]}...")
+
             # Make a request directly, not using self._make_request to avoid recursion
             headers = {
-                "Authorization": f"Bearer {self.access_token}",
+                "Authorization": f"Bearer {token}",
                 "User-Agent": "NormanMCPServer/0.1.0",
                 "X-Requested-With": "XMLHttpRequest"
             }
@@ -136,76 +256,75 @@ class NormanAPI:
             
             if not companies:
                 logger.warning("No companies found for user")
-                return
-            
+                return None
+
             # Use the first company
-            self.company_id = companies[0].get("publicId")
-            if self.company_id:
-                logger.info(f"✅ Using company ID from API: {self.company_id}")
+            company_id = companies[0].get("publicId")
+            if company_id:
+                logger.info(f"✅ Using company ID from API: {company_id}")
             else:
                 logger.warning("Company found but no publicId available")
-                
+            return company_id
+
         except Exception as e:
             logger.error(f"Error getting company ID: {str(e)}")
             # Don't set a fallback company ID - let API response indicate the error
-    
+            return None
+
+
     def _make_request(self, method: str, url: str, params: Optional[Dict[str, Any]] = None, 
                      json_data: Optional[Dict[str, Any]] = None, 
                      files: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Make a request to the Norman Finance API with security controls."""
-        # Always check for a global token first, as it's most reliable
-        try:
-            from norman_mcp.context import get_api_token
-            global_token = get_api_token()
-            if global_token:
-                logger.debug("Using globally stored Norman token from login")
-                self.access_token = global_token
-                self.token_source = "global"
-        except Exception as e:
-            logger.error(f"Error getting global token: {str(e)}")
-        
-        # If still no token, try environment variables as last resort
-        if not self.access_token:
+        # Resolve the caller's token for THIS request. Keep it in a local: it
+        # must never be written to `self`, which is shared across users.
+        token = self._resolve_norman_token()
+
+        # No token and single-tenant mode: env credentials are the last resort.
+        if not token and self.token_source == "env":
             try:
                 logger.warning("No Norman token available. Attempting authentication with environment variables...")
                 self.authenticate()
+                token = self.access_token
             except Exception as e:
                 logger.error(f"Authentication failed: {str(e)}")
                 return {"error": "No authentication token available. Please authenticate first."}
-        
+
+        if not token:
+            logger.error("No Norman token resolvable for this request")
+            return {"error": "No authentication token available. Please authenticate first."}
+
         # Validate URL to prevent SSRF attacks
         if not validate_url(url):
             logger.error(f"Invalid or potentially dangerous URL: {url}")
             raise ValueError(f"Invalid or potentially dangerous URL: {url}")
-        
+
         # Set secure headers with our token
         headers = {
-            "Authorization": f"Bearer {self.access_token}",
+            "Authorization": f"Bearer {token}",
             "User-Agent": "NormanMCPServer/0.1.0",
             "X-Requested-With": "XMLHttpRequest",
             # Security headers
             "X-Content-Type-Options": "nosniff",
             "X-Frame-Options": "DENY"
         }
-        
+
         # Log token source for debugging
         logger.debug(f"Making API request to {url} with token source: {self.token_source}")
-        
-        # If we need company ID and don't have one yet, we'll let the API handle it
-        # or we'll get it from the companies endpoint result
-        if not self.company_id and not url.endswith("companies/"):
-            logger.debug("No company ID set yet, will be determined by API or later from companies endpoint")
-        
-        # Add company ID to params if we have one and URL requires it
+
         if params is None:
             params = {}
-        
-        if self.company_id and not url.endswith("companies/"):
-            # Don't automatically add company ID - let the API determine it
-            logger.debug(f"Using company ID for request: {self.company_id}")
-            if "companyId" not in params:
-                params["companyId"] = self.company_id
-        
+
+        # Add company ID to params if we have one and the URL requires it.
+        # `self.company_id` is request-scoped (see the property), so this can
+        # only ever be the calling user's own company.
+        if not url.endswith("companies/"):
+            company_id = self.company_id
+            if company_id:
+                logger.debug(f"Using company ID for request: {company_id}")
+                if "companyId" not in params:
+                    params["companyId"] = company_id
+
         # Sanitize parameters to prevent injection
         if params:
             sanitized_params = {}
@@ -287,15 +406,14 @@ class NormanAPI:
 
                 # OAuth mode: try to refresh the Norman token transparently
                 # using the refresh token we stored at code-exchange time.
+                # `refresh_norman_token_sync` rewrites the provider's mapping for
+                # this MCP token, so the retry re-resolves the fresh token
+                # per-request instead of us caching it on the shared client.
                 new_norman_token = self._refresh_oauth_norman_token()
                 if new_norman_token:
-                    self.access_token = new_norman_token
-                    self.token_source = "global"
                     return self._make_request(method, url, params, json_data, files)
 
                 logger.warning("Cannot refresh Norman token; client must reconnect")
-                self.access_token = None
-                from norman_mcp.context import set_api_token
                 set_api_token(None)
                 return {
                     "error": (
@@ -347,7 +465,6 @@ class NormanAPI:
         session see the new token.
         """
         try:
-            from norman_mcp.context import get_oauth_provider, set_api_token
             provider = get_oauth_provider()
             if provider is None:
                 return None

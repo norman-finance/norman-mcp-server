@@ -211,11 +211,11 @@ async def authenticate_with_credentials(api_client):
             if not norman_token:
                 return False
             
-            api_client.set_token(norman_token)
-            
-            from norman_mcp.context import set_api_token
-            set_api_token(norman_token)
-            
+            # stdio: one process serves exactly one user, so the token belongs on
+            # the instance. (In OAuth mode it must stay request-scoped instead --
+            # see NormanAPI.set_token.)
+            api_client.set_token(norman_token, single_tenant=True)
+
             logger.info(f"✅ Authenticated: {norman_email}")
             return True
             
