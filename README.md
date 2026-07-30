@@ -125,13 +125,9 @@ Before connecting, [create a free Norman account](https://app.norman.finance/sig
 <summary><strong>Claude Connectors</strong></summary>
 <br/>
 
-1. Go to [claude.ai/settings/connectors](https://claude.ai/settings/connectors)
-2. Click **Add custom connector**
-3. Paste:
-
-```
-https://mcp.norman.finance/mcp
-```
+1. Go to [https://claude.ai/new#settings/customize-connectors)
+2. Click **Add**
+3. Find and connect: **Norman Finance**
 </details>
 
 <details>
