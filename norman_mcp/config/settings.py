@@ -14,6 +14,7 @@ class Config:
         NORMAN_PASSWORD: Password for stdio transport authentication
         NORMAN_ENVIRONMENT: 'production' or 'sandbox' (default: production)
         NORMAN_API_TIMEOUT: API request timeout in seconds (default: 200)
+        NORMAN_INTERNAL_API_BASE_URL: Internal Norman API URL for first-party token validation
         NORMAN_OAUTH_CLIENT_ID: OAuth client ID for Norman OAuth server (required for HTTP transports)
         NORMAN_OAUTH_CLIENT_SECRET: OAuth client secret (optional, for confidential clients)
         NORMAN_MCP_HOST: Host to bind to (default: 0.0.0.0)
@@ -48,10 +49,17 @@ class Config:
         return os.getenv("NORMAN_OAUTH_CLIENT_SECRET")
     
     @property
+    def internal_api_base_url(self) -> str:
+        override = os.getenv("NORMAN_INTERNAL_API_BASE_URL", "").strip()
+        if override:
+            return f"{override.rstrip('/')}/"
+        return self.api_base_url
+
+    @property
     def api_base_url(self) -> str:
         if self.NORMAN_ENVIRONMENT.lower() == "production":
             return "https://api.norman.finance/"
         else:
             return "https://sandbox.norman.finance/"
 
-config = Config() 
+config = Config()

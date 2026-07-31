@@ -2,7 +2,8 @@
 
 import norman_mcp
 from unittest.mock import patch
-from norman_mcp.server import Config, NormanAPI
+from norman_mcp.api.client import NormanAPI
+from norman_mcp.config.settings import Config
 
 
 def test_version():
@@ -23,6 +24,11 @@ def test_config_class():
         assert config.NORMAN_ENVIRONMENT == "sandbox"
         assert config.api_base_url == "https://sandbox.norman.finance/"
 
+    with patch.dict('os.environ', {'NORMAN_INTERNAL_API_BASE_URL': 'http://backend:8000'}):
+        config = Config()
+        assert config.internal_api_base_url == "http://backend:8000/"
+        assert config.api_base_url == "https://api.norman.finance/"
+
 
 def test_norman_api_class():
     """Test the NormanAPI class initialization without actual API calls."""
@@ -31,4 +37,4 @@ def test_norman_api_class():
         api = NormanAPI()
         assert api.access_token is None
         assert api.refresh_token is None
-        assert api.company_id is None 
+        assert api.company_id is None

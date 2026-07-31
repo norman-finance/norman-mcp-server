@@ -1721,4 +1721,4 @@ sse = ["fastapi", "pydantic", "uvicorn"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10"
-content-hash = "294421edc9bd32f533833ec77e0bd6aa290270352bc0c80523bdc1ebde5c37cc"
+content-hash = "c2b045c4b6158416b9fc721adb74aab45c98c676d99940f4150fd763621c4d85"

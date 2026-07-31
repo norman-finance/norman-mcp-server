@@ -9,6 +9,7 @@ authentication to Norman's OAuth server. It:
 """
 
 import json as _json
+import base64
 import os
 import logging
 import time
@@ -90,6 +91,10 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         # `NormanAPI.company_id` attribute, which was shared process-wide and was
         # both how switch_company "persisted" and how companies leaked.
         self.token_to_company_id: Dict[str, str] = {}
+        # Norman's own chat connects to this existing remote server with a
+        # short-lived Norman API JWT. These validated entries are memory-only:
+        # unlike delegated OAuth tokens they must never reach the state file.
+        self._first_party_tokens: Dict[str, tuple[AccessToken, Optional[str], float]] = {}
 
         self._persist_lock = threading.Lock()
         self._load_state()
@@ -568,7 +573,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         access_token = self.tokens.get(token)
         
         if not access_token:
-            return None
+            return await self._load_first_party_access_token(token)
         
         if access_token.expires_at and access_token.expires_at < time.time():
             del self.tokens[token]
@@ -595,6 +600,73 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             set_api_company_id(company_id)
 
         return access_token
+
+    async def _load_first_party_access_token(self, token: str) -> Optional[AccessToken]:
+        """Accept a Norman API JWT only after the Norman API validates its tenant access."""
+        from norman_mcp.context import set_api_company_id, set_api_token
+
+        cached = self._first_party_tokens.get(token)
+        if cached and cached[2] > time.time():
+            access_token, company_id, _validated_until = cached
+            set_api_token(token)
+            set_api_company_id(company_id)
+            return access_token
+
+        payload = self._unverified_jwt_payload(token)
+        if not payload or payload.get("norman_mcp_first_party") is not True:
+            return None
+        expires_at = int(float(payload.get("exp") or 0))
+        if expires_at <= time.time():
+            return None
+
+        company_id = str(payload.get("company_id") or "") or None
+        validation_path = (
+            f"api/v1/companies/{company_id}/"
+            if company_id
+            else "api/v1/companies/"
+        )
+        try:
+            async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
+                response = await client.get(
+                    urljoin(config.internal_api_base_url, validation_path),
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "User-Agent": "NormanMCPServer/first-party",
+                    },
+                )
+            response.raise_for_status()
+            if company_id is None:
+                body = response.json()
+                companies = body.get("results", []) if isinstance(body, dict) else []
+                company_id = str(companies[0].get("publicId") or "") if companies else None
+        except (httpx.HTTPError, TypeError, ValueError, KeyError):
+            logger.info("Rejected invalid first-party Norman MCP token")
+            return None
+
+        access_token = AccessToken(
+            token=token,
+            client_id="norman-first-party",
+            scopes=SUPPORTED_SCOPES,
+            expires_at=expires_at,
+        )
+        validated_until = min(expires_at, time.time() + 300)
+        self._first_party_tokens[token] = (access_token, company_id, validated_until)
+        set_api_token(token)
+        set_api_company_id(company_id)
+        return access_token
+
+    @staticmethod
+    def _unverified_jwt_payload(token: str) -> Optional[dict]:
+        """Read routing claims only; authenticity is established by the API request above."""
+        if len(token) > 4096 or token.count(".") != 2:
+            return None
+        try:
+            payload = token.split(".", 2)[1]
+            payload += "=" * (-len(payload) % 4)
+            value = _json.loads(base64.urlsafe_b64decode(payload).decode())
+        except (ValueError, TypeError, UnicodeDecodeError):
+            return None
+        return value if isinstance(value, dict) else None
 
     async def load_refresh_token(
         self, client: OAuthClientInformationFull, refresh_token: str
