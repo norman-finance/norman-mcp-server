@@ -532,7 +532,7 @@ wheels = [
 
 [[package]]
 name = "mcp"
-version = "1.26.0"
+version = "1.23.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -550,9 +550,9 @@ dependencies = [
     { name = "typing-inspection" },
     { name = "uvicorn", marker = "sys_platform != 'emscripten'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fc/6d/62e76bbb8144d6ed86e202b5edd8a4cb631e7c8130f3f4893c3f90262b10/mcp-1.26.0.tar.gz", hash = "sha256:db6e2ef491eecc1a0d93711a76f28dec2e05999f93afd48795da1c1137142c66", size = 608005 }
+sdist = { url = "https://files.pythonhosted.org/packages/25/1a/9c8a5362e3448d585081d6c7aa95898a64e0ac59d3e26169ae6c3ca5feaf/mcp-1.23.0.tar.gz", hash = "sha256:84e0c29316d0a8cf0affd196fd000487ac512aa3f771b63b2ea864e22961772b", size = 596506 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fd/d9/eaa1f80170d2b7c5ba23f3b59f766f3a0bb41155fbc32a69adfa1adaaef9/mcp-1.26.0-py3-none-any.whl", hash = "sha256:904a21c33c25aa98ddbeb47273033c435e595bbacfdb177f4bd87f6dceebe1ca", size = 233615 },
+    { url = "https://files.pythonhosted.org/packages/7b/b2/28739ce409f98159c0121eab56e69ad71546c4f34ac8b42e58c03f57dccc/mcp-1.23.0-py3-none-any.whl", hash = "sha256:5a645cf111ed329f4619f2629a3f15d9aabd7adc2ea09d600d31467b51ecb64f", size = 231427 },
 ]
 
 [package.optional-dependencies]
@@ -625,6 +625,7 @@ dependencies = [
     { name = "httpx" },
     { name = "jinja2" },
     { name = "mcp", extra = ["cli"] },
+    { name = "pyjwt" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "requests" },
@@ -652,9 +653,10 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.24.0" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.10.1" },
     { name = "jinja2", specifier = ">=3.0.0" },
-    { name = "mcp", extras = ["cli"], specifier = ">=1.8.0" },
+    { name = "mcp", extras = ["cli"], specifier = "==1.23.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=0.942" },
     { name = "pydantic", marker = "extra == 'sse'", specifier = ">=2.0.0" },
+    { name = "pyjwt", specifier = ">=2.10.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "python-dotenv", specifier = ">=0.19.0" },
     { name = "pyyaml", specifier = ">=6.0.1" },
