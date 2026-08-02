@@ -33,7 +33,12 @@ def main():
     """Main entry point for the CLI."""
     # Load environment variables
     load_dotenv()
-    
+
+    # Before anything else, so that failures during argument parsing and server
+    # construction are reported too. No-op unless SENTRY_DSN is set.
+    from .observability import init_sentry
+    init_sentry()
+
     parser = argparse.ArgumentParser(description='Norman Finance MCP Server with OAuth')
     parser.add_argument('--email', help='Norman Finance account email (optional)')
     parser.add_argument('--password', help='Norman Finance account password (optional)')
