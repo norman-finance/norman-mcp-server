@@ -43,6 +43,11 @@ sse = [
     "uvicorn>=0.22.0",
     "pydantic>=2.0.0",
 ]
+# Error reporting for the hosted deployment. Kept optional so the published
+# wheel and local stdio use stay dependency-free; see norman_mcp/observability.py.
+sentry = [
+    "sentry-sdk>=2.0.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/norman-finance/norman-mcp-server"
