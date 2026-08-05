@@ -56,8 +56,11 @@ Issues = "https://github.com/norman-finance/norman-mcp-server/issues"
 [project.scripts]
 norman-mcp = "norman_mcp.cli:main"
 
-[tool.setuptools]
-packages = ["norman_mcp"]
+[tool.setuptools.packages.find]
+include = ["norman_mcp*"]
+
+[tool.setuptools.package-data]
+norman_mcp = ["static/*", "files/*"]
 
 [tool.black]
 line-length = 100
