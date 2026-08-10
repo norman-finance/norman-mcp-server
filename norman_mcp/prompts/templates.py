@@ -250,6 +250,8 @@ def register_prompts(mcp):
             "and switched in settings.\n\n"
             "### Available Tools for SME\n"
             "- `list_company_categories` — browse DATEV categories\n"
+            "- `set_company_categories_visibility` — hide/unhide categories in bulk (e.g. a company "
+            "carrying both SKR03 and SKR04 accounts: hide the chart it does not use)\n"
             "- `list_coa_templates` — see available CoA templates\n"
             "- `trigger_datev_export` — generate DATEV export for tax advisor\n"
             "- `create_transaction` / `update_transaction` — with company_category_id, payment_date, payment_type\n"

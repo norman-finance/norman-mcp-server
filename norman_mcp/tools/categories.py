@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
 
 from mcp.types import ToolAnnotations
@@ -176,3 +176,92 @@ def register_category_tools(mcp):
             body["description"] = description
 
         return api._make_request("POST", categories_url, json_data=body)
+
+    @mcp.tool(
+        title="Hide or Unhide Company Categories (SME only)",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def set_company_categories_visibility(
+        ctx: Context,
+        action: str = Field(description="'hide' to take the categories out of use, 'unhide' to bring them back"),
+        chart_template: Optional[str] = Field(
+            default=None,
+            description=(
+                "Select every row provisioned from this chart of accounts: 'skr03', 'skr04', "
+                "'PL_FULL', 'PL_KPIR'. This is how you clean up a company that ended up with "
+                "two charts at once — e.g. hide chart_template='skr04' to leave only SKR03."
+            ),
+        ),
+        codes: Optional[List[str]] = Field(default=None, description="Select by account code, e.g. ['4200', '6815']"),
+        category_ids: Optional[List[str]] = Field(
+            default=None,
+            description="Select explicit category ids as returned by list_company_categories",
+        ),
+        cashflow_type: Optional[str] = Field(default=None, description="Restrict to INCOME, EXPENSE or EQUITY rows"),
+        include_custom: bool = Field(
+            default=False,
+            description=(
+                "Also affect categories the company created itself. Off by default so a "
+                "chart-wide sweep never touches hand-made accounts; ids always apply."
+            ),
+        ),
+        dry_run: bool = Field(
+            default=False,
+            description="Return the selection without changing anything. Use before a chart-wide sweep.",
+        ),
+    ) -> Dict[str, Any]:
+        """
+        Hide or unhide SME company categories in bulk.
+
+        ⚠️ SME ONLY — GmbH/UG companies with a DATEV chart of accounts.
+
+        Hidden categories disappear from the category pickers in the app and from
+        the candidate list the AI categorizer picks from. Nothing is deleted:
+        transactions already booked on a hidden category keep it (the result
+        reports transactionsCount / itemsCount per row), and unhiding restores
+        the row exactly as it was.
+
+        The main use: a company whose chart was provisioned twice and now shows
+        both SKR03 and SKR04 accounts. Hide the chart it does not use.
+
+        Selectors combine with AND and at least one is required. A non-zero
+        summary.skippedCustom means the filter passed over hand-made accounts —
+        rerun with include_custom=true if the user meant those too. Preview with
+        dry_run=true and tell the user what would be hidden before doing it for
+        real — this changes what they can book on.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        if not await _check_sme(api):
+            return _SME_ONLY_ERROR
+
+        normalized = (action or "").strip().lower()
+        if normalized not in ("hide", "unhide"):
+            return {"error": f"Unknown action '{action}'. Use 'hide' or 'unhide'."}
+
+        body: Dict[str, Any] = {
+            "isActive": normalized == "unhide",
+            "includeCustom": include_custom,
+            "dryRun": dry_run,
+        }
+        if chart_template:
+            body["chartTemplate"] = chart_template
+        if codes:
+            body["codes"] = codes
+        if category_ids:
+            body["categoryIds"] = category_ids
+        if cashflow_type:
+            body["cashflowType"] = cashflow_type
+
+        visibility_url = urljoin(
+            config.api_base_url,
+            "api/v1/accounting/company-categories/set-visibility/",
+        )
+        return api._make_request("POST", visibility_url, json_data=body)
