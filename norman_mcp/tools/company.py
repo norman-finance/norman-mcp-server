@@ -147,11 +147,24 @@ def register_company_tools(mcp):
     async def list_company_categories(
         ctx: Context,
         cashflow_type: Optional[str] = Field(default=None, description="Filter by cashflow type: INCOME or EXPENSE"),
+        chart_template: Optional[str] = Field(
+            default=None,
+            description="Keep only rows provisioned from this chart of accounts: 'skr03', 'skr04', 'PL_FULL'",
+        ),
+        include_inactive: bool = Field(
+            default=False,
+            description="Also return hidden categories (isActive=false). Needed before unhiding anything.",
+        ),
     ) -> Dict[str, Any]:
         """
         List SME company categories from the DATEV chart of accounts (SKR03/SKR04).
         These categories are specific to the company and are used for GmbH/UG bookkeeping.
-        Each category has a code (e.g. '4200'), name, and cashflow type.
+        Each category has a code (e.g. '4200'), name, cashflow type, and sourceTemplate —
+        the chart of accounts it was provisioned from ('' for hand-made ones). A company
+        showing both SKR03 and SKR04 accounts can be cleaned up with
+        set_company_categories_visibility.
+
+        Hidden categories are omitted unless include_inactive=true.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -167,6 +180,10 @@ def register_company_tools(mcp):
         params = {"pageSize": 200}
         if cashflow_type:
             params["cashflowType"] = cashflow_type
+        if chart_template:
+            params["chartTemplate"] = chart_template
+        if include_inactive:
+            params["includeInactive"] = "true"
         
         return api._make_request("GET", categories_url, params=params)
 
