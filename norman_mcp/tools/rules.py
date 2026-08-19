@@ -1,0 +1,266 @@
+import logging
+from typing import Dict, Any, Optional, List
+from urllib.parse import urljoin
+
+from pydantic import Field
+
+from mcp.types import ToolAnnotations
+from norman_mcp.context import Context
+from norman_mcp import config
+
+logger = logging.getLogger(__name__)
+
+PREVIEW_SAMPLE_SIZE = 10
+
+CONDITION_FIELDS_HELP = (
+    'Condition items, each {"field", "operator", "value"}. Fields: description | '
+    "cashflow_type | amount | iban. Operators for text fields: contains | not_contains | "
+    "equals | not_equals | starts_with | regex; for amount: gt | lt | gte | lte | equals. "
+    'cashflow_type uses equals with value "INCOME" or "EXPENSE"; amount values are plain '
+    'numbers passed as strings, e.g. "100".'
+)
+
+
+def _rules_url(path: str = "") -> str:
+    return urljoin(config.api_base_url, f"api/v1/accounting/rules/{path}")
+
+
+def _without_none(payload: Dict[str, Any]) -> Dict[str, Any]:
+    return {key: value for key, value in payload.items() if value is not None}
+
+
+def register_rule_tools(mcp):
+    """Register automation-rule tools with the MCP server.
+
+    Automation rules ("Norman Agents") are user-defined IF-conditions
+    THEN-set-category rules that run BEFORE the AI on every new and imported
+    transaction. First match by priority wins; new rules are appended at the
+    end of the priority list.
+
+    Author a rule when the user says things like "always book Telekom to
+    Internet costs", "create a rule for this", or keeps correcting the same
+    merchant. Flow: preview_rule (show sample matches) -> create_rule -> offer
+    apply_rule_to_existing for the uncategorized backlog.
+
+    Categories: freelancer companies use category_id (a child/leaf category
+    UUID from the transaction payload or a categorize_transaction suggestion);
+    GmbH/UG (SME) companies use company_category_id instead. Never send both.
+
+    Paywall: the free plan includes ONE active automation. An error carrying
+    "automation_limit_reached" is not a transient failure — do not retry;
+    explain that more automations need a paid plan and offer to save the rule
+    as an inactive draft (is_active=false) instead.
+    """
+
+    @mcp.tool(
+        title="List Automation Rules",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def list_rules(ctx: Context) -> Dict[str, Any]:
+        """
+        List the company's automation rules together with usage stats and the
+        plan's automation limit.
+
+        Returns:
+            Rules ordered by priority (first match wins) and a summary with
+            match counts and the `limits` block (activeLimit/activeUsed).
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        rules = api._make_request("GET", _rules_url())
+        summary = api._make_request("GET", _rules_url("summary/"))
+        return {"rules": rules, "summary": summary}
+
+    @mcp.tool(
+        title="Preview Automation Rule",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def preview_rule(
+        ctx: Context,
+        conditions: List[Dict[str, str]] = Field(description=CONDITION_FIELDS_HELP),
+        logic: str = Field(
+            default="AND",
+            description='How items combine: "AND" (all must match) or "OR" (any matches)',
+        ),
+    ) -> Dict[str, Any]:
+        """
+        Dry-run rule conditions against recent transactions BEFORE creating the
+        rule. Show the user a few of the returned matches so they can confirm
+        the rule catches the right things.
+
+        Returns:
+            A sample of matching transactions and the total sampled count.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        matched = api._make_request(
+            "POST",
+            _rules_url("preview/"),
+            json_data={"conditions": {"logic": logic, "items": conditions}},
+        )
+        if isinstance(matched, list):
+            return {"sampleMatches": matched[:PREVIEW_SAMPLE_SIZE], "sampledFrom": len(matched)}
+        return matched
+
+    @mcp.tool(
+        title="Create Automation Rule",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
+    async def create_rule(
+        ctx: Context,
+        name: str = Field(description="Short human-readable rule name, e.g. 'Telekom -> Internet costs'"),
+        conditions: List[Dict[str, str]] = Field(description=CONDITION_FIELDS_HELP),
+        logic: str = Field(
+            default="AND",
+            description='How items combine: "AND" (all must match) or "OR" (any matches)',
+        ),
+        category_id: Optional[str] = Field(
+            default=None,
+            description="Freelancer child-category UUID to set on matching transactions",
+        ),
+        company_category_id: Optional[str] = Field(
+            default=None,
+            description="SME CompanyCategory UUID to set on matching transactions (GmbH/UG companies)",
+        ),
+        is_active: bool = Field(default=True, description="Create enabled (true) or as an inactive draft (false)"),
+    ) -> Dict[str, Any]:
+        """
+        Create an automation rule. Preview first with preview_rule. Send exactly
+        one of category_id / company_category_id (freelancer vs SME). After
+        creating, offer apply_rule_to_existing to also categorize the backlog.
+
+        Returns:
+            The created rule.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        payload = _without_none(
+            {
+                "name": name,
+                "conditions": {"logic": logic, "items": conditions},
+                "category": category_id,
+                "companyCategory": company_category_id,
+                "isActive": is_active,
+            }
+        )
+        return api._make_request("POST", _rules_url(), json_data=payload)
+
+    @mcp.tool(
+        title="Update Automation Rule",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def update_rule(
+        ctx: Context,
+        rule_id: str = Field(description="Rule publicId from list_rules"),
+        name: Optional[str] = Field(default=None, description="New rule name"),
+        conditions: Optional[List[Dict[str, str]]] = Field(default=None, description=CONDITION_FIELDS_HELP),
+        logic: str = Field(
+            default="AND",
+            description='Used only together with conditions: "AND" or "OR"',
+        ),
+        category_id: Optional[str] = Field(default=None, description="Freelancer child-category UUID"),
+        company_category_id: Optional[str] = Field(default=None, description="SME CompanyCategory UUID"),
+        is_active: Optional[bool] = Field(default=None, description="Enable (true) or disable (false) the rule"),
+    ) -> Dict[str, Any]:
+        """
+        Update an automation rule. Only the provided fields change.
+        Re-activating a rule counts against the plan's automation limit like
+        creating one.
+
+        Returns:
+            The updated rule.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        payload = _without_none(
+            {
+                "name": name,
+                "conditions": {"logic": logic, "items": conditions} if conditions is not None else None,
+                "category": category_id,
+                "companyCategory": company_category_id,
+                "isActive": is_active,
+            }
+        )
+        return api._make_request("PATCH", _rules_url(f"{rule_id}/"), json_data=payload)
+
+    @mcp.tool(
+        title="Delete Automation Rule",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def delete_rule(
+        ctx: Context,
+        rule_id: str = Field(description="Rule publicId from list_rules"),
+    ) -> Dict[str, Any]:
+        """
+        Delete an automation rule after the user confirms. Prefer disabling
+        (update_rule with is_active=false) when the user may want it back.
+
+        Returns:
+            Deletion confirmation.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        api._make_request("DELETE", _rules_url(f"{rule_id}/"))
+        return {"status": "deleted", "ruleId": rule_id}
+
+    @mcp.tool(
+        title="Apply Rule To Existing Transactions",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def apply_rule_to_existing(
+        ctx: Context,
+        rule_id: str = Field(description="Rule publicId from list_rules or a create_rule response"),
+    ) -> Dict[str, Any]:
+        """
+        Run an existing rule over the company's uncategorized transactions and
+        categorize every match now. Use after create_rule when the user also
+        wants the backlog cleaned up.
+
+        Returns:
+            The number of transactions updated.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        return api._make_request("POST", _rules_url(f"{rule_id}/apply-to-existing/"))

@@ -33,6 +33,8 @@
 
 **Bookkeeping** — Categorize transactions, match receipts, and verify entries
 
+**Automation rules** — "Always book Telekom to Internet costs": preview, create, and manage rules that categorize matching transactions automatically
+
 **Client Management** — Maintain your client database and contact details
 
 **Tax Filing** — Generate Finanzamt previews, file VAT returns, and track deadlines

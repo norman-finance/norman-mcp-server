@@ -33,6 +33,7 @@ from norman_mcp.tools.transactions import register_transaction_tools
 from norman_mcp.tools.documents import register_document_tools
 from norman_mcp.tools.company import register_company_tools
 from norman_mcp.tools.categories import register_category_tools
+from norman_mcp.tools.rules import register_rule_tools
 from norman_mcp.tools.tax_advisor import register_tax_advisor_tools
 from norman_mcp.tools.incorporation import register_incorporation_tools
 from norman_mcp.tools.gewerbe_registration import register_gewerbe_registration_tools
@@ -358,6 +359,7 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
     register_offer_tools(server)
     register_tax_tools(server)
     register_transaction_tools(server)
+    register_rule_tools(server)
     register_document_tools(server)
     register_company_tools(server)
     register_category_tools(server)
