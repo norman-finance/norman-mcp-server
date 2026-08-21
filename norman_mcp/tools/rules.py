@@ -11,6 +11,7 @@ from norman_mcp import config
 logger = logging.getLogger(__name__)
 
 PREVIEW_SAMPLE_SIZE = 10
+EXECUTIONS_SAMPLE_SIZE = 15
 
 CONDITION_FIELDS_HELP = (
     'Condition items, each {"field", "operator", "value"}. Fields: description | '
@@ -23,6 +24,10 @@ CONDITION_FIELDS_HELP = (
 
 def _rules_url(path: str = "") -> str:
     return urljoin(config.api_base_url, f"api/v1/accounting/rules/{path}")
+
+
+def _executions_url(path: str = "") -> str:
+    return urljoin(config.api_base_url, f"api/v1/accounting/rule-executions/{path}")
 
 
 def _without_none(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -264,3 +269,100 @@ def register_rule_tools(mcp):
             return {"error": "No company available. Please authenticate first."}
 
         return api._make_request("POST", _rules_url(f"{rule_id}/apply-to-existing/"))
+
+    @mcp.tool(
+        title="List Rule Executions",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def list_rule_executions(
+        ctx: Context,
+        status: Optional[str] = Field(
+            default=None,
+            description=(
+                "Filter by status: awaiting_review (the review queue) | success | partial | "
+                "failed | skipped | dismissed | pending. Omit for everything, newest first."
+            ),
+        ),
+        rule_id: Optional[str] = Field(default=None, description="Filter by rule publicId"),
+    ) -> Dict[str, Any]:
+        """
+        Automation execution log. status=awaiting_review lists the matches a
+        review-first rule parked for the user's approval — show each one (rule
+        name, transaction/invoice, planned actions) and let the user decide;
+        never approve or dismiss without an explicit go-ahead.
+
+        Returns:
+            A sample of executions and the total sampled count.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        params: Dict[str, Any] = {}
+        if status:
+            params["status"] = status
+        if rule_id:
+            params["rule"] = rule_id
+        executions = api._make_request("GET", _executions_url(), params=params)
+        if isinstance(executions, list):
+            return {"executions": executions[:EXECUTIONS_SAMPLE_SIZE], "sampledFrom": len(executions)}
+        return executions
+
+    @mcp.tool(
+        title="Approve Rule Execution",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def approve_rule_execution(
+        ctx: Context,
+        execution_id: str = Field(description="Execution publicId from list_rule_executions"),
+    ) -> Dict[str, Any]:
+        """
+        Approve an awaiting-review execution AFTER the user explicitly
+        confirmed it: the rule's full action chain runs (category, VAT,
+        reminder emails, ...).
+
+        Returns:
+            The execution with per-action results.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        return api._make_request("POST", _executions_url(f"{execution_id}/approve/"))
+
+    @mcp.tool(
+        title="Dismiss Rule Execution",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def dismiss_rule_execution(
+        ctx: Context,
+        execution_id: str = Field(description="Execution publicId from list_rule_executions"),
+    ) -> Dict[str, Any]:
+        """
+        Reject an awaiting-review execution after the user said no. The target
+        goes back through normal categorization, and this rule never re-claims
+        the same target.
+
+        Returns:
+            The dismissed execution.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        return api._make_request("POST", _executions_url(f"{execution_id}/dismiss/"))
