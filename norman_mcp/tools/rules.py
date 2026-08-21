@@ -26,6 +26,14 @@ def _rules_url(path: str = "") -> str:
     return urljoin(config.api_base_url, f"api/v1/accounting/rules/{path}")
 
 
+def _approvals_url() -> str:
+    return urljoin(config.api_base_url, "api/v1/assistant/approvals/")
+
+
+def _agents_url(path: str = "") -> str:
+    return urljoin(config.api_base_url, f"api/v1/accounting/agents/{path}")
+
+
 def _executions_url(path: str = "") -> str:
     return urljoin(config.api_base_url, f"api/v1/accounting/rule-executions/{path}")
 
@@ -312,6 +320,125 @@ def register_rule_tools(mcp):
         if isinstance(executions, list):
             return {"executions": executions[:EXECUTIONS_SAMPLE_SIZE], "sampledFrom": len(executions)}
         return executions
+
+    @mcp.tool(
+        title="List Pending Approvals",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def list_pending_approvals(ctx: Context) -> Dict[str, Any]:
+        """
+        Everything an agent prepared and is waiting on the user for, in one
+        list: review-first automations, a prepared UStVA, an active workflow
+        step. Use this for "what needs me?" instead of guessing across
+        surfaces.
+
+        Items with an executionId can be decided here (approve_rule_execution
+        or dismiss_rule_execution) once the user says so; the rest carry a link
+        to the screen that owns the decision.
+
+        Returns:
+            items and count.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        return api._make_request("GET", _approvals_url())
+
+    @mcp.tool(
+        title="Undo Rule Execution",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def undo_rule_execution(
+        ctx: Context,
+        execution_id: str = Field(description="Execution publicId from list_rule_executions"),
+    ) -> Dict[str, Any]:
+        """
+        Put back what an automation changed, newest action first, AFTER the
+        user asked for it.
+
+        Only a run that changed something can be undone, and only once.
+        Actions that left the world outside the books - a notification, a
+        queued reminder, a prepared payment - cannot be taken back and come
+        back as "not reversible"; say so rather than implying the run was
+        fully reverted.
+
+        Returns:
+            The execution, stamped revertedAt.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        return api._make_request("POST", _executions_url(f"{execution_id}/undo/"))
+
+    @mcp.tool(
+        title="List Agents",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def list_agents(ctx: Context) -> Dict[str, Any]:
+        """
+        The prebuilt agents shelf with each card's state and counters: AI
+        categorization, auto-enrichment, document reconciliation, invoice
+        chasing, bill payments with approval, VAT-return readiness, client
+        document chasing, the month-end close, the document collector, plus
+        links to Tax Autopilot and recurring invoices.
+
+        Returns:
+            cards, each with key, kind, enabled and counters.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        return api._make_request("GET", _agents_url())
+
+    @mcp.tool(
+        title="Toggle Agent",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def toggle_agent(
+        ctx: Context,
+        key: str = Field(description="Card key from list_agents, e.g. vat_readiness"),
+        enabled: bool = Field(description="True turns the agent on, False turns it off"),
+    ) -> Dict[str, Any]:
+        """
+        Turn a prebuilt agent on or off after the user asked for it.
+
+        What that means depends on the card: a toggle card flips a pipeline, a
+        rule card (invoice chasing, bill payments) materializes or parks a
+        review-first rule, and a workflow card starts or abandons its run.
+        Turning something on can be refused on a limited plan - relay the
+        message instead of retrying.
+
+        Returns:
+            The card in its new state.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        return api._make_request("POST", _agents_url(f"{key}/toggle/"), json_data={"enabled": enabled})
 
     @mcp.tool(
         title="Approve Rule Execution",
