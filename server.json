@@ -1,9 +1,16 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "finance.norman/mcp-server",
-  "title": "Norman MCP Server",
-  "description": "AI-powered bookkeeping and tax filing for entrepreneurs at the heart of the European economy.",
-  "version": "0.1.7",
+  "title": "Norman Finance — Accounting, Bookkeeping & Taxes (Germany)",
+  "description": "AI accounting for German businesses: bookkeeping, invoices, receipts, VAT & tax filing via ELSTER.",
+  "icons": [
+    {
+      "src": "https://norman.finance/icon.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "version": "0.1.8",
+  "websiteUrl": "https://norman.finance",
   "repository": {
     "url": "https://github.com/norman-finance/norman-mcp-server",
     "source": "github"
@@ -18,7 +25,7 @@
     {
       "registryType": "pypi",
       "identifier": "norman-mcp-server",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "transport": {
         "type": "stdio"
       },
