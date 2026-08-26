@@ -263,11 +263,19 @@ class NormanAPI:
         """Resolve and store the company id for the env/stdio token."""
         self.company_id = self._fetch_company_id(self.access_token)
 
-    def _fetch_company_id(self, token: Optional[str]) -> Optional[str]:
+    def _fetch_company_id(self, token: Optional[str], _refreshed: bool = False) -> Optional[str]:
         """Look up the first company for `token`'s owner.
 
         Pure in the token: it stores nothing on `self`, so it is safe to call
         concurrently for different users.
+
+        Handles its own 401. Norman access tokens live one hour, and this lookup
+        runs *before* any `_make_request` (tools need the company id to build
+        their URL), so it cannot inherit that method's transparent refresh.
+        Without the refresh below, an expired token surfaced to the user as the
+        misleading "No company available. Please authenticate first." roughly an
+        hour after connecting -- which is why permanent authentication appeared
+        impossible.
         """
         if not token:
             return None
@@ -290,7 +298,17 @@ class NormanAPI:
                 headers=headers,
                 timeout=config.NORMAN_API_TIMEOUT
             )
-            
+
+            if response.status_code == 401 and not _refreshed:
+                refreshed_token = self._reauthenticate_for_company_lookup()
+                if refreshed_token:
+                    return self._fetch_company_id(refreshed_token, _refreshed=True)
+                logger.warning(
+                    "Company lookup got 401 and the Norman token could not be "
+                    "refreshed; the client needs to reconnect"
+                )
+                return None
+
             response.raise_for_status()
             response_data = response.json()
             
@@ -312,6 +330,24 @@ class NormanAPI:
             logger.error(f"Error getting company ID: {str(e)}")
             # Don't set a fallback company ID - let API response indicate the error
             return None
+
+    def _reauthenticate_for_company_lookup(self) -> Optional[str]:
+        """Get a fresh Norman token after the company lookup returned 401.
+
+        OAuth mode refreshes via the provider (the refresh token is indexed by
+        the caller's MCP token, so this stays request-scoped). Single-tenant
+        env/stdio mode re-authenticates with its configured credentials.
+        """
+        if self.token_source == "env":
+            try:
+                self.authenticate()
+                return self.access_token
+            except Exception as e:
+                logger.error(f"Env re-authentication failed during company lookup: {e}")
+                return None
+
+        logger.info("Norman token expired during company lookup; refreshing")
+        return self._refresh_oauth_norman_token()
 
 
     def _make_request(self, method: str, url: str, params: Optional[Dict[str, Any]] = None, 
