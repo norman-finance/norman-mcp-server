@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import requests
 from dataclasses import dataclass
@@ -18,6 +19,7 @@ from norman_mcp.context import (
 # Configure logging
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class NormanAPI:
     """API client for Norman Finance.
@@ -29,6 +31,7 @@ class NormanAPI:
     `company_id` property -- both request-scoped. `access_token` /
     `_env_company_id` below are only for single-tenant env/stdio mode.
     """
+
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
     token_source: str = "env"  # can be 'env', 'oauth', or 'direct_login'
@@ -158,28 +161,38 @@ class NormanAPI:
         # If we already have a token, use it
         if self.access_token:
             return
-            
+
         # Skip authentication if requested
         if not self.authenticate_on_init:
             logger.info("Skipping automatic authentication on initialization")
             return
-            
+
         # Check if credentials are available before attempting authentication
         if not config.NORMAN_EMAIL or not config.NORMAN_PASSWORD:
-            logger.warning("Norman Finance credentials not set. Please set NORMAN_EMAIL and NORMAN_PASSWORD environment variables.")
-            logger.warning("The server will start, but API calls will fail until valid credentials are provided.")
+            logger.warning(
+                "Norman Finance credentials not set. Please set NORMAN_EMAIL and NORMAN_PASSWORD environment variables."
+            )
+            logger.warning(
+                "The server will start, but API calls will fail until valid credentials are provided."
+            )
             return
-        
+
         try:
             self.authenticate()
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 400:
-                logger.warning("Failed to authenticate with Norman Finance API: Invalid credentials.")
-                logger.warning("Please check your NORMAN_EMAIL and NORMAN_PASSWORD environment variables.")
-                logger.warning("The server will start, but API calls will fail until valid credentials are provided.")
+                logger.warning(
+                    "Failed to authenticate with Norman Finance API: Invalid credentials."
+                )
+                logger.warning(
+                    "Please check your NORMAN_EMAIL and NORMAN_PASSWORD environment variables."
+                )
+                logger.warning(
+                    "The server will start, but API calls will fail until valid credentials are provided."
+                )
             else:
                 raise
-    
+
     def set_token(self, token: str, single_tenant: bool = False) -> None:
         """Set the access token.
 
@@ -197,11 +210,15 @@ class NormanAPI:
 
         # If we already have a token from direct login, don't override it with OAuth token
         if self.token_source == "direct_login":
-            logger.info("Keeping existing direct login token instead of setting OAuth token")
+            logger.info(
+                "Keeping existing direct login token instead of setting OAuth token"
+            )
             return
 
         if single_tenant:
-            logger.info("Setting Norman API token from credential login (single tenant)")
+            logger.info(
+                "Setting Norman API token from credential login (single tenant)"
+            )
             self.access_token = token
             self.token_source = "env"
             try:
@@ -224,46 +241,53 @@ class NormanAPI:
         # `company_id` property resolves lazily instead -- which also spares an
         # API round trip on requests that never need a company.
 
-
     def authenticate(self) -> None:
         """Authenticate with Norman Finance API and get access token."""
         if not config.NORMAN_EMAIL or not config.NORMAN_PASSWORD:
-            raise ValueError("Norman Finance credentials not set. Please set NORMAN_EMAIL and NORMAN_PASSWORD environment variables.")
-        
+            raise ValueError(
+                "Norman Finance credentials not set. Please set NORMAN_EMAIL and NORMAN_PASSWORD environment variables."
+            )
+
         # Extract username from email (as per instructions)
-        username = config.NORMAN_EMAIL.split('@')[0]
+        username = config.NORMAN_EMAIL.split("@")[0]
         auth_url = urljoin(config.api_base_url, "api/v1/auth/token/")
-        
+
         payload = {
             "username": username,
             "email": config.NORMAN_EMAIL,
-            "password": config.NORMAN_PASSWORD
+            "password": config.NORMAN_PASSWORD,
         }
-        
+
         try:
-            response = requests.post(auth_url, json=payload, timeout=config.NORMAN_API_TIMEOUT)
+            response = requests.post(
+                auth_url, json=payload, timeout=config.NORMAN_API_TIMEOUT
+            )
             response.raise_for_status()
-            
+
             auth_data = response.json()
             self.access_token = auth_data.get("access")
             self.refresh_token = auth_data.get("refresh")
             self.token_source = "env"
-            
+
             # Get company ID (user typically has only one company)
             self._set_company_id()
-            
-            logger.info("Successfully authenticated with Norman Finance API using environment credentials")
+
+            logger.info(
+                "Successfully authenticated with Norman Finance API using environment credentials"
+            )
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to authenticate with Norman Finance API: {str(e)}")
-            if hasattr(e, 'response') and e.response is not None:
+            if hasattr(e, "response") and e.response is not None:
                 logger.error(f"Response: {e.response.text}")
             raise
-    
+
     def _set_company_id(self) -> None:
         """Resolve and store the company id for the env/stdio token."""
         self.company_id = self._fetch_company_id(self.access_token)
 
-    def _fetch_company_id(self, token: Optional[str], _refreshed: bool = False) -> Optional[str]:
+    def _fetch_company_id(
+        self, token: Optional[str], _refreshed: bool = False
+    ) -> Optional[str]:
         """Look up the first company for `token`'s owner.
 
         Pure in the token: it stores nothing on `self`, so it is safe to call
@@ -290,13 +314,11 @@ class NormanAPI:
             headers = {
                 "Authorization": f"Bearer {token}",
                 "User-Agent": "NormanMCPServer/0.1.0",
-                "X-Requested-With": "XMLHttpRequest"
+                "X-Requested-With": "XMLHttpRequest",
             }
-            
+
             response = requests.get(
-                companies_url,
-                headers=headers,
-                timeout=config.NORMAN_API_TIMEOUT
+                companies_url, headers=headers, timeout=config.NORMAN_API_TIMEOUT
             )
 
             if response.status_code == 401 and not _refreshed:
@@ -311,9 +333,9 @@ class NormanAPI:
 
             response.raise_for_status()
             response_data = response.json()
-            
+
             companies = response_data.get("results", [])
-            
+
             if not companies:
                 logger.warning("No companies found for user")
                 return None
@@ -349,10 +371,14 @@ class NormanAPI:
         logger.info("Norman token expired during company lookup; refreshing")
         return self._refresh_oauth_norman_token()
 
-
-    def _make_request(self, method: str, url: str, params: Optional[Dict[str, Any]] = None, 
-                     json_data: Optional[Dict[str, Any]] = None, 
-                     files: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def _make_request(
+        self,
+        method: str,
+        url: str,
+        params: Optional[Dict[str, Any]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        files: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """Make a request to the Norman Finance API with security controls."""
         # Resolve the caller's token for THIS request. Keep it in a local: it
         # must never be written to `self`, which is shared across users.
@@ -361,16 +387,22 @@ class NormanAPI:
         # No token and single-tenant mode: env credentials are the last resort.
         if not token and self.token_source == "env":
             try:
-                logger.warning("No Norman token available. Attempting authentication with environment variables...")
+                logger.warning(
+                    "No Norman token available. Attempting authentication with environment variables..."
+                )
                 self.authenticate()
                 token = self.access_token
             except Exception as e:
                 logger.error(f"Authentication failed: {str(e)}")
-                return {"error": "No authentication token available. Please authenticate first."}
+                return {
+                    "error": "No authentication token available. Please authenticate first."
+                }
 
         if not token:
             logger.error("No Norman token resolvable for this request")
-            return {"error": "No authentication token available. Please authenticate first."}
+            return {
+                "error": "No authentication token available. Please authenticate first."
+            }
 
         # Validate URL to prevent SSRF attacks
         if not validate_url(url):
@@ -384,11 +416,13 @@ class NormanAPI:
             "X-Requested-With": "XMLHttpRequest",
             # Security headers
             "X-Content-Type-Options": "nosniff",
-            "X-Frame-Options": "DENY"
+            "X-Frame-Options": "DENY",
         }
 
         # Log token source for debugging
-        logger.debug(f"Making API request to {url} with token source: {self.token_source}")
+        logger.debug(
+            f"Making API request to {url} with token source: {self.token_source}"
+        )
 
         if params is None:
             params = {}
@@ -412,7 +446,7 @@ class NormanAPI:
                 else:
                     sanitized_params[key] = value
             params = sanitized_params
-        
+
         # Sanitize JSON data to prevent injection
         if json_data:
             sanitized_json = {}
@@ -431,7 +465,7 @@ class NormanAPI:
                 else:
                     sanitized_json[key] = value
             json_data = sanitized_json
-        
+
         try:
             if files and json_data:
                 response = requests.request(
@@ -441,7 +475,7 @@ class NormanAPI:
                     params=params,
                     data=json_data,
                     files=files,
-                    timeout=config.NORMAN_API_TIMEOUT
+                    timeout=config.NORMAN_API_TIMEOUT,
                 )
             else:
                 response = requests.request(
@@ -451,10 +485,10 @@ class NormanAPI:
                     params=params,
                     json=json_data,
                     files=files,
-                    timeout=config.NORMAN_API_TIMEOUT
+                    timeout=config.NORMAN_API_TIMEOUT,
                 )
             response.raise_for_status()
-            
+
             # Attempt to parse JSON response, but handle non-JSON responses gracefully
             try:
                 if response.content:
@@ -462,11 +496,11 @@ class NormanAPI:
                 return {}
             except ValueError:
                 # Not JSON, return content as string if it's not binary
-                if response.headers.get('content-type', '').startswith('text/'):
+                if response.headers.get("content-type", "").startswith("text/"):
                     return {"content": response.text}
                 # For binary content, return success message
                 return {"success": True, "message": "Request successful"}
-                
+
         except requests.exceptions.HTTPError as e:
             # Handle token expiration
             if e.response.status_code == 401:
@@ -502,23 +536,32 @@ class NormanAPI:
                 }
             elif e.response.status_code == 403:
                 logger.error("Access forbidden. Check your account permissions.")
-                return {"error": "Access forbidden. Check your account permissions.", "status_code": 403}
+                return {
+                    "error": "Access forbidden. Check your account permissions.",
+                    "status_code": 403,
+                }
             elif e.response.status_code == 404:
                 logger.error(f"Resource not found: {url}")
                 return {"error": "Resource not found", "status_code": 404}
             elif e.response.status_code == 429:
                 logger.error("Rate limit exceeded. Please try again later.")
-                return {"error": "Rate limit exceeded. Please try again later.", "status_code": 429}
+                return {
+                    "error": "Rate limit exceeded. Please try again later.",
+                    "status_code": 429,
+                }
             else:
                 logger.error(f"HTTP error: {str(e)}")
                 error_detail = None
-                if hasattr(e, 'response') and e.response is not None:
+                if hasattr(e, "response") and e.response is not None:
                     logger.error(f"Response: {e.response.text}")
                     try:
                         error_detail = e.response.json()
                     except (ValueError, AttributeError):
                         error_detail = e.response.text
-                result = {"error": f"Request failed: {str(e)}", "status_code": e.response.status_code}
+                result = {
+                    "error": f"Request failed: {str(e)}",
+                    "status_code": e.response.status_code,
+                }
                 if error_detail:
                     result["detail"] = error_detail
                 return result
@@ -534,6 +577,24 @@ class NormanAPI:
         except Exception as e:
             logger.error(f"Unexpected error making request to {url}: {str(e)}")
             return {"error": f"Unexpected error: {str(e)}"}
+
+    async def arequest(
+        self,
+        method: str,
+        url: str,
+        params: Optional[Dict[str, Any]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        files: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Run the blocking requests client off the MCP event loop."""
+        return await asyncio.to_thread(
+            self._make_request,
+            method,
+            url,
+            params,
+            json_data,
+            files,
+        )
 
     def _refresh_oauth_norman_token(self) -> Optional[str]:
         """Refresh the Norman access token for the current MCP request (OAuth).
