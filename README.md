@@ -127,7 +127,7 @@ Before connecting, [create a free Norman account](https://app.norman.finance/sig
 <summary><strong>Claude Connectors</strong></summary>
 <br/>
 
-1. Go to [https://claude.ai/new#settings/customize-connectors)
+1. Go to [Claude Connectors](https://claude.ai/new#settings/customize-connectors)
 2. Click **Add**
 3. Find and connect: **Norman Finance**
 </details>
