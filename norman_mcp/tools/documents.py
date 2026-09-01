@@ -2,18 +2,22 @@ import base64
 import json
 import logging
 import os
-import re
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
-import tempfile
+
 import requests
-from urllib.parse import urlparse
+from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from pydantic import Field
 
-from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
-from norman_mcp.context import Context
 from norman_mcp import config
-from norman_mcp.security.utils import validate_file_path, validate_input
+from norman_mcp.context import Context
+from norman_mcp.document_input import (
+    DocumentInputError,
+    ResolvedDocument,
+    normalize_document_input,
+    resolve_document_input,
+)
+from norman_mcp.security.utils import validate_input
 
 logger = logging.getLogger(__name__)
 
@@ -45,97 +49,6 @@ def _enrich_attachment_download_urls(data: dict, api=None, company_id: str | Non
                 _enrich_single(item)
     return data
 
-
-def is_url(path: str) -> bool:
-    """Check if the given path is a URL."""
-    try:
-        result = urlparse(path)
-        return all([result.scheme, result.netloc]) and result.scheme in ['http', 'https']
-    except Exception:
-        return False
-
-def download_file(url: str) -> Optional[str]:
-    """Download a file from URL to a temporary location and return its path."""
-    try:
-        response = requests.get(url, stream=True, timeout=30)
-        response.raise_for_status()
-        
-        # Extract filename from URL or Content-Disposition header
-        filename = None
-        
-        if "Content-Disposition" in response.headers:
-            # Try to get filename from Content-Disposition header
-            content_disposition = response.headers["Content-Disposition"]
-            match = re.search(r'filename="?([^"]+)"?', content_disposition)
-            if match:
-                filename = match.group(1)
-        
-        # If no filename found in header, extract from URL
-        if not filename:
-            url_path = urlparse(url).path
-            filename = os.path.basename(url_path) or "downloaded_file"
-        
-        # Create a temporary file
-        temp_dir = tempfile.mkdtemp(prefix="norman_")
-        temp_path = os.path.join(temp_dir, filename)
-        
-        # Write the file
-        with open(temp_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-                
-        return temp_path
-    except Exception as e:
-        logger.error(f"Error downloading file from {url}: {str(e)}")
-        return None
-
-def _strip_base64_prefix(raw: str) -> str:
-    """Remove data-URI prefix (e.g. 'data:application/pdf;base64,') if present."""
-    if raw.startswith("data:") and "," in raw:
-        return raw.split(",", 1)[1]
-    return raw
-
-
-def save_base64_to_temp(content_b64: str, file_name: str) -> Optional[str]:
-    """Decode base64 content and write to a temporary file. Returns the path."""
-    try:
-        cleaned = _strip_base64_prefix(content_b64)
-        cleaned = re.sub(r"\s+", "", cleaned)
-        data = base64.b64decode(cleaned, validate=True)
-        if len(data) == 0:
-            logger.error("Base64 decoded to empty content")
-            return None
-        temp_dir = tempfile.mkdtemp(prefix="norman_")
-        temp_path = os.path.join(temp_dir, file_name)
-        with open(temp_path, "wb") as f:
-            f.write(data)
-        logger.info(f"Saved base64 file ({len(data)} bytes) to {temp_path}")
-        return temp_path
-    except base64.binascii.Error as e:
-        logger.error(f"Invalid base64 content: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Error decoding base64 content: {e}")
-        return None
-
-
-def validate_file_path(file_path: str) -> bool:
-    """Validate that a file path is safe to use."""
-    # Allow URLs as they'll be handled separately
-    if is_url(file_path):
-        return True
-        
-    # Check for local file path safety
-    file_path = os.path.abspath(file_path)
-    is_path_traversal = ".." in file_path or "~" in file_path
-    return not is_path_traversal
-
-def validate_input(input_str: str) -> str:
-    """Validate that input string doesn't contain malicious content."""
-    if not input_str:
-        return ""
-    # Remove any potential script or command injection characters
-    return re.sub(r'[;<>&|]', '', input_str)
 
 def register_document_tools(mcp):
     """Register all document-related tools with the MCP server."""
@@ -169,9 +82,7 @@ def register_document_tools(mcp):
         """
         from norman_mcp.files.upload import create_upload_token
 
-        public_url = os.environ.get(
-            "NORMAN_MCP_PUBLIC_URL", "https://mcp.norman.finance"
-        )
+        public_url = os.environ.get("NORMAN_MCP_PUBLIC_URL", "https://mcp.norman.finance")
         token = create_upload_token(description)
         upload_page_url = f"{public_url.rstrip('/')}/files/upload/{token}"
 
@@ -193,133 +104,138 @@ def register_document_tools(mcp):
             idempotentHint=False,
             openWorldHint=False,
         ),
+        meta={"openai/fileParams": ["files"]},
     )
     async def upload_bulk_attachments(
         ctx: Context,
-        file_urls: Optional[List[str]] = Field(default=None, description="BEST OPTION: List of HTTP(S) URLs. The server downloads each file directly — nothing goes through the LLM context."),
-        file_refs: Optional[List[str]] = Field(default=None, description="List of file_ref tokens from prior POST /files/upload calls."),
-        files_base64: Optional[List[Dict[str, str]]] = Field(default=None, description="LAST RESORT — only for tiny files (<50 KB each). Each item: {\"file_name\": \"receipt.pdf\", \"content\": \"<base64>\"}. Do NOT use for images or PDFs."),
-        file_paths: Optional[List[str]] = Field(default=None, description="Deprecated alias for file_urls."),
-        cashflow_type: Optional[str] = Field(default=None, description="Optional cashflow type for the transactions (INCOME or EXPENSE). If not provided, then try to detect it from the file")
+        files: Optional[List[Dict[str, Any]]] = Field(
+            default=None,
+            description=(
+                "Provider-neutral file objects. Each item may contain download_url, "
+                "file_ref, or file_data with file_name. OpenAI clients can attach files "
+                "to this parameter; Claude clients should provide a signed URL, inline "
+                "data, or a Norman file_ref."
+            ),
+        ),
+        file_urls: Optional[List[str]] = Field(
+            default=None,
+            description="List of signed HTTPS URLs. The server downloads each file directly — nothing goes through the LLM context.",
+        ),
+        file_refs: Optional[List[str]] = Field(
+            default=None, description="List of file_ref tokens from prior POST /files/upload calls."
+        ),
+        files_base64: Optional[List[Dict[str, str]]] = Field(
+            default=None,
+            description='LAST RESORT — only for tiny files (<50 KB each). Each item: {"file_name": "receipt.pdf", "content": "<base64>"}. Do NOT use for images or PDFs.',
+        ),
+        file_paths: Optional[List[str]] = Field(
+            default=None,
+            description="Legacy local-worker input. Public MCP clients should use files, file_urls, or file_refs.",
+        ),
+        cashflow_type: Optional[str] = Field(
+            default=None,
+            description="Optional cashflow type for the transactions (INCOME or EXPENSE). If not provided, then try to detect it from the file",
+        ),
     ) -> Dict[str, Any]:
         """
         Upload multiple file attachments in bulk.
 
-        Priority: file_urls > file_refs > files_base64.
-        Do NOT base64-encode images or PDFs — it will exceed the context window.
+        Prefer the provider-neutral ``files`` parameter. Signed HTTPS URLs and
+        Norman ``file_ref`` values are portable across OpenAI and Claude. Inline
+        base64 is accepted only for small files.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
-        
+
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
-        
-        if not file_urls and not file_refs and not files_base64 and not file_paths:
-            return {"error": "Provide file_urls (preferred), file_refs, or files_base64."}
+
+        if not files and not file_urls and not file_refs and not files_base64 and not file_paths:
+            return {"error": "Provide files, file_urls, file_refs, or files_base64."}
 
         if cashflow_type and cashflow_type not in ["INCOME", "EXPENSE"]:
             return {"error": "cashflow_type must be either 'INCOME' or 'EXPENSE'"}
 
         upload_url = urljoin(
-            config.api_base_url,
-            "api/v1/accounting/transactions/upload-documents/"
+            config.api_base_url, "api/v1/accounting/transactions/upload-documents/"
         )
 
-        temp_files = []
+        resolved_documents: List[ResolvedDocument] = []
         opened_files = []
+        allow_local_paths = os.environ.get("MCP_ALLOW_LOCAL_FILE_PATHS", "").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
 
         try:
-            files = []
-            valid_paths = []
+            from norman_mcp.files.upload import resolve_ref
 
-            # Priority 1: file_urls
-            all_urls = list(file_urls or []) + [p for p in (file_paths or []) if is_url(p)]
-            for url in all_urls:
-                if not is_url(url):
-                    logger.warning("Skipping non-URL: %s", url)
-                    continue
-                downloaded = download_file(url)
-                if downloaded:
-                    valid_paths.append(downloaded)
-                    temp_files.append(downloaded)
+            document_inputs: List[Dict[str, Any]] = list(files or [])
+            document_inputs.extend({"download_url": url} for url in file_urls or [])
+            document_inputs.extend({"file_ref": ref} for ref in file_refs or [])
+            document_inputs.extend(
+                {
+                    "file_name": item.get("file_name"),
+                    "file_data": item.get("content"),
+                }
+                for item in files_base64 or []
+            )
+            document_inputs.extend({"file_path": path} for path in file_paths or [])
+
+            for item in document_inputs:
+                if "file_path" in item:
+                    normalized = normalize_document_input(file_path=item["file_path"])
                 else:
-                    logger.warning("Failed to download: %s", url)
+                    normalized = normalize_document_input(item)
+                resolved_documents.append(
+                    resolve_document_input(
+                        normalized,
+                        file_ref_resolver=resolve_ref,
+                        allow_local_paths=allow_local_paths,
+                    )
+                )
 
-            # Priority 2: file_refs
-            if file_refs:
-                from norman_mcp.files.upload import resolve_ref
-                for ref in file_refs:
-                    path = resolve_ref(ref)
-                    if path:
-                        valid_paths.append(path)
-                    else:
-                        logger.warning("file_ref not found or expired: %s", ref)
+            if not resolved_documents:
+                return {"error": "No valid files found for upload."}
 
-            # Priority 3: base64
-            if files_base64:
-                for item in files_base64:
-                    name = item.get("file_name", "upload")
-                    content = item.get("content", "")
-                    if not content:
-                        continue
-                    tmp = save_base64_to_temp(content, name)
-                    if tmp:
-                        valid_paths.append(tmp)
-                        temp_files.append(tmp)
-                
-            if not valid_paths:
-                return {"error": "No valid files found for upload"}
-                
-            # Open and prepare valid files
-            for path in valid_paths:
-                file_handle = open(path, "rb")
+            multipart_files = []
+            for document in resolved_documents:
+                file_handle = open(document.path, "rb")
                 opened_files.append(file_handle)
-                files.append(("files", file_handle))
-                    
+                multipart_files.append(("files", (document.filename, file_handle)))
+
             data = {}
             if cashflow_type:
                 data["cashflow_type"] = cashflow_type
-                
-            response = api._make_request("POST", upload_url, json_data=data, files=files)
-            
-            # Close all opened file handles
-            for file_handle in opened_files:
-                file_handle.close()
-                
-            # Clean up temporary files
-            for temp_file in temp_files:
-                try:
-                    if os.path.exists(temp_file):
-                        os.remove(temp_file)
-                        os.rmdir(os.path.dirname(temp_file))
-                        logger.info(f"Removed temporary file: {temp_file}")
-                except Exception as e:
-                    logger.warning(f"Failed to remove temporary file {temp_file}: {str(e)}")
-                    
-            return response
-            
-        except FileNotFoundError as e:
-            return {"error": f"File not found: {str(e)}"}
-        except PermissionError as e:
-            return {"error": f"Permission denied when accessing file: {str(e)}"}
+
+            return api._make_request(
+                "POST",
+                upload_url,
+                json_data=data,
+                files=multipart_files,
+            )
+
+        except DocumentInputError as e:
+            return {
+                "error": str(e),
+                "accepted_inputs": [
+                    "files[].download_url",
+                    "files[].file_ref",
+                    "files[].file_data + files[].file_name",
+                ],
+            }
         except Exception as e:
-            logger.error(f"Error uploading files: {str(e)}")
+            logger.exception("Error uploading files")
             return {"error": f"Error uploading files: {str(e)}"}
         finally:
-            # Ensure files are closed and temp files are cleaned up in case of exceptions
             for file_handle in opened_files:
                 try:
                     file_handle.close()
                 except Exception:
                     pass
-                    
-            for temp_file in temp_files:
-                try:
-                    if os.path.exists(temp_file):
-                        os.remove(temp_file)
-                        os.rmdir(os.path.dirname(temp_file))
-                except Exception:
-                    pass
+            for document in resolved_documents:
+                document.cleanup()
 
     @mcp.tool(
         title="List Attachments",
@@ -332,36 +248,46 @@ def register_document_tools(mcp):
     )
     async def list_attachments(
         ctx: Context,
-        file_name: Optional[str] = Field(default=None, description="Filter by file name (case insensitive partial match)"),
-        linked: Optional[bool] = Field(default=None, description="Filter by whether attachment is linked to transactions"),
-        attachment_type: Optional[str] = Field(default=None, description="Filter by attachment type (invoice, receipt, contract, other)"),
-        description: Optional[str] = Field(default=None, description="Filter by description (case insensitive partial match)"),
-        brand_name: Optional[str] = Field(default=None, description="Filter by brand name (case insensitive partial match)")
+        file_name: Optional[str] = Field(
+            default=None, description="Filter by file name (case insensitive partial match)"
+        ),
+        linked: Optional[bool] = Field(
+            default=None, description="Filter by whether attachment is linked to transactions"
+        ),
+        attachment_type: Optional[str] = Field(
+            default=None,
+            description="Filter by attachment type (invoice, receipt, contract, other)",
+        ),
+        description: Optional[str] = Field(
+            default=None, description="Filter by description (case insensitive partial match)"
+        ),
+        brand_name: Optional[str] = Field(
+            default=None, description="Filter by brand name (case insensitive partial match)"
+        ),
     ) -> Dict[str, Any]:
         """
         Get list of attachments with optional filters.
-        
+
         Args:
             file_name: Filter by file name (case insensitive partial match)
             linked: Filter by whether attachment is linked to transactions
             attachment_type: Filter by attachment type (invoice, receipt, contract, other)
             description: Filter by description (case insensitive partial match)
             brand_name: Filter by brand name (case insensitive partial match)
-            
+
         Returns:
             List of attachments matching the filters. Use downloadUrl for direct temporary file download links.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
-        
+
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
-            
+
         attachments_url = urljoin(
-            config.api_base_url,
-            f"api/v1/companies/{company_id}/attachments/"
+            config.api_base_url, f"api/v1/companies/{company_id}/attachments/"
         )
-        
+
         params = {}
         if file_name:
             params["file_name"] = file_name
@@ -373,7 +299,7 @@ def register_document_tools(mcp):
             params["description"] = description
         if brand_name:
             params["brand_name"] = brand_name
-            
+
         result = api._make_request("GET", attachments_url, params=params)
         return _enrich_attachment_download_urls(result, api=api, company_id=company_id)
 
@@ -385,29 +311,67 @@ def register_document_tools(mcp):
             idempotentHint=False,
             openWorldHint=False,
         ),
+        meta={"openai/fileParams": ["file"]},
     )
     async def create_attachment(
         ctx: Context,
-        file_url: Optional[str] = Field(default=None, description="BEST OPTION: HTTP(S) URL to a publicly accessible file. The server downloads it directly — nothing goes through the LLM context. Use this whenever the file has a URL."),
-        file_ref: Optional[str] = Field(default=None, description="Reference token from a prior POST /files/upload call. Use when the client uploaded the file directly to the MCP server."),
-        file_content_base64: Optional[str] = Field(default=None, description="LAST RESORT — only for tiny files (<50 KB). Do NOT use for images, PDFs, or scanned documents — the base64 string will exceed the context window. Prefer file_url or file_ref."),
-        file_name: Optional[str] = Field(default=None, description="Original filename with extension (e.g. 'invoice.pdf'). Required when using file_content_base64."),
-        transactions: Optional[List[str]] = Field(default=None, description="List of transaction IDs to link"),
-        attachment_type: Optional[str] = Field(default=None, description="Type of attachment (invoice, receipt)"),
+        file: Optional[Dict[str, Any]] = Field(
+            default=None,
+            description=(
+                "Provider-neutral file object. Use download_url, file_ref, or "
+                "file_data with file_name. OpenAI clients can attach a file to "
+                "this parameter; Claude clients should provide a signed URL, "
+                "inline data, or a Norman file_ref."
+            ),
+        ),
+        file_url: Optional[str] = Field(
+            default=None,
+            description="Signed HTTPS URL to a publicly accessible file. The server downloads it directly — nothing goes through the LLM context.",
+        ),
+        file_ref: Optional[str] = Field(
+            default=None,
+            description="Reference token from a prior POST /files/upload call. Use when the client uploaded the file directly to the MCP server.",
+        ),
+        file_content_base64: Optional[str] = Field(
+            default=None,
+            description="LAST RESORT — only for tiny files (<50 KB). Do NOT use for images, PDFs, or scanned documents — the base64 string will exceed the context window. Prefer file_url or file_ref.",
+        ),
+        file_name: Optional[str] = Field(
+            default=None,
+            description="Original filename with extension (e.g. 'invoice.pdf'). Required when using file_content_base64.",
+        ),
+        transactions: Optional[List[str]] = Field(
+            default=None, description="List of transaction IDs to link"
+        ),
+        attachment_type: Optional[str] = Field(
+            default=None, description="Type of attachment (invoice, receipt)"
+        ),
         amount: Optional[float] = Field(default=None, description="Amount related to attachment"),
-        amount_exchanged: Optional[float] = Field(default=None, description="Exchanged amount in different currency"),
-        attachment_number: Optional[str] = Field(default=None, description="Unique number for attachment"),
-        brand_name: Optional[str] = Field(default=None, description="Brand name associated with attachment"),
+        amount_exchanged: Optional[float] = Field(
+            default=None, description="Exchanged amount in different currency"
+        ),
+        attachment_number: Optional[str] = Field(
+            default=None, description="Unique number for attachment"
+        ),
+        brand_name: Optional[str] = Field(
+            default=None, description="Brand name associated with attachment"
+        ),
         currency: str = "EUR",
         currency_exchanged: str = "EUR",
         description: Optional[str] = Field(default=None, description="Description of attachment"),
-        supplier_country: Optional[str] = Field(default=None, description="Country of supplier (DE, INSIDE_EU, OUTSIDE_EU)"),
+        supplier_country: Optional[str] = Field(
+            default=None, description="Country of supplier (DE, INSIDE_EU, OUTSIDE_EU)"
+        ),
         value_date: Optional[str] = Field(default=None, description="Date of value"),
         vat_sum_amount: Optional[float] = Field(default=None, description="VAT sum amount"),
-        vat_sum_amount_exchanged: Optional[float] = Field(default=None, description="Exchanged VAT sum amount"),
+        vat_sum_amount_exchanged: Optional[float] = Field(
+            default=None, description="Exchanged VAT sum amount"
+        ),
         vat_rate: Optional[int] = Field(default=None, description="VAT rate percentage"),
         sale_type: Optional[str] = Field(default=None, description="Type of sale"),
-        additional_metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata for attachment")
+        additional_metadata: Optional[Dict[str, Any]] = Field(
+            default=None, description="Additional metadata for attachment"
+        ),
     ) -> Dict[str, Any]:
         """
         Create a new attachment with a file.
@@ -431,7 +395,7 @@ def register_document_tools(mcp):
             additional_metadata: Additional metadata for attachment
 
         How to provide the file (pick one):
-        1. file_url  — best if the file has a public HTTP(S) URL
+        1. file_url  — use a short-lived signed HTTPS URL
         2. file_ref  — call request_file_upload first to get an upload link,
            ask the user to open it in their browser and drop the file,
            then pass the file_ref here
@@ -446,14 +410,11 @@ def register_document_tools(mcp):
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        if not file_url and not file_ref and not file_content_base64:
+        if not file and not file_url and not file_ref and not file_content_base64:
             return {
-                "error": "Provide one of: file_url (preferred), file_ref, "
-                "or file_content_base64 (small files only)."
+                "error": "Provide one of: file, file_url, file_ref, or "
+                "file_content_base64 (small files only)."
             }
-
-        if file_content_base64 and not file_name:
-            return {"error": "file_name is required when using file_content_base64"}
 
         if attachment_type and attachment_type not in ["invoice", "receipt", "contract", "other"]:
             return {"error": "attachment_type must be one of: invoice, receipt, contract, other"}
@@ -465,61 +426,33 @@ def register_document_tools(mcp):
             return {"error": "sale_type must be one of: GOODS, SERVICES"}
 
         attachments_url = urljoin(
-            config.api_base_url,
-            f"api/v1/companies/{company_id}/attachments/"
+            config.api_base_url, f"api/v1/companies/{company_id}/attachments/"
         )
 
+        resolved_document: ResolvedDocument | None = None
+        file_handle = None
         try:
-            temp_file_path = None
-            actual_file_path = None
+            from norman_mcp.files.upload import resolve_ref
 
-            # Priority 1: file_url — download from URL
-            if file_url:
-                if not is_url(file_url):
-                    return {
-                        "error": f"file_url must be a valid HTTP(S) URL. Got: {file_url}. "
-                        "The MCP server cannot access local filesystem paths."
-                    }
-                logger.info("Downloading file from URL: %s", file_url)
-                temp_file_path = download_file(file_url)
-                if not temp_file_path:
-                    return {"error": f"Failed to download file from URL: {file_url}"}
-                actual_file_path = temp_file_path
-
-            # Priority 2: file_ref — previously uploaded via POST /files/upload
-            elif file_ref:
-                from norman_mcp.files.upload import resolve_ref
-                actual_file_path = resolve_ref(file_ref)
-                if not actual_file_path:
-                    return {
-                        "error": f"file_ref '{file_ref}' not found or expired. "
-                        "Upload the file again via POST /files/upload."
-                    }
-
-            # Priority 3: base64 — small files only
-            elif file_content_base64:
-                temp_file_path = save_base64_to_temp(file_content_base64, file_name)
-                if not temp_file_path:
-                    return {"error": "Failed to decode base64 file content"}
-                actual_file_path = temp_file_path
-
-            if not actual_file_path or not os.path.exists(actual_file_path):
-                return {
-                    "error": "File not found. The MCP server cannot access your local "
-                    "filesystem. Provide a file_url (HTTP link) or upload via "
-                    "POST /files/upload and pass the file_ref."
-                }
-
-            if not os.access(actual_file_path, os.R_OK):
-                return {"error": f"Permission denied when accessing file: {actual_file_path}"}
-                
-            files = {
-                "file": open(actual_file_path, "rb")
+            normalized = normalize_document_input(
+                file,
+                file_url=file_url,
+                file_ref=file_ref,
+                file_content_base64=file_content_base64,
+                file_name=file_name,
+            )
+            resolved_document = resolve_document_input(
+                normalized,
+                file_ref_resolver=resolve_ref,
+            )
+            file_handle = open(resolved_document.path, "rb")
+            multipart_files = {
+                "file": (resolved_document.filename, file_handle),
             }
-                
+
             data = {}
             if transactions:
-            # Validate each transaction ID
+                # Validate each transaction ID
                 data["transactions"] = [tx for tx in transactions if validate_input(tx)]
             if attachment_type:
                 data["attachment_type"] = attachment_type
@@ -557,35 +490,41 @@ def register_document_tools(mcp):
                         sanitized_metadata[validate_input(key)] = validate_input(value)
                     else:
                         sanitized_metadata[validate_input(key)] = value
-                data["additional_metadata"] = sanitized_metadata
-                
-            response = api._make_request("POST", attachments_url, json_data=data, files=files)
-            
-            files["file"].close()
-            
-            if temp_file_path and os.path.exists(temp_file_path):
-                try:
-                    os.remove(temp_file_path)
-                    os.rmdir(os.path.dirname(temp_file_path))
-                    logger.info(f"Removed temporary file: {temp_file_path}")
-                except Exception as e:
-                    logger.warning(f"Failed to remove temporary file: {str(e)}")
-                    
+                # Multipart form fields must be scalar values. DRF's JSONField
+                # parses the serialized object on the Norman API side.
+                data["additional_metadata"] = json.dumps(sanitized_metadata)
+
+            response = api._make_request(
+                "POST",
+                attachments_url,
+                json_data=data,
+                files=multipart_files,
+            )
             return _enrich_attachment_download_urls(response, api=api, company_id=company_id)
+        except DocumentInputError as e:
+            return {
+                "error": str(e),
+                "accepted_inputs": [
+                    "file.download_url",
+                    "file.file_ref",
+                    "file.file_data + file.file_name",
+                ],
+            }
         except FileNotFoundError:
             return {"error": "File not found. Provide a file_url or upload via POST /files/upload."}
         except PermissionError:
             return {"error": "Permission denied when accessing the file."}
         except Exception as e:
-            # Clean up temporary file if there was an error
-            if temp_file_path and os.path.exists(temp_file_path):
-                try:
-                    os.remove(temp_file_path)
-                    os.rmdir(os.path.dirname(temp_file_path))
-                except Exception:
-                    pass
             logger.error(f"Error uploading file: {str(e)}")
             return {"error": f"Error uploading file: {str(e)}"}
+        finally:
+            if file_handle:
+                try:
+                    file_handle.close()
+                except Exception:
+                    pass
+            if resolved_document:
+                resolved_document.cleanup()
 
     @mcp.tool(
         title="Link Attachment to Transaction",
@@ -599,33 +538,31 @@ def register_document_tools(mcp):
     async def link_attachment_transaction(
         ctx: Context,
         attachment_id: str = Field(description="ID of the attachment"),
-        transaction_id: str = Field(description="ID of the transaction to link")
+        transaction_id: str = Field(description="ID of the transaction to link"),
     ) -> Dict[str, Any]:
         """
         Link a transaction to an attachment.
-        
+
         Args:
             attachment_id: ID of the attachment
             transaction_id: ID of the transaction to link
-            
+
         Returns:
             Response from the link transaction request
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
-        
+
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
-            
+
         link_url = urljoin(
             config.api_base_url,
-            f"api/v1/companies/{company_id}/attachments/{attachment_id}/link-transaction/"
+            f"api/v1/companies/{company_id}/attachments/{attachment_id}/link-transaction/",
         )
-        
-        link_data = {
-            "transaction": transaction_id
-        }
-        
+
+        link_data = {"transaction": transaction_id}
+
         return api._make_request("POST", link_url, json_data=link_data)
 
     @mcp.tool(
@@ -685,9 +622,14 @@ def register_document_tools(mcp):
 
     _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".tif"}
     _EXT_TO_MIME = {
-        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-        ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
-        ".tiff": "image/tiff", ".tif": "image/tiff",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+        ".bmp": "image/bmp",
+        ".tiff": "image/tiff",
+        ".tif": "image/tiff",
     }
 
     @mcp.tool(
@@ -713,9 +655,14 @@ def register_document_tools(mcp):
         company_id = api.company_id
 
         if not company_id:
-            return CallToolResult(content=[
-                TextContent(type="text", text='{"error": "No company available. Please authenticate first."}')
-            ])
+            return CallToolResult(
+                content=[
+                    TextContent(
+                        type="text",
+                        text='{"error": "No company available. Please authenticate first."}',
+                    )
+                ]
+            )
 
         detail_url = urljoin(
             config.api_base_url,
@@ -739,16 +686,18 @@ def register_document_tools(mcp):
                 "downloadUrl": presigned_url,
                 "note": "File is not an image; use downloadUrl to access it.",
             }
-            return CallToolResult(content=[
-                TextContent(type="text", text=json.dumps(meta, ensure_ascii=False))
-            ])
+            return CallToolResult(
+                content=[TextContent(type="text", text=json.dumps(meta, ensure_ascii=False))]
+            )
 
         resp = requests.get(presigned_url, timeout=30)
         resp.raise_for_status()
 
         try:
-            from PIL import Image
             from io import BytesIO
+
+            from PIL import Image
+
             img = Image.open(BytesIO(resp.content))
             max_dim = 1200
             if max(img.size) > max_dim:
@@ -767,7 +716,9 @@ def register_document_tools(mcp):
             "downloadUrl": presigned_url,
         }
 
-        return CallToolResult(content=[
-            ImageContent(type="image", data=image_b64, mimeType=mime),
-            TextContent(type="text", text=json.dumps(meta, ensure_ascii=False)),
-        ])
+        return CallToolResult(
+            content=[
+                ImageContent(type="image", data=image_b64, mimeType=mime),
+                TextContent(type="text", text=json.dumps(meta, ensure_ascii=False)),
+            ]
+        )

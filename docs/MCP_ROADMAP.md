@@ -53,7 +53,7 @@ Add one canonical `ingest_document` contract with:
 - an optional match-or-create transaction instruction without silently creating duplicate bookkeeping;
 - provenance and confidence per extracted field, validation findings, ingest status, match status, and a stable Norman document identifier in the result.
 
-The server must download transient file URLs promptly, validate MIME type and size, isolate tenants, define retention, and preserve a complete audit trail. Norman's existing upload-link/file-reference flow remains the compatibility fallback. Native ChatGPT attachment delivery is **planned**, not shipped, until the MCP descriptor and file-object schema implement the official file-parameter contract.
+The server now accepts the portable file object and declares its ChatGPT file parameter through `openai/fileParams`. It downloads transient URLs promptly, applies URL and size guards, and retains Norman's upload-link/file-reference flow as the compatibility fallback. Native ChatGPT attachment delivery is not considered fully shipped until the connector-level handoff has passed E2E verification; idempotency, provenance, matching, retention, and audit-state work also remain in this P0 item.
 
 Claude custom connectors and the Anthropic Messages API MCP connector can call remote MCP tools with normal JSON arguments, so the portable `file_ref`, signed `file_url`, and small-base64 paths are the initial Claude-compatible contract. Anthropic does not currently document a Claude.ai attachment equivalent to `openai/fileParams` that is automatically forwarded into a remote MCP tool call. Treat a file attached to a Claude conversation as Claude context, not as a Norman upload, until an explicit bridge is implemented.
 

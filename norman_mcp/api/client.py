@@ -1,13 +1,12 @@
 import asyncio
 import logging
-import requests
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 from urllib.parse import urljoin
 
-from ..config.settings import config
-from ..security.utils import validate_input, validate_url
+import requests
 from mcp.server.auth.middleware.auth_context import get_access_token
+
 from norman_mcp.context import (
     get_api_company_id,
     get_api_token,
@@ -15,6 +14,9 @@ from norman_mcp.context import (
     set_api_company_id,
     set_api_token,
 )
+
+from ..config.settings import config
+from ..security.utils import validate_input, validate_url
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -210,15 +212,11 @@ class NormanAPI:
 
         # If we already have a token from direct login, don't override it with OAuth token
         if self.token_source == "direct_login":
-            logger.info(
-                "Keeping existing direct login token instead of setting OAuth token"
-            )
+            logger.info("Keeping existing direct login token instead of setting OAuth token")
             return
 
         if single_tenant:
-            logger.info(
-                "Setting Norman API token from credential login (single tenant)"
-            )
+            logger.info("Setting Norman API token from credential login (single tenant)")
             self.access_token = token
             self.token_source = "env"
             try:
@@ -259,9 +257,7 @@ class NormanAPI:
         }
 
         try:
-            response = requests.post(
-                auth_url, json=payload, timeout=config.NORMAN_API_TIMEOUT
-            )
+            response = requests.post(auth_url, json=payload, timeout=config.NORMAN_API_TIMEOUT)
             response.raise_for_status()
 
             auth_data = response.json()
@@ -285,9 +281,7 @@ class NormanAPI:
         """Resolve and store the company id for the env/stdio token."""
         self.company_id = self._fetch_company_id(self.access_token)
 
-    def _fetch_company_id(
-        self, token: Optional[str], _refreshed: bool = False
-    ) -> Optional[str]:
+    def _fetch_company_id(self, token: Optional[str], _refreshed: bool = False) -> Optional[str]:
         """Look up the first company for `token`'s owner.
 
         Pure in the token: it stores nothing on `self`, so it is safe to call
@@ -377,7 +371,7 @@ class NormanAPI:
         url: str,
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
-        files: Optional[Dict[str, Any]] = None,
+        files: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """Make a request to the Norman Finance API with security controls."""
         # Resolve the caller's token for THIS request. Keep it in a local: it
@@ -394,15 +388,11 @@ class NormanAPI:
                 token = self.access_token
             except Exception as e:
                 logger.error(f"Authentication failed: {str(e)}")
-                return {
-                    "error": "No authentication token available. Please authenticate first."
-                }
+                return {"error": "No authentication token available. Please authenticate first."}
 
         if not token:
             logger.error("No Norman token resolvable for this request")
-            return {
-                "error": "No authentication token available. Please authenticate first."
-            }
+            return {"error": "No authentication token available. Please authenticate first."}
 
         # Validate URL to prevent SSRF attacks
         if not validate_url(url):
@@ -420,9 +410,7 @@ class NormanAPI:
         }
 
         # Log token source for debugging
-        logger.debug(
-            f"Making API request to {url} with token source: {self.token_source}"
-        )
+        logger.debug(f"Making API request to {url} with token source: {self.token_source}")
 
         if params is None:
             params = {}
@@ -584,7 +572,7 @@ class NormanAPI:
         url: str,
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
-        files: Optional[Dict[str, Any]] = None,
+        files: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """Run the blocking requests client off the MCP event loop."""
         return await asyncio.to_thread(

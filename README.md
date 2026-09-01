@@ -115,7 +115,7 @@ An external archive can already send a document through a Norman temporary `file
 | Public or short-lived signed HTTPS URL | Supported |
 | Small base64 payload | Supported, size-limited |
 | Structured invoice metadata | Supported |
-| Native file attached directly to a ChatGPT tool call | Planned; requires the official MCP `openai/fileParams` file-object contract |
+| Native file attached directly to a ChatGPT tool call | Descriptor implemented through `openai/fileParams`; client delivery still requires ChatGPT connector E2E verification |
 | Explicit `file_ref`, HTTPS URL, or small base64 in a Claude MCP tool call | Supported by the portable contract |
 | File attached directly to a Claude.ai conversation | Not automatically forwarded to Norman; planned upload bridge |
 | Anthropic Files API `file_id` used directly as a Norman file reference | Not portable; the calling application must upload the bytes to Norman first |
@@ -131,7 +131,7 @@ The target archive workflow is:
 Document archive → Norman ingest + validation → bookkeeping/bank matching → DATEV/tax advisor
 ```
 
-See the [external document archive ingestion](docs/MCP_ROADMAP.md#2-external-document-archive-ingestion) P0 item for the portable `ingest_document` contract and native ChatGPT attachment work.
+See the [external document archive ingestion](docs/MCP_ROADMAP.md#2-external-document-archive-ingestion) P0 item for the remaining idempotency, provenance, matching, and client-E2E work.
 
 <br/>
 

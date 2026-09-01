@@ -29,6 +29,8 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
+from norman_mcp.document_input import safe_filename
+
 logger = logging.getLogger(__name__)
 
 MAX_AGE_SECONDS = int(os.environ.get("MCP_UPLOAD_MAX_AGE", "1800"))
@@ -66,8 +68,14 @@ def _cleanup_expired() -> None:
 
 # ── Public helpers for tools ─────────────────────────────────────────
 
+
 def store_file(data: bytes, filename: str) -> str:
     """Store raw bytes and return a ``file_ref`` token."""
+    if not data:
+        raise ValueError("Empty file")
+    if len(data) > MAX_FILE_SIZE:
+        raise ValueError(f"File exceeds maximum size ({MAX_FILE_SIZE // (1024 * 1024)} MB)")
+    filename = safe_filename(filename)
     with _lock:
         _cleanup_expired()
         ref = f"ref_{secrets.token_urlsafe(16)}"
@@ -119,6 +127,7 @@ def _consume_upload_token(token: str) -> bool:
 
 # ── HTTP handlers ────────────────────────────────────────────────────
 
+
 async def _handle_direct_upload(request: Request) -> JSONResponse:
     """``POST /files/upload`` — multipart form with one ``file`` field."""
     content_type = request.headers.get("content-type", "")
@@ -145,15 +154,17 @@ async def _handle_direct_upload(request: Request) -> JSONResponse:
     if len(data) == 0:
         return JSONResponse({"error": "Empty file"}, status_code=400)
 
-    filename = getattr(upload, "filename", None) or "upload"
+    filename = safe_filename(getattr(upload, "filename", None))
     ref = store_file(data, filename)
 
-    return JSONResponse({
-        "file_ref": ref,
-        "filename": filename,
-        "size": len(data),
-        "expires_in_seconds": MAX_AGE_SECONDS,
-    })
+    return JSONResponse(
+        {
+            "file_ref": ref,
+            "filename": filename,
+            "size": len(data),
+            "expires_in_seconds": MAX_AGE_SECONDS,
+        }
+    )
 
 
 _UPLOAD_PAGE_HTML = """<!DOCTYPE html>
@@ -307,15 +318,18 @@ async def _handle_upload_page_post(request: Request) -> JSONResponse:
     filename = getattr(upload, "filename", None) or "upload"
     ref = store_file(data, filename)
 
-    return JSONResponse({
-        "file_ref": ref,
-        "filename": filename,
-        "size": len(data),
-        "expires_in_seconds": MAX_AGE_SECONDS,
-    })
+    return JSONResponse(
+        {
+            "file_ref": ref,
+            "filename": filename,
+            "size": len(data),
+            "expires_in_seconds": MAX_AGE_SECONDS,
+        }
+    )
 
 
 # ── Route factory ────────────────────────────────────────────────────
+
 
 def create_file_upload_routes() -> List[Route]:
     return [
