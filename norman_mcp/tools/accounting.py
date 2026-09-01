@@ -7,6 +7,10 @@ Ledger remains the source of truth and the API remains the only writer.
 
 from __future__ import annotations
 
+import json
+import mimetypes
+from contextlib import ExitStack
+from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import urljoin
 
@@ -16,6 +20,7 @@ from pydantic import Field
 from norman_mcp import config
 from norman_mcp.context import Context
 
+from norman_mcp.files.upload import resolve_ref
 
 READ_ONLY = ToolAnnotations(
     readOnlyHint=True,
@@ -60,9 +65,16 @@ async def _request(
     *,
     params: Optional[Dict[str, Any]] = None,
     json_data: Optional[Dict[str, Any]] = None,
+    files: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Use the non-blocking client in both the embedded and standalone MCP."""
-    return await api.arequest(method, url, params=params, json_data=json_data)
+    return await api.arequest(
+        method,
+        url,
+        params=params,
+        json_data=json_data,
+        files=files,
+    )
 
 
 def _company_url(company_id: str, suffix: str) -> str:
@@ -73,6 +85,92 @@ def _company_url(company_id: str, suffix: str) -> str:
 
 def _compact(data: Dict[str, Any]) -> Dict[str, Any]:
     return {key: value for key, value in data.items() if value is not None}
+
+
+def _cutover_payload(
+    *,
+    mode: str,
+    fiscal_year_begin: str,
+    fiscal_year_end: str,
+    cutover_date: str,
+    opening_method: str,
+    manual_balance_date: Optional[str],
+    manual_balances: Optional[list[Dict[str, Any]]],
+) -> Dict[str, Any]:
+    return _compact(
+        {
+            "mode": mode,
+            "opening_method": opening_method,
+            "fiscal_year_begin": fiscal_year_begin,
+            "fiscal_year_end": fiscal_year_end,
+            "cutover_date": cutover_date,
+            "manual_balance_date": manual_balance_date,
+            "manual_balances": manual_balances,
+        }
+    )
+
+
+def _cutover_file_fields(
+    *,
+    opening_file_ref: Optional[str],
+    booking_file_refs: Optional[list[str]],
+    parties_file_ref: Optional[str],
+    assets_file_ref: Optional[str],
+) -> list[tuple[str, str]]:
+    fields: list[tuple[str, str]] = []
+    if opening_file_ref:
+        fields.append(("opening_file", opening_file_ref))
+    fields.extend(("bookings_files", ref) for ref in booking_file_refs or [])
+    if parties_file_ref:
+        fields.append(("parties_file", parties_file_ref))
+    if assets_file_ref:
+        fields.append(("assets_file", assets_file_ref))
+    return fields
+
+
+def _original_upload_name(file_ref: str, path: Path) -> str:
+    prefix = f"{file_ref}_"
+    return path.name[len(prefix) :] if path.name.startswith(prefix) else path.name
+
+
+async def _post_cutover(
+    api: Any,
+    url: str,
+    *,
+    payload: Dict[str, Any],
+    file_fields: list[tuple[str, str]],
+) -> Dict[str, Any]:
+    """Resolve short-lived uploads and post a cutover multipart request safely."""
+    resolved: list[tuple[str, str, Path]] = []
+    for field_name, file_ref in file_fields:
+        path = resolve_ref(file_ref)
+        if path is None:
+            return {
+                "error": (
+                    f"file_ref '{file_ref}' was not found or has expired. "
+                    "Upload the file again and retry."
+                )
+            }
+        resolved.append((field_name, file_ref, Path(path)))
+
+    request_payload = dict(payload)
+    if resolved and isinstance(request_payload.get("manual_balances"), list):
+        request_payload["manual_balances"] = json.dumps(request_payload["manual_balances"])
+
+    with ExitStack() as stack:
+        files: list[tuple[str, tuple[str, Any, str]]] = []
+        for field_name, file_ref, path in resolved:
+            filename = _original_upload_name(file_ref, path)
+            content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+            handle = stack.enter_context(path.open("rb"))
+            files.append((field_name, (filename, handle, content_type)))
+        return await _request(
+            api,
+            "POST",
+            url,
+            json_data=request_payload,
+            files=files or None,
+        )
 
 
 def register_accounting_tools(mcp: Any) -> None:
@@ -101,6 +199,162 @@ def register_accounting_tools(mcp: Any) -> None:
                 "fiscalYearBegin": fiscal_year_begin,
                 "fiscalYearEnd": fiscal_year_end,
             },
+        )
+
+    @mcp.tool(title="Analyze Accounting Migration Files", annotations=READ_ONLY)
+    async def analyze_accounting_cutover_documents(
+        ctx: Context,
+        file_refs: list[str] = Field(
+            description=(
+                "One to 20 uploaded DATEV, CSV or supporting document references. "
+                "Analysis detects file roles, fiscal periods and the likely SKR framework."
+            )
+        ),
+    ) -> Dict[str, Any]:
+        """Analyze migration files without writing anything to the Ledger."""
+        if not 1 <= len(file_refs) <= 20:
+            return {"error": "Provide between 1 and 20 file_ref values."}
+        api, company_id, error = _api_and_company(ctx)
+        if error:
+            return error
+        return await _post_cutover(
+            api,
+            _company_url(company_id, "accounting/cutover/analyze/"),
+            payload={},
+            file_fields=[("files", file_ref) for file_ref in file_refs],
+        )
+
+    @mcp.tool(title="Preview Accounting Migration", annotations=READ_ONLY)
+    async def preview_accounting_cutover(
+        ctx: Context,
+        mode: str = Field(description="formation, year_start or mid_year"),
+        fiscal_year_begin: str = Field(description="YYYY-MM-DD"),
+        fiscal_year_end: str = Field(description="YYYY-MM-DD"),
+        cutover_date: str = Field(
+            description="Last date covered by the imported books, in YYYY-MM-DD format"
+        ),
+        opening_method: str = Field(default="datev", description="datev or manual"),
+        opening_file_ref: Optional[str] = Field(
+            default=None, description="Uploaded DATEV opening-balance file reference"
+        ),
+        booking_file_refs: Optional[list[str]] = Field(
+            default=None,
+            description="Uploaded DATEV booking-stack references, in period order",
+        ),
+        parties_file_ref: Optional[str] = Field(
+            default=None, description="Optional uploaded customer/vendor file reference"
+        ),
+        assets_file_ref: Optional[str] = Field(
+            default=None, description="Optional uploaded asset-register file reference"
+        ),
+        manual_balance_date: Optional[str] = Field(
+            default=None,
+            description="Balance date for manual opening balances, in YYYY-MM-DD format",
+        ),
+        manual_balances: Optional[list[Dict[str, Any]]] = Field(
+            default=None,
+            description=(
+                "Manual opening rows with account_code, side (debit or credit), "
+                "amount and optional memo"
+            ),
+        ),
+    ) -> Dict[str, Any]:
+        """Preview findings and reconciliation without changing the books."""
+        api, company_id, error = _api_and_company(ctx)
+        if error:
+            return error
+        return await _post_cutover(
+            api,
+            _company_url(company_id, "accounting/cutover/preview/"),
+            payload=_cutover_payload(
+                mode=mode,
+                fiscal_year_begin=fiscal_year_begin,
+                fiscal_year_end=fiscal_year_end,
+                cutover_date=cutover_date,
+                opening_method=opening_method,
+                manual_balance_date=manual_balance_date,
+                manual_balances=manual_balances,
+            ),
+            file_fields=_cutover_file_fields(
+                opening_file_ref=opening_file_ref,
+                booking_file_refs=booking_file_refs,
+                parties_file_ref=parties_file_ref,
+                assets_file_ref=assets_file_ref,
+            ),
+        )
+
+    @mcp.tool(title="Apply Accounting Migration", annotations=DESTRUCTIVE)
+    async def apply_accounting_cutover(
+        ctx: Context,
+        mode: str = Field(description="formation, year_start or mid_year"),
+        fiscal_year_begin: str = Field(description="YYYY-MM-DD"),
+        fiscal_year_end: str = Field(description="YYYY-MM-DD"),
+        cutover_date: str = Field(
+            description="Last date covered by the imported books, in YYYY-MM-DD format"
+        ),
+        confirmed: bool = Field(
+            default=False,
+            description=(
+                "Must be true only after the user reviewed a preview made with the exact same inputs"
+            ),
+        ),
+        opening_method: str = Field(default="datev", description="datev or manual"),
+        opening_file_ref: Optional[str] = Field(
+            default=None, description="Uploaded DATEV opening-balance file reference"
+        ),
+        booking_file_refs: Optional[list[str]] = Field(
+            default=None,
+            description="Uploaded DATEV booking-stack references, in period order",
+        ),
+        parties_file_ref: Optional[str] = Field(
+            default=None, description="Optional uploaded customer/vendor file reference"
+        ),
+        assets_file_ref: Optional[str] = Field(
+            default=None, description="Optional uploaded asset-register file reference"
+        ),
+        manual_balance_date: Optional[str] = Field(
+            default=None,
+            description="Balance date for manual opening balances, in YYYY-MM-DD format",
+        ),
+        manual_balances: Optional[list[Dict[str, Any]]] = Field(
+            default=None,
+            description=(
+                "Manual opening rows with account_code, side (debit or credit), "
+                "amount and optional memo"
+            ),
+        ),
+    ) -> Dict[str, Any]:
+        """Write previewed opening/cutover data only after explicit confirmation."""
+        if not confirmed:
+            return {
+                "confirmationRequired": True,
+                "warning": (
+                    "Applying the migration writes opening and cutover postings to the Ledger "
+                    "and establishes the transaction cutover boundary. Review a successful "
+                    "preview made with these exact inputs before confirming."
+                ),
+            }
+        api, company_id, error = _api_and_company(ctx)
+        if error:
+            return error
+        return await _post_cutover(
+            api,
+            _company_url(company_id, "accounting/cutover/import/"),
+            payload=_cutover_payload(
+                mode=mode,
+                fiscal_year_begin=fiscal_year_begin,
+                fiscal_year_end=fiscal_year_end,
+                cutover_date=cutover_date,
+                opening_method=opening_method,
+                manual_balance_date=manual_balance_date,
+                manual_balances=manual_balances,
+            ),
+            file_fields=_cutover_file_fields(
+                opening_file_ref=opening_file_ref,
+                booking_file_refs=booking_file_refs,
+                parties_file_ref=parties_file_ref,
+                assets_file_ref=assets_file_ref,
+            ),
         )
 
     @mcp.tool(title="List Chart of Accounts Templates", annotations=READ_ONLY)

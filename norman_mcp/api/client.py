@@ -377,7 +377,7 @@ class NormanAPI:
         url: str,
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
-        files: Optional[Dict[str, Any]] = None,
+        files: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """Make a request to the Norman Finance API with security controls."""
         # Resolve the caller's token for THIS request. Keep it in a local: it
@@ -584,7 +584,7 @@ class NormanAPI:
         url: str,
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
-        files: Optional[Dict[str, Any]] = None,
+        files: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """Run the blocking requests client off the MCP event loop."""
         return await asyncio.to_thread(

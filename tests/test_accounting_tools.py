@@ -1,9 +1,11 @@
 import asyncio
 import inspect
+import json
 from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any
 
+from norman_mcp.files.upload import store_file
 from norman_mcp.tools.accounting import register_accounting_tools
 
 
@@ -53,6 +55,9 @@ def test_accounting_workspace_registers_safe_parity_without_binding_submission()
     mcp, _api = registered_tools()
 
     assert {
+        "analyze_accounting_cutover_documents",
+        "preview_accounting_cutover",
+        "apply_accounting_cutover",
         "list_chart_of_accounts",
         "create_chart_of_accounts_account",
         "list_assets",
@@ -67,6 +72,157 @@ def test_accounting_workspace_registers_safe_parity_without_binding_submission()
         "get_annual_close_workbook",
     }.issubset(mcp.tools)
     assert not {name for name in mcp.tools if "submit" in name or "lock" in name}
+
+
+def test_cutover_analysis_sends_repeated_multipart_file_fields() -> None:
+    mcp, api = registered_tools()
+    first_ref = store_file(b"first", "DTVF_Buchungsstapel_1.csv")
+    second_ref = store_file(b"second", "DTVF_Buchungsstapel_2.csv")
+
+    result = asyncio.run(
+        mcp.tools["analyze_accounting_cutover_documents"](
+            context_for(api),
+            file_refs=[first_ref, second_ref],
+        )
+    )
+
+    assert result == {"ok": True}
+    method, url, kwargs = api.requests[-1]
+    assert method == "POST"
+    assert url.endswith("/accounting/cutover/analyze/")
+    assert [field for field, _upload in kwargs["files"]] == ["files", "files"]
+    assert [upload[0] for _field, upload in kwargs["files"]] == [
+        "DTVF_Buchungsstapel_1.csv",
+        "DTVF_Buchungsstapel_2.csv",
+    ]
+    assert all(upload[1].closed for _field, upload in kwargs["files"])
+
+
+def test_cutover_analysis_rejects_expired_file_reference_without_request() -> None:
+    mcp, api = registered_tools()
+
+    result = asyncio.run(
+        mcp.tools["analyze_accounting_cutover_documents"](
+            context_for(api),
+            file_refs=["ref_expired"],
+        )
+    )
+
+    assert "expired" in result["error"]
+    assert api.requests == []
+
+
+def test_cutover_manual_preview_is_read_only_json_request() -> None:
+    mcp, api = registered_tools()
+    balances = [
+        {
+            "account_code": "1200",
+            "side": "debit",
+            "amount": "100.00",
+            "memo": "Bank",
+        }
+    ]
+
+    result = asyncio.run(
+        mcp.tools["preview_accounting_cutover"](
+            context_for(api),
+            mode="year_start",
+            fiscal_year_begin="2026-01-01",
+            fiscal_year_end="2026-12-31",
+            cutover_date="2026-01-01",
+            opening_method="manual",
+            opening_file_ref=None,
+            booking_file_refs=None,
+            parties_file_ref=None,
+            assets_file_ref=None,
+            manual_balance_date="2025-12-31",
+            manual_balances=balances,
+        )
+    )
+
+    assert result == {"ok": True}
+    method, url, kwargs = api.requests[-1]
+    assert method == "POST"
+    assert url.endswith("/accounting/cutover/preview/")
+    assert kwargs["files"] is None
+    assert kwargs["json_data"] == {
+        "mode": "year_start",
+        "opening_method": "manual",
+        "fiscal_year_begin": "2026-01-01",
+        "fiscal_year_end": "2026-12-31",
+        "cutover_date": "2026-01-01",
+        "manual_balance_date": "2025-12-31",
+        "manual_balances": balances,
+    }
+
+
+def test_cutover_preview_serializes_manual_balances_with_supporting_file() -> None:
+    mcp, api = registered_tools()
+    parties_ref = store_file(b"parties", "customers-and-vendors.csv")
+    balances = [{"account_code": "1200", "side": "debit", "amount": "1.00"}]
+
+    asyncio.run(
+        mcp.tools["preview_accounting_cutover"](
+            context_for(api),
+            mode="year_start",
+            fiscal_year_begin="2026-01-01",
+            fiscal_year_end="2026-12-31",
+            cutover_date="2026-01-01",
+            opening_method="manual",
+            opening_file_ref=None,
+            booking_file_refs=None,
+            parties_file_ref=parties_ref,
+            assets_file_ref=None,
+            manual_balance_date="2025-12-31",
+            manual_balances=balances,
+        )
+    )
+
+    _method, _url, kwargs = api.requests[-1]
+    assert [field for field, _upload in kwargs["files"]] == ["parties_file"]
+    assert json.loads(kwargs["json_data"]["manual_balances"]) == balances
+
+
+def test_cutover_apply_requires_confirmation_then_posts_exact_payload() -> None:
+    mcp, api = registered_tools()
+    context = context_for(api)
+    arguments = {
+        "mode": "year_start",
+        "fiscal_year_begin": "2026-01-01",
+        "fiscal_year_end": "2026-12-31",
+        "cutover_date": "2026-01-01",
+        "opening_method": "manual",
+        "opening_file_ref": None,
+        "booking_file_refs": None,
+        "parties_file_ref": None,
+        "assets_file_ref": None,
+        "manual_balance_date": "2025-12-31",
+        "manual_balances": [{"account_code": "1200", "side": "debit", "amount": "100.00"}],
+    }
+
+    warning = asyncio.run(
+        mcp.tools["apply_accounting_cutover"](
+            context,
+            confirmed=False,
+            **arguments,
+        )
+    )
+    assert warning["confirmationRequired"] is True
+    assert api.requests == []
+
+    result = asyncio.run(
+        mcp.tools["apply_accounting_cutover"](
+            context,
+            confirmed=True,
+            **arguments,
+        )
+    )
+
+    assert result == {"ok": True}
+    method, url, kwargs = api.requests[-1]
+    assert method == "POST"
+    assert url.endswith("/accounting/cutover/import/")
+    assert kwargs["json_data"]["manual_balances"] == arguments["manual_balances"]
 
 
 def test_annual_close_creation_is_draft_only() -> None:
