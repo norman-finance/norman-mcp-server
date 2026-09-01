@@ -49,7 +49,7 @@
 
 **Company Formation** — Found a German **GmbH or UG**: collect the founders' data, check the name against the Handelsregister, generate the founding documents (Musterprotokoll, Gesellschafterliste), match with a notary, and track every step through to registration
 
-**Documents** — Upload and attach receipts, invoices, and supporting files
+**Documents** — Create receipts, invoices, and supporting documents from Norman upload references, HTTPS URLs, small base64 payloads, and structured metadata
 
 <br/>
 
@@ -102,6 +102,31 @@ The remote MCP server is the recommended connection. It uses OAuth and keeps the
 For tax workflows, **preview and submission are separate operations**. A client or agent should inspect the preview and ask for explicit user confirmation immediately before any irreversible filing or other external action.
 
 See [MCP priorities and parity roadmap](docs/MCP_ROADMAP.md) for shipped coverage and the next product priorities.
+
+<br/>
+
+### Document ingestion and external archives
+
+An external archive can already send a document through a Norman temporary `file_ref`, a reachable HTTPS `file_url`, or a small base64 payload. It can also provide structured fields such as supplier/customer, invoice number, dates, amounts, currency, VAT, document type, and transaction links. Norman can skip OCR when the required structured fields are already present, or use OCR to complete missing data.
+
+| Input path | Current status |
+|---|---|
+| Norman upload page → temporary `file_ref` | Supported |
+| Public or short-lived signed HTTPS URL | Supported |
+| Small base64 payload | Supported, size-limited |
+| Structured invoice metadata | Supported |
+| Native file attached directly to a ChatGPT tool call | Planned; requires the official MCP `openai/fileParams` file-object contract |
+| Atomic deduplication, match-or-create, provenance, batch status, and webhooks | Planned |
+
+For normal PDFs, use `file_ref` or a signed HTTPS URL rather than base64. A URL must remain reachable long enough for Norman to download it. Files sent to the remote Norman MCP server leave the AI host and are processed under Norman's security, residency, and retention controls.
+
+The target archive workflow is:
+
+```text
+Document archive → Norman ingest + validation → bookkeeping/bank matching → DATEV/tax advisor
+```
+
+See the [external document archive ingestion](docs/MCP_ROADMAP.md#2-external-document-archive-ingestion) P0 item for the portable `ingest_document` contract and native ChatGPT attachment work.
 
 <br/>
 

@@ -25,6 +25,7 @@ The first P0 slice is **in review** in [PR #103](https://github.com/norman-finan
 - Tax-report review, validation, ELSTER preview, and separately annotated submission tools
 - GmbH/UG formation and corporate tax registration workflows
 - Tax-advisor company review, DATEV preparation, missing-receipt, and compliance skills
+- Document creation from an HTTPS URL, a Norman temporary file reference, or a small base64 payload, with optional pre-extracted invoice metadata
 
 ## P0: complete company-accounting parity
 
@@ -38,32 +39,48 @@ The first P0 slice is **in review** in [PR #103](https://github.com/norman-finan
 - preview findings and reconciliation totals before applying an import;
 - persist the cutover boundary and prevent duplicate transaction postings for covered periods.
 
-### 2. Payment-account and bank mapping
+### 2. External document archive ingestion
+
+Let a document archive hand Norman a receipt or invoice together with data it has already extracted, while Norman remains responsible for bookkeeping, bank reconciliation, and the DATEV/tax workflow.
+
+Add one canonical `ingest_document` contract with:
+
+- a ChatGPT-native top-level `file` object (`download_url`, `file_id`, optional `mime_type` and `file_name`) declared through `_meta["openai/fileParams"]`;
+- portable fallbacks through a Norman `file_ref` or a short-lived, signed HTTPS `file_url` for MCP clients without native file parameters;
+- `external_document_id` and `idempotency_key`, plus checksum-based duplicate detection;
+- structured supplier/customer, invoice number, document date, amount, currency, VAT, document type, and line-item metadata;
+- explicit processing modes: trust supplied metadata, verify it against the document, or use OCR as a fallback;
+- an optional match-or-create transaction instruction without silently creating duplicate bookkeeping;
+- provenance and confidence per extracted field, validation findings, ingest status, match status, and a stable Norman document identifier in the result.
+
+The server must download transient file URLs promptly, validate MIME type and size, isolate tenants, define retention, and preserve a complete audit trail. Norman's existing upload-link/file-reference flow remains the compatibility fallback. Native ChatGPT attachment delivery is **planned**, not shipped, until the MCP descriptor and file-object schema implement the official file-parameter contract.
+
+### 3. Payment-account and bank mapping
 
 Allow agents to list connected financial accounts and map each bank, card, cash, or PayPal source to its Ledger account. Reconnection must identify an existing institution/account and must not leave duplicate expired-connection prompts.
 
-### 3. Safe filing and annual-close previews
+### 4. Safe filing and annual-close previews
 
 - expose E-Bilanz and annual-close preview/download operations;
 - keep preview and submission as distinct tools;
 - require an explicit, fresh confirmation immediately before tax submission or another irreversible external action;
 - return actionable validation findings instead of raw ELSTER or taxonomy identifiers where possible.
 
-### 4. VAT and ZM source parity
+### 5. VAT and ZM source parity
 
 Keep tax treatment consistent across Norman transactions and non-transaction Ledger entries, including domestic VAT, EU and non-EU reverse charge, foreign VAT, Kleinunternehmer cases, split items, refunds, and Zusammenfassende Meldung (ZM). Preserve source links so an agent can explain how each report line was derived.
 
-### 5. Payroll review
+### 6. Payroll review
 
 Add read and review tools for managing-director payroll, payroll runs, Ledger postings, and Lohnsteuer previews. Submission remains confirmation-gated.
 
-### 6. Exports and audit handoff
+### 7. Exports and audit handoff
 
 - expose the Ledger GoBD audit export alongside the existing DATEV export;
 - support period, account, and source filters without changing the legacy transaction export;
 - return downloadable artifacts and progress for long-running export jobs.
 
-### 7. Release integrity
+### 8. Release integrity
 
 Make Git tags, GitHub releases, PyPI, and `server.json` use one published version and add a verified package-release workflow. A registry manifest must never point to a package version that does not exist.
 
@@ -73,6 +90,7 @@ Make Git tags, GitHub releases, PyPI, and `server.json` use one published versio
 - Drill-through from reports and Ledger postings to the originating Norman transaction, asset, payroll run, or import batch
 - Search, filters, and pagination parity across chart of accounts, journal, SuSa, open items, and cash book
 - Product/service catalogue, custom units, prices, VAT defaults, and optional inventory tracking
+- Batch document ingestion with durable progress, retries, dead-letter handling, completion webhooks/status events, and vendor/customer auto-upsert
 - Richer report comparison and reconciliation helpers for tax advisors
 
 ## MCP platform direction
