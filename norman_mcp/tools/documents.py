@@ -340,6 +340,13 @@ def register_document_tools(mcp):
             default=None,
             description="Original filename with extension (e.g. 'invoice.pdf'). Required when using file_content_base64.",
         ),
+        file_path: Optional[str] = Field(
+            default=None,
+            description=(
+                "Legacy local file path or URL. Kept for backwards compatibility. "
+                "Remote clients should prefer file, file_url, or file_ref."
+            ),
+        ),
         transactions: Optional[List[str]] = Field(
             default=None, description="List of transaction IDs to link"
         ),
@@ -360,7 +367,8 @@ def register_document_tools(mcp):
         currency_exchanged: str = "EUR",
         description: Optional[str] = Field(default=None, description="Description of attachment"),
         supplier_country: Optional[str] = Field(
-            default=None, description="Country of supplier (DE, INSIDE_EU, OUTSIDE_EU)"
+            default=None,
+            description="Country of supplier (DE, DOMESTIC, INSIDE_EU, OUTSIDE_EU)",
         ),
         value_date: Optional[str] = Field(default=None, description="Date of value"),
         vat_sum_amount: Optional[float] = Field(default=None, description="VAT sum amount"),
@@ -386,7 +394,7 @@ def register_document_tools(mcp):
             currency: Currency of amount (default EUR)
             currency_exchanged: Exchanged currency (default EUR)
             description: Description of attachment
-            supplier_country: Country of supplier (DE, INSIDE_EU, OUTSIDE_EU)
+            supplier_country: Country of supplier (DE, DOMESTIC, INSIDE_EU, OUTSIDE_EU)
             value_date: Date of value
             vat_sum_amount: VAT sum amount
             vat_sum_amount_exchanged: Exchanged VAT sum amount
@@ -410,17 +418,22 @@ def register_document_tools(mcp):
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        if not file and not file_url and not file_ref and not file_content_base64:
+        if not file and not file_url and not file_ref and not file_content_base64 and not file_path:
             return {
                 "error": "Provide one of: file, file_url, file_ref, or "
-                "file_content_base64 (small files only)."
+                "file_content_base64 (small files only). Legacy file_path is also accepted."
             }
 
         if attachment_type and attachment_type not in ["invoice", "receipt", "contract", "other"]:
             return {"error": "attachment_type must be one of: invoice, receipt, contract, other"}
 
-        if supplier_country and supplier_country not in ["DE", "INSIDE_EU", "OUTSIDE_EU"]:
-            return {"error": "supplier_country must be one of: DE, INSIDE_EU, OUTSIDE_EU"}
+        if supplier_country and supplier_country not in [
+            "DE",
+            "DOMESTIC",
+            "INSIDE_EU",
+            "OUTSIDE_EU",
+        ]:
+            return {"error": "supplier_country must be one of: DE, DOMESTIC, INSIDE_EU, OUTSIDE_EU"}
 
         if sale_type and sale_type not in ["GOODS", "SERVICES"]:
             return {"error": "sale_type must be one of: GOODS, SERVICES"}
@@ -440,6 +453,7 @@ def register_document_tools(mcp):
                 file_ref=file_ref,
                 file_content_base64=file_content_base64,
                 file_name=file_name,
+                file_path=file_path,
             )
             resolved_document = resolve_document_input(
                 normalized,

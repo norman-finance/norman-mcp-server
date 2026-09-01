@@ -223,8 +223,8 @@ _UPLOAD_PAGE_HTML = """<!DOCTYPE html>
     <div class="label">File reference</div>
     <div class="ref" id="refValue"></div>
     <div class="hint">
-      ✅ Upload complete. You can close this page — the AI assistant
-      already has the reference and will attach the file automatically.
+      ✅ Upload complete. Copy this file reference and send it back to the
+      AI assistant so it can attach the file.
     </div>
   </div>
   <div id="errorBox" style="display:none" class="error"></div>
