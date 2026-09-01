@@ -130,6 +130,10 @@ Before connecting, [create a free Norman account](https://app.norman.finance/sig
 1. Go to [Claude Connectors](https://claude.ai/new#settings/customize-connectors)
 2. Click **Add**
 3. Find and connect: **Norman Finance**
+
+MCP Apps-compatible Claude hosts can also open Norman's read-only **Document
+Review**, **Reconciliation Cockpit**, and **Ledger Explorer** directly in the
+conversation. Other Claude clients receive the same data as normal tool output.
 </details>
 
 <details>
@@ -155,6 +159,10 @@ claude /plugin install github:norman-finance/norman-mcp-server
 <br/>
 
 1. Install it from the official [ChatGPT Plugins Directory](https://chatgpt.com/plugins/plugin_asdk_app_6981ec32565481919b1c5a1627b1e330).
+
+The plugin includes interactive, read-only views for reviewing documents,
+reconciliation issues, and Ledger accounts. The accounting API remains the
+source of truth; write actions still require their normal tools and approvals.
 
 </details>
 

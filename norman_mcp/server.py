@@ -41,6 +41,7 @@ from norman_mcp.tools.gewerbe_registration import register_gewerbe_registration_
 from norman_mcp.tools.corporate_tax_registration import register_corporate_tax_registration_tools
 from norman_mcp.prompts.templates import register_prompts
 from norman_mcp.resources.endpoints import register_resources
+from norman_mcp.apps import register_public_apps
 from norman_mcp.auth.provider import NormanOAuthProvider
 from norman_mcp.auth.routes import create_norman_auth_routes
 
@@ -371,6 +372,7 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
     register_corporate_tax_registration_tools(server)
     register_prompts(server)
     register_resources(server)
+    register_public_apps(server)
     
     return server
 

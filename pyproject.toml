@@ -60,7 +60,7 @@ norman-mcp = "norman_mcp.cli:main"
 include = ["norman_mcp*"]
 
 [tool.setuptools.package-data]
-norman_mcp = ["static/*", "files/*"]
+norman_mcp = ["static/*", "files/*", "apps/*.html"]
 
 [tool.black]
 line-length = 100
