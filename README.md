@@ -116,9 +116,14 @@ An external archive can already send a document through a Norman temporary `file
 | Small base64 payload | Supported, size-limited |
 | Structured invoice metadata | Supported |
 | Native file attached directly to a ChatGPT tool call | Planned; requires the official MCP `openai/fileParams` file-object contract |
+| Explicit `file_ref`, HTTPS URL, or small base64 in a Claude MCP tool call | Supported by the portable contract |
+| File attached directly to a Claude.ai conversation | Not automatically forwarded to Norman; planned upload bridge |
+| Anthropic Files API `file_id` used directly as a Norman file reference | Not portable; the calling application must upload the bytes to Norman first |
 | Atomic deduplication, match-or-create, provenance, batch status, and webhooks | Planned |
 
 For normal PDFs, use `file_ref` or a signed HTTPS URL rather than base64. A URL must remain reachable long enough for Norman to download it. Files sent to the remote Norman MCP server leave the AI host and are processed under Norman's security, residency, and retention controls.
+
+Claude custom connectors and Anthropic's Messages API MCP connector can use the explicit portable inputs above. A document attached to a Claude.ai message is available to Claude, but Anthropic does not currently document automatic forwarding of that attachment into a remote MCP tool argument. A custom Anthropic API integration can bridge the gap by retrieving the file, uploading it to Norman, and then calling the MCP tool with the returned Norman `file_ref`. MCP resources work in the opposite direction: they let a client read content exposed by Norman and do not themselves upload a Claude attachment to Norman.
 
 The target archive workflow is:
 
@@ -186,6 +191,8 @@ Before connecting, [create a free Norman account](https://app.norman.finance/sig
 1. Go to [Claude Connectors](https://claude.ai/new#settings/customize-connectors)
 2. Click **Add**
 3. Find and connect: **Norman Finance**
+
+For document uploads, pass a Norman `file_ref`, a reachable signed HTTPS URL, or a small base64 payload to the tool. Attaching a file only to the Claude conversation is not currently a documented automatic upload path to the remote Norman server.
 </details>
 
 <details>

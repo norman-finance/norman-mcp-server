@@ -55,6 +55,17 @@ Add one canonical `ingest_document` contract with:
 
 The server must download transient file URLs promptly, validate MIME type and size, isolate tenants, define retention, and preserve a complete audit trail. Norman's existing upload-link/file-reference flow remains the compatibility fallback. Native ChatGPT attachment delivery is **planned**, not shipped, until the MCP descriptor and file-object schema implement the official file-parameter contract.
 
+Claude custom connectors and the Anthropic Messages API MCP connector can call remote MCP tools with normal JSON arguments, so the portable `file_ref`, signed `file_url`, and small-base64 paths are the initial Claude-compatible contract. Anthropic does not currently document a Claude.ai attachment equivalent to `openai/fileParams` that is automatically forwarded into a remote MCP tool call. Treat a file attached to a Claude conversation as Claude context, not as a Norman upload, until an explicit bridge is implemented.
+
+Claude parity therefore requires:
+
+- a Norman presigned-upload/session flow that returns a stable `file_ref` before `ingest_document` is called;
+- an adapter for custom Anthropic API clients that reads a Claude Files API asset and uploads the bytes to Norman before invoking the MCP tool;
+- clear tool errors when only an unresolvable client-side file identifier is supplied;
+- compatibility tests in Claude.ai custom connectors, Claude Desktop, the Anthropic Messages API MCP connector, ChatGPT, and MCP Inspector.
+
+MCP resources may expose Norman documents back to a client, including binary resources, but they are a server-to-client read mechanism and are not a portable replacement for uploading a user's Claude attachment to Norman.
+
 ### 3. Payment-account and bank mapping
 
 Allow agents to list connected financial accounts and map each bank, card, cash, or PayPal source to its Ledger account. Reconnection must identify an existing institution/account and must not leave duplicate expired-connection prompts.
