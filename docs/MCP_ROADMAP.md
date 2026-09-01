@@ -4,6 +4,14 @@ Norman MCP should expose the same accounting model that customers use in the Nor
 
 This document separates what is available today from the next parity work. It is a product roadmap, not a compatibility promise or release schedule.
 
+## Delivery status
+
+- **Shipped** means the capability is available from the deployed Norman MCP server.
+- **In review** means implementation exists in a pull request but is not yet part of the deployed server.
+- **Planned** means the product/API contract still needs implementation or MCP exposure.
+
+The first P0 slice is **in review** in [PR #103](https://github.com/norman-finance/norman-mcp-server/pull/103): DATEV/opening-document analysis, reconciliation preview, and an explicitly confirmed opening/cutover import, plus a guided accounting-cutover skill.
+
 ## Available today
 
 - Transactions, including split items, categorisation, receipts, and verification
@@ -22,7 +30,7 @@ This document separates what is available today from the next parity work. It is
 
 ### 1. Opening and migration workspace
 
-Expose the full opening/cutover flow rather than only its current status:
+**Status: in review in [PR #103](https://github.com/norman-finance/norman-mcp-server/pull/103).** The implementation exposes the existing backend opening/cutover authority rather than creating a second accounting model:
 
 - upload and inspect DATEV opening balances and booking stacks;
 - detect SKR03/SKR04 from imported data and ask before changing the company framework;
