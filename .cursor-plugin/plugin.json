@@ -1,7 +1,7 @@
 {
   "name": "norman-finance",
   "version": "1.0.0",
-  "description": "AI-powered bookkeeping and tax filing automation for entrepreneurs at the heart of the European economy.",
+  "description": "German accounting via MCP: invoices, transactions, vendors, SKR03/SKR04 ledgers, assets, annual close, documents, and ELSTER tax previews.",
   "author": {
     "name": "Norman Finance",
     "email": "support@norman.finance"
@@ -17,6 +17,10 @@
     "taxes",
     "german",
     "freelancer",
+    "gmbh",
+    "ug",
+    "ledger",
+    "datev",
     "mcp",
     "oauth"
   ],

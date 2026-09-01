@@ -5,14 +5,14 @@
     "email": "support@norman.finance"
   },
   "metadata": {
-    "description": "AI-powered bookkeeping and tax filing automation for entrepreneurs at the heart of the European economy.",
+    "description": "German accounting, Ledger, invoicing, and tax workflows through MCP.",
     "version": "1.0.0"
   },
   "plugins": [
     {
       "name": "norman-finance",
       "source": "./",
-      "description": "Connect to Norman Finance to manage clients, invoices, transactions, taxes, and documents from your AI chat.",
+      "description": "Connect to Norman Finance for invoices, transactions, vendors, SKR03/SKR04 ledgers, assets, annual close, documents, and ELSTER previews.",
       "version": "1.0.0",
       "author": {
         "name": "Norman Finance"
@@ -28,6 +28,10 @@
         "taxes",
         "german",
         "freelancer",
+        "gmbh",
+        "ug",
+        "ledger",
+        "datev",
         "mcp",
         "oauth"
       ],
@@ -39,7 +43,9 @@
         "finanzamt",
         "umsatzsteuer",
         "kleinunternehmer",
-        "freiberufler"
+        "freiberufler",
+        "hauptbuch",
+        "jahresabschluss"
       ]
     }
   ]
