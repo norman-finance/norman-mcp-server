@@ -13,9 +13,18 @@ from pydantic import Field
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
-from norman_mcp.security.utils import validate_file_path, validate_input
 
 logger = logging.getLogger(__name__)
+
+_STRUCTURED_DOCUMENT_KEYS = {
+    "file_url", "file_ref", "file_content_base64", "file_name",
+    "source_system", "external_id", "metadata",
+}
+_STRUCTURED_METADATA_KEYS = {
+    "supplier", "customer", "invoice_number", "invoice_date", "service_date",
+    "net_amount", "vat_amount", "gross_amount", "currency", "document_type",
+    "direction", "tags",
+}
 
 
 def _enrich_attachment_download_urls(data: dict, api=None, company_id: str | None = None) -> dict:
@@ -136,6 +145,61 @@ def validate_input(input_str: str) -> str:
         return ""
     # Remove any potential script or command injection characters
     return re.sub(r'[;<>&|]', '', input_str)
+
+
+def _validate_structured_document(document: Dict[str, Any]) -> Optional[str]:
+    unknown = sorted(set(document) - _STRUCTURED_DOCUMENT_KEYS)
+    if unknown:
+        return f"Unsupported document fields: {', '.join(unknown)}"
+
+    sources = [
+        key for key in ("file_url", "file_ref", "file_content_base64")
+        if document.get(key)
+    ]
+    if len(sources) != 1:
+        return "Provide exactly one of file_url, file_ref, or file_content_base64."
+    if document.get("file_content_base64") and not document.get("file_name"):
+        return "file_name is required with file_content_base64."
+    if document.get("external_id") and not document.get("source_system"):
+        return "source_system is required when external_id is provided."
+
+    metadata = document.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        return "metadata must be an object."
+    unknown_metadata = sorted(set(metadata) - _STRUCTURED_METADATA_KEYS)
+    if unknown_metadata:
+        return f"Unsupported metadata fields: {', '.join(unknown_metadata)}"
+    if "tags" in metadata and not isinstance(metadata["tags"], list):
+        return "metadata.tags must be an array."
+    return None
+
+
+def _resolve_structured_document_file(document: Dict[str, Any]) -> tuple[Optional[str], bool, Optional[str]]:
+    """Return (path, is_temporary, error) for one portable document input."""
+    if file_url := document.get("file_url"):
+        if not is_url(file_url):
+            return None, False, "file_url must be a valid HTTP(S) URL."
+        path = download_file(file_url)
+        return (path, True, None) if path else (None, False, "Failed to download file_url.")
+
+    if file_ref := document.get("file_ref"):
+        from norman_mcp.files.upload import resolve_ref
+        path = resolve_ref(file_ref)
+        return (path, False, None) if path else (None, False, "file_ref was not found or expired.")
+
+    path = save_base64_to_temp(document["file_content_base64"], document["file_name"])
+    return (path, True, None) if path else (None, False, "Failed to decode file_content_base64.")
+
+
+def _remove_temp_file(path: Optional[str]) -> None:
+    if not path:
+        return
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+            os.rmdir(os.path.dirname(path))
+    except Exception as exc:
+        logger.warning("Failed to remove temporary file %s: %s", path, exc)
 
 def register_document_tools(mcp):
     """Register all document-related tools with the MCP server."""
@@ -320,6 +384,109 @@ def register_document_tools(mcp):
                         os.rmdir(os.path.dirname(temp_file))
                 except Exception:
                     pass
+
+    @mcp.tool(
+        title="Import Structured Documents (No OCR)",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
+    async def upload_structured_attachments(
+        ctx: Context,
+        documents: List[Dict[str, Any]] = Field(
+            description=(
+                "Documents to store without OCR. Each item contains exactly one of "
+                "file_url, file_ref, or file_content_base64; optional source_system "
+                "and external_id; and optional metadata with supplier, customer, "
+                "invoice_number, invoice_date, service_date, net_amount, vat_amount, "
+                "gross_amount, currency, document_type, direction, and tags."
+            ),
+        ),
+    ) -> Dict[str, Any]:
+        """Store pre-processed documents without transaction side effects.
+
+        Missing metadata remains missing. With source_system + external_id,
+        retries return the existing document instead of creating a duplicate.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+        if not documents:
+            return {"error": "documents must contain at least one item."}
+        if len(documents) > 100:
+            return {"error": "A maximum of 100 documents can be imported at once."}
+
+        import_url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/attachments/structured-import/",
+        )
+        results: List[Dict[str, Any]] = []
+        created_count = 0
+        existing_count = 0
+        failed_count = 0
+
+        for index, document in enumerate(documents):
+            if not isinstance(document, dict):
+                results.append({"index": index, "error": "Each document must be an object."})
+                failed_count += 1
+                continue
+
+            if error := _validate_structured_document(document):
+                results.append({"index": index, "error": error})
+                failed_count += 1
+                continue
+
+            path, is_temporary, error = _resolve_structured_document_file(document)
+            if error or not path:
+                results.append({"index": index, "error": error or "File is unavailable."})
+                failed_count += 1
+                continue
+
+            try:
+                metadata = dict(document.get("metadata") or {})
+                if document.get("source_system"):
+                    metadata["external_source"] = document["source_system"]
+                if document.get("external_id"):
+                    metadata["external_id"] = document["external_id"]
+
+                with open(path, "rb") as file_handle:
+                    response = await api.arequest(
+                        "POST",
+                        import_url,
+                        json_data=metadata,
+                        files={"file": file_handle},
+                    )
+
+                result = {"index": index, **response}
+                if response.get("error"):
+                    failed_count += 1
+                elif response.get("created") is False:
+                    existing_count += 1
+                else:
+                    created_count += 1
+                results.append(result)
+            except (FileNotFoundError, PermissionError) as exc:
+                failed_count += 1
+                results.append({"index": index, "error": str(exc)})
+            except Exception as exc:
+                logger.exception("Structured document import failed at index %d", index)
+                failed_count += 1
+                results.append({"index": index, "error": f"Import failed: {exc}"})
+            finally:
+                if is_temporary:
+                    _remove_temp_file(path)
+
+        return {
+            "total": len(documents),
+            "created": created_count,
+            "existing": existing_count,
+            "failed": failed_count,
+            "results": results,
+        }
 
     @mcp.tool(
         title="List Attachments",
