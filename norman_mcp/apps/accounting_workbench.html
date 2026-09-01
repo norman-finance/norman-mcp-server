@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Norman Accounting Workbench</title>
+  <style>
+    :root { color-scheme: light dark; --ink:#171717; --muted:#6b6b6b; --line:#e7e7e5; --panel:#f7f7f5; --accent:#111; --bad:#9b2c2c; --warn:#8a5a00; --good:#17643b; --surface:#fff; }
+    @media (prefers-color-scheme:dark) { :root { --ink:#f5f5f2; --muted:#aaa; --line:#363634; --panel:#222220; --accent:#fff; --bad:#ff9a9a; --warn:#ffc565; --good:#7ee2a8; --surface:#171716; } }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--surface); color:var(--ink); font:14px/1.45 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    button,input,select { font:inherit; }
+    button { color:inherit; }
+    .app { min-height:360px; padding:18px; }
+    .top { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+    h1 { font-size:20px; line-height:1.2; margin:0; }
+    .eyebrow { color:var(--muted); font-size:11px; font-weight:700; letter-spacing:.09em; margin-bottom:5px; text-transform:uppercase; }
+    .tabs { display:flex; gap:4px; margin:16px 0; padding-bottom:10px; border-bottom:1px solid var(--line); overflow:auto; }
+    .tab,.filter,.ghost,.primary { border:1px solid transparent; background:transparent; border-radius:999px; cursor:pointer; padding:7px 11px; white-space:nowrap; }
+    .tab:hover,.filter:hover,.ghost:hover { background:var(--panel); }
+    .tab.active,.filter.active { border-color:var(--ink); }
+    .primary { border-radius:6px; background:var(--accent); color:var(--surface); font-weight:650; }
+    .ghost { border-color:var(--line); border-radius:6px; }
+    .summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(115px,1fr)); gap:8px; margin-bottom:14px; }
+    .metric { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+    .metric strong { display:block; font-size:19px; }
+    .metric span { color:var(--muted); font-size:12px; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
+    .toolbar input { min-width:180px; flex:1; border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:6px; padding:8px 10px; }
+    .filters { display:flex; flex-wrap:wrap; gap:4px; }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:8px; }
+    table { width:100%; border-collapse:collapse; min-width:650px; }
+    th { color:var(--muted); font-size:11px; letter-spacing:.04em; text-align:left; text-transform:uppercase; }
+    th,td { border-bottom:1px solid var(--line); padding:10px 12px; vertical-align:top; }
+    tr:last-child td { border-bottom:0; }
+    tbody tr[data-selectable="true"] { cursor:pointer; }
+    tbody tr[data-selectable="true"]:hover { background:var(--panel); }
+    .num { font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; }
+    .badge { display:inline-block; border:1px solid var(--line); border-radius:999px; font-size:11px; margin:1px 3px 1px 0; padding:2px 7px; white-space:nowrap; }
+    .badge.bad { border-color:color-mix(in srgb,var(--bad) 45%,transparent); color:var(--bad); }
+    .badge.warn { border-color:color-mix(in srgb,var(--warn) 45%,transparent); color:var(--warn); }
+    .badge.good { border-color:color-mix(in srgb,var(--good) 45%,transparent); color:var(--good); }
+    .muted { color:var(--muted); }
+    .empty,.error { border:1px dashed var(--line); border-radius:8px; color:var(--muted); padding:30px; text-align:center; }
+    .error { border-color:var(--bad); color:var(--bad); }
+    .detail { display:grid; grid-template-columns:minmax(0,1fr) 260px; gap:14px; }
+    .inspector { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
+    .inspector h2 { font-size:15px; margin:0 0 10px; }
+    .kv { display:grid; grid-template-columns:90px 1fr; gap:6px 10px; margin-bottom:14px; }
+    .kv dt { color:var(--muted); }
+    .kv dd { margin:0; overflow-wrap:anywhere; }
+    .loading { align-items:center; background:color-mix(in srgb,var(--surface) 88%,transparent); display:none; inset:0; justify-content:center; position:absolute; z-index:3; }
+    .loading.show { display:flex; }
+    .shell { position:relative; }
+    @media (max-width:720px) { .app{padding:12px}.detail{grid-template-columns:1fr}.inspector{order:-1}.top{display:block}.primary{margin-top:10px} }
+  </style>
+</head>
+<body>
+  <main class="app shell">
+    <div id="loading" class="loading">Loading…</div>
+    <div class="top">
+      <div><div class="eyebrow">Norman Finance</div><h1 id="title">Accounting Workbench</h1></div>
+      <button id="ask" class="primary" type="button">Ask AI about this</button>
+    </div>
+    <nav class="tabs" aria-label="Accounting views">
+      <button class="tab" data-view="documents" type="button">Document Review</button>
+      <button class="tab" data-view="reconciliation" type="button">Reconciliation</button>
+      <button class="tab" data-view="ledger" type="button">Ledger Explorer</button>
+    </nav>
+    <section id="content" aria-live="polite"><div class="empty">Waiting for Norman data…</div></section>
+  </main>
+  <script>
+    (() => {
+      const state = { data:null, selected:null, issue:"all", query:"", pending:new Map(), requestId:1, bridgeReady:false };
+      const tools = {
+        documents:"get_document_review_data",
+        reconciliation:"get_reconciliation_cockpit_data",
+        ledger:"get_ledger_explorer_data"
+      };
+      const title = document.getElementById("title");
+      const content = document.getElementById("content");
+      const loading = document.getElementById("loading");
+      const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
+      const num = (value, currency="EUR") => {
+        const parsed = Number(value ?? 0);
+        try { return new Intl.NumberFormat(document.documentElement.lang || "en", {style:"currency",currency:currency || "EUR"}).format(Number.isFinite(parsed) ? parsed : 0); }
+        catch { return `${Number.isFinite(parsed) ? parsed.toFixed(2) : value} ${currency || ""}`.trim(); }
+      };
+      const date = value => value ? esc(String(value).slice(0,10)) : "—";
+      const getStructured = result => {
+        if (result?.structuredContent) return result.structuredContent;
+        const text = result?.content?.find?.(item => item.type === "text")?.text;
+        if (text) { try { return JSON.parse(text); } catch {} }
+        return result;
+      };
+      function request(method, params, timeout=12000) {
+        const id = state.requestId++;
+        window.parent.postMessage({jsonrpc:"2.0",id,method,params}, "*");
+        return new Promise((resolve,reject) => {
+          const timer = setTimeout(() => { state.pending.delete(id); reject(new Error("Host request timed out")); }, timeout);
+          state.pending.set(id,{resolve,reject,timer});
+        });
+      }
+      async function initializeApp() {
+        try {
+          await request("ui/initialize",{
+            protocolVersion:"2026-01-26",
+            appInfo:{name:"Norman Accounting Workbench",version:"1.0.0"},
+            appCapabilities:{availableDisplayModes:["inline"]}
+          },5000);
+          state.bridgeReady=true;
+          window.parent.postMessage({jsonrpc:"2.0",method:"ui/notifications/initialized",params:{}},"*");
+        } catch {
+          // ChatGPT can hydrate the same widget through window.openai instead.
+        }
+      }
+      async function callTool(name, args={}) {
+        if (state.bridgeReady || !window.openai?.callTool) return request("tools/call",{name,arguments:args});
+        return window.openai.callTool(name,args);
+      }
+      async function sendMessage(prompt) {
+        if (state.bridgeReady || !window.openai?.sendFollowUpMessage) return request("ui/message",{role:"user",content:[{type:"text",text:prompt}]},5000);
+        return window.openai.sendFollowUpMessage({prompt});
+      }
+      function showLoading(show) { loading.classList.toggle("show",show); }
+      function metrics(summary={}) {
+        return `<div class="summary">${Object.entries(summary).map(([key,value]) => `<div class="metric"><strong>${esc(value)}</strong><span>${esc(key.replace(/([A-Z])/g," $1"))}</span></div>`).join("")}</div>`;
+      }
+      function toolbar(filters=[]) {
+        return `<div class="toolbar"><input id="search" value="${esc(state.query)}" placeholder="Filter visible rows"><div class="filters">${filters.map(([key,label]) => `<button class="filter ${state.issue===key?"active":""}" data-issue="${esc(key)}" type="button">${esc(label)}</button>`).join("")}</div></div>`;
+      }
+      function documentView(data) {
+        const rows=(data.items||[]).filter(item => {
+          const hay=`${item.fileName} ${item.brand} ${item.number} ${item.description}`.toLowerCase();
+          const matchesQuery=!state.query || hay.includes(state.query.toLowerCase());
+          const matchesIssue=state.issue==="all" || (state.issue==="linked" ? item.linked : !item.linked);
+          return matchesQuery && matchesIssue;
+        });
+        const selected=state.selected && (data.items||[]).find(item=>item.id===state.selected);
+        const table=`<div class="table-wrap"><table><thead><tr><th>Document</th><th>Supplier</th><th>Date</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>${rows.map(item=>`<tr data-selectable="true" data-id="${esc(item.id)}"><td><strong>${esc(item.fileName||"Untitled")}</strong><br><span class="muted">${esc(item.type||"")}</span></td><td>${esc(item.brand||item.description||"—")}</td><td>${date(item.date)}</td><td class="num">${num(item.amount,item.currency)}</td><td><span class="badge ${item.linked?"good":"warn"}">${esc(item.status)}</span></td></tr>`).join("")}</tbody></table></div>`;
+        const inspector=selected?`<aside class="inspector"><h2>${esc(selected.fileName)}</h2><dl class="kv"><dt>Supplier</dt><dd>${esc(selected.brand||"—")}</dd><dt>Number</dt><dd>${esc(selected.number||"—")}</dd><dt>VAT</dt><dd>${esc(selected.vatRate??"—")}%</dd><dt>Linked</dt><dd>${selected.linked?"Yes":"No"}</dd></dl><button class="ghost row-ask" data-kind="document" data-id="${esc(selected.id)}" type="button">Review in chat</button></aside>`:"";
+        return `${metrics(data.summary)}${toolbar([["all","All"],["unmatched","Needs match"],["linked","Linked"]])}<div class="detail"><div>${rows.length?table:'<div class="empty">No documents match this filter.</div>'}</div>${inspector}</div>`;
+      }
+      function reconciliationView(data) {
+        const rows=(data.items||[]).filter(item => {
+          const hay=`${item.description} ${item.categoryCode} ${item.categoryName} ${(item.issues||[]).join(" ")}`.toLowerCase();
+          const matchesQuery=!state.query || hay.includes(state.query.toLowerCase());
+          const matchesIssue=state.issue==="all" || (item.issues||[]).includes(state.issue);
+          return matchesQuery && matchesIssue;
+        });
+        const table=`<div class="table-wrap"><table><thead><tr><th>Transaction</th><th>Category</th><th class="num">Amount</th><th>Issues</th><th></th></tr></thead><tbody>${rows.map(item=>`<tr><td><strong>${esc(item.description||"Untitled")}</strong><br><span class="muted">${date(item.date)} · ${esc(item.cashflowType)}</span></td><td>${esc([item.categoryCode,item.categoryName].filter(Boolean).join(" · ")||"—")}</td><td class="num">${num(item.amount,item.currency)}</td><td>${(item.issues||[]).length?(item.issues||[]).map(issue=>`<span class="badge ${issue==="Previous SKR"?"bad":"warn"}">${esc(issue)}</span>`).join(""):'<span class="badge good">Ready</span>'}</td><td><button class="ghost row-ask" data-kind="transaction" data-id="${esc(item.id)}" type="button">Review</button></td></tr>`).join("")}</tbody></table></div>`;
+        return `${metrics(data.summary)}${toolbar([["all","All"],["Missing document","Missing document"],["Uncategorized","Uncategorized"],["Previous SKR","Previous SKR"]])}${rows.length?table:'<div class="empty">No transactions match this filter.</div>'}`;
+      }
+      function ledgerView(data) {
+        if (data.mode==="account") {
+          const account=data.account||{};
+          const rows=data.items||[];
+          return `<div class="toolbar"><button id="ledger-back" class="ghost" type="button">← All accounts</button><strong>Account ${esc(account.code||"")}</strong></div>${metrics({debit:account.debit??0,credit:account.credit??0,balance:account.balance??0,postings:rows.length})}<div class="table-wrap"><table><thead><tr><th>Date</th><th>Entry</th><th>Memo</th><th>Debit</th><th>Credit</th><th class="num">Amount</th><th class="num">Running balance</th></tr></thead><tbody>${rows.map(item=>`<tr><td>${date(item.date)}</td><td>${esc(item.entryNo||"—")}</td><td>${esc(item.memo||item.origin||"—")}${item.locked?' <span class="badge">Locked</span>':''}</td><td>${esc(item.debitCode)}</td><td>${esc(item.creditCode)}</td><td class="num">${num(item.signedAmount)}</td><td class="num">${num(item.runningBalance)}</td></tr>`).join("")}</tbody></table></div>`;
+        }
+        const rows=(data.items||[]).filter(item => !state.query || `${item.code} ${item.name}`.toLowerCase().includes(state.query.toLowerCase()));
+        return `${metrics(data.summary)}${toolbar([])}<div class="table-wrap"><table><thead><tr><th>Account</th><th>Name</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead><tbody>${rows.map(item=>`<tr data-selectable="true" data-code="${esc(item.code)}"><td><strong>${esc(item.code)}</strong></td><td>${esc(item.name||"—")}</td><td class="num">${num(item.debit)}</td><td class="num">${num(item.credit)}</td><td class="num">${num(item.balance)}</td></tr>`).join("")}</tbody></table></div>`;
+      }
+      function render(data) {
+        if (!data || typeof data!=="object") return;
+        state.data=data; state.selected=null;
+        title.textContent=data.title||"Accounting Workbench";
+        document.querySelectorAll(".tab").forEach(tab=>tab.classList.toggle("active",tab.dataset.view===data.view));
+        if (data.error) content.innerHTML=`<div class="error">${esc(data.error)}</div>`;
+        else if (data.view==="documents") content.innerHTML=documentView(data);
+        else if (data.view==="reconciliation") content.innerHTML=reconciliationView(data);
+        else if (data.view==="ledger") content.innerHTML=ledgerView(data);
+        else content.innerHTML='<div class="empty">Unsupported view.</div>';
+        bindContent();
+      }
+      function rerender() { if (state.data) render({...state.data}); }
+      function bindContent() {
+        document.getElementById("search")?.addEventListener("input",event=>{state.query=event.target.value;rerender();});
+        document.querySelectorAll("[data-issue]").forEach(button=>button.addEventListener("click",()=>{state.issue=button.dataset.issue;rerender();}));
+        document.querySelectorAll("tr[data-id]").forEach(row=>row.addEventListener("click",()=>{state.selected=row.dataset.id;content.innerHTML=documentView(state.data);bindContent();}));
+        document.querySelectorAll(".row-ask").forEach(button=>button.addEventListener("click",async event=>{event.stopPropagation();await sendMessage(`Review Norman ${button.dataset.kind} ${button.dataset.id}. Explain what needs attention and do not change anything without my confirmation.`);}));
+        document.querySelectorAll("tr[data-code]").forEach(row=>row.addEventListener("click",()=>loadView("ledger",row.dataset.code)));
+        document.getElementById("ledger-back")?.addEventListener("click",()=>loadView("ledger"));
+      }
+      async function loadView(view, accountCode=null) {
+        showLoading(true); state.query=""; state.issue="all";
+        try {
+          const filters=state.data?.filters||{};
+          const args=view==="ledger"?{date_from:filters.dateFrom||null,date_to:filters.dateTo||null,account_code:accountCode}:{};
+          const result=await callTool(tools[view],args);
+          render(getStructured(result));
+        } catch (error) { content.innerHTML=`<div class="error">${esc(error?.message||error)}</div>`; }
+        finally { showLoading(false); }
+      }
+      document.querySelectorAll(".tab").forEach(tab=>tab.addEventListener("click",()=>loadView(tab.dataset.view)));
+      document.getElementById("ask").addEventListener("click",()=>sendMessage(`Review the current Norman ${state.data?.title||"accounting"} view. Summarize the important issues and suggest the next safe step without changing data.`));
+      window.addEventListener("message",event=>{
+        if (event.source!==window.parent) return;
+        const message=event.data;
+        if (!message || message.jsonrpc!=="2.0") return;
+        if (message.id!==undefined && state.pending.has(message.id)) {
+          const pending=state.pending.get(message.id); state.pending.delete(message.id); clearTimeout(pending.timer);
+          message.error?pending.reject(message.error):pending.resolve(message.result); return;
+        }
+        if (message.method==="ui/notifications/tool-result") render(message.params?.structuredContent);
+      },{passive:true});
+      initializeApp();
+      if (window.openai?.toolOutput) render(window.openai.toolOutput);
+    })();
+  </script>
+</body>
+</html>
