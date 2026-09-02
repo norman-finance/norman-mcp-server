@@ -10,6 +10,7 @@ from norman_mcp.tools.gewerbe_registration import register_gewerbe_registration_
 from norman_mcp.tools.incorporation import register_incorporation_tools
 from norman_mcp.tools.invoices import register_invoice_tools
 from norman_mcp.tools.offers import register_offer_tools
+from norman_mcp.tools.rules import register_rule_tools
 from norman_mcp.tools.tax_advisor import register_tax_advisor_tools
 from norman_mcp.tools.taxes import register_tax_tools
 
@@ -87,6 +88,7 @@ def test_external_actions_and_internal_ai_use_truthful_annotations() -> None:
     register_tax_advisor_tools(server)
     register_tax_tools(server)
     register_category_tools(server)
+    register_rule_tools(server)
     tools = server._tool_manager._tools  # noqa: SLF001
 
     assert _annotation_tuple(tools["send_invoice"]) == EXTERNAL_IRREVERSIBLE_WRITE
@@ -94,6 +96,7 @@ def test_external_actions_and_internal_ai_use_truthful_annotations() -> None:
     assert _annotation_tuple(tools["send_offer"]) == EXTERNAL_IRREVERSIBLE_WRITE
     assert _annotation_tuple(tools["ping_client_for_documents"]) == EXTERNAL_IRREVERSIBLE_WRITE
     assert _annotation_tuple(tools["submit_tax_report"]) == EXTERNAL_IRREVERSIBLE_WRITE
+    assert _annotation_tuple(tools["approve_rule_execution"]) == EXTERNAL_IRREVERSIBLE_WRITE
     assert _annotation_tuple(tools["suggest_skr_category"]) == READ_ONLY
 
 
