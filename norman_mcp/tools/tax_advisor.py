@@ -311,7 +311,7 @@ def register_tax_advisor_tools(mcp):
         title="Ping Client for Documents",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=False,
             openWorldHint=True,
         ),

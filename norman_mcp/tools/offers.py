@@ -294,9 +294,9 @@ def register_offer_tools(mcp):
         title="Send Offer via Email",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=False,
-            openWorldHint=False,
+            openWorldHint=True,
         ),
     )
     async def send_offer(

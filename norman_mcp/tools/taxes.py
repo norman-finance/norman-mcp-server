@@ -183,7 +183,7 @@ def register_tax_tools(mcp):
             readOnlyHint=False,
             destructiveHint=True,
             idempotentHint=False,
-            openWorldHint=False,
+            openWorldHint=True,
         ),
     )
     async def submit_tax_report(
@@ -376,4 +376,4 @@ def register_tax_tools(mcp):
             f"api/v1/companies/{company_id}/vat-next-report-amount/"
         )
         
-        return api._make_request("GET", vat_url) 
+        return api._make_request("GET", vat_url)

@@ -78,7 +78,7 @@ def register_category_tools(mcp):
             readOnlyHint=True,
             destructiveHint=False,
             idempotentHint=False,
-            openWorldHint=True,
+            openWorldHint=False,
         ),
     )
     async def suggest_skr_category(

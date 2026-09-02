@@ -3,6 +3,7 @@ from typing import Any
 from urllib.parse import urljoin
 
 from norman_mcp.context import Context
+from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from norman_mcp import config
@@ -22,6 +23,10 @@ CORPORATE_CHOICES: dict[str, dict[str, str]] = {
     "salutation": {"1": "Herr", "2": "Frau"},
     "shareholderType": {"natural": "Natural person", "legal": "Legal entity (a company)"},
 }
+
+READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=False, destructiveHint=False)
+WRITE = ToolAnnotations(readOnlyHint=False, openWorldHint=False, destructiveHint=False)
+DESTRUCTIVE_WRITE = ToolAnnotations(readOnlyHint=False, openWorldHint=False, destructiveHint=True)
 
 PERSON_SHAPE = (
     "Person dict keys (camelCase): salutation ('1' Herr / '2' Frau), firstName, lastName, "
@@ -68,7 +73,7 @@ def register_corporate_tax_registration_tools(mcp):
     themselves. Always finish by handing over the submission link.
     """
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_corporate_tax_registration(ctx: Context) -> dict[str, Any]:
         """Get the user's corporate tax registration (Fragebogen), if any. Call this FIRST.
 
@@ -80,12 +85,12 @@ def register_corporate_tax_registration_tools(mcp):
         api = ctx.request_context.lifespan_context.get("api")
         return api._make_request("GET", _corporate_url("my/"))
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_corporate_tax_registration_choices(ctx: Context) -> dict[str, Any]:
         """Get the valid values for the corporate Fragebogen enum fields (value → label)."""
         return CORPORATE_CHOICES
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def create_corporate_tax_registration(
         ctx: Context,
         incorporation_public_id: str | None = Field(
@@ -107,7 +112,7 @@ def register_corporate_tax_registration_tools(mcp):
         payload = _clean({"source": NORMAN_AGENT_SOURCE, "incorporation": incorporation_public_id})
         return api._make_request("POST", _corporate_url(), json_data=payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def update_corporate_company(  # noqa: PLR0913
         ctx: Context,
         public_id: str = Field(description="Corporate tax registration publicId"),
@@ -161,7 +166,7 @@ def register_corporate_tax_registration_tools(mcp):
         )
         return api._make_request("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def update_corporate_registration_details(  # noqa: PLR0913
         ctx: Context,
         public_id: str = Field(description="Corporate tax registration publicId"),
@@ -193,7 +198,7 @@ def register_corporate_tax_registration_tools(mcp):
         )
         return api._make_request("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTRUCTIVE_WRITE)
     async def set_corporate_people(
         ctx: Context,
         public_id: str = Field(description="Corporate tax registration publicId"),
@@ -220,7 +225,7 @@ def register_corporate_tax_registration_tools(mcp):
         payload = _clean({"representatives": representatives, "shareholderEntries": shareholder_entries})
         return api._make_request("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def update_corporate_financials(  # noqa: PLR0913
         ctx: Context,
         public_id: str = Field(description="Corporate tax registration publicId"),
@@ -248,7 +253,7 @@ def register_corporate_tax_registration_tools(mcp):
         )
         return api._make_request("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def update_corporate_vat_and_bank(  # noqa: PLR0913
         ctx: Context,
         public_id: str = Field(description="Corporate tax registration publicId"),
@@ -294,7 +299,7 @@ def register_corporate_tax_registration_tools(mcp):
         )
         return api._make_request("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_corporate_submission_link(ctx: Context) -> dict[str, Any]:
         """The FINAL step: hand the user over to the Norman app to review and submit.
 
