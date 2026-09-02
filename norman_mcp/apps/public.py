@@ -19,7 +19,7 @@ from pydantic import Field
 from norman_mcp import config
 from norman_mcp.context import Context
 
-APP_RESOURCE_URI = "ui://norman/accounting-workbench-v1.html"
+APP_RESOURCE_URI = "ui://norman/accounting-workbench-v2.html"
 APP_MIME_TYPE = "text/html;profile=mcp-app"
 
 READ_ONLY = ToolAnnotations(
@@ -206,7 +206,12 @@ def _render_result(view: str, title: str, payload: Dict[str, Any]) -> CallToolRe
         content=[
             TextContent(
                 type="text",
-                text=f"Opened {title} with {count} visible row{'s' if count != 1 else ''}.",
+                text=(
+                    f"{title} data is ready with {count} visible "
+                    f"row{'s' if count != 1 else ''}. Compatible clients render the attached "
+                    "interactive view; do not claim that a screen opened unless the client "
+                    "actually displayed it."
+                ),
             )
         ],
         structuredContent=data,

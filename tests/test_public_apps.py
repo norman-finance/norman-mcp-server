@@ -5,6 +5,8 @@ from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any
 
+from mcp.server.fastmcp import FastMCP
+from mcp.shared.memory import create_connected_server_and_client_session
 from mcp.types import CallToolResult
 
 from norman_mcp.apps.public import (
@@ -231,3 +233,41 @@ def test_render_tools_return_structured_content_and_widget_only_meta() -> None:
     assert isinstance(result, CallToolResult)
     assert result.structuredContent["view"] == "documents"
     assert result.meta == {"norman/view": "documents"}
+    assert "data is ready" in result.content[0].text
+    assert "Opened" not in result.content[0].text
+
+
+def test_app_contract_survives_real_mcp_protocol_serialization() -> None:
+    async def exercise_protocol() -> None:
+        mcp = FastMCP("public-app-contract")
+        register_public_apps(mcp)
+
+        async with create_connected_server_and_client_session(
+            mcp, raise_exceptions=True
+        ) as session:
+            tools = await session.list_tools()
+            render_tools = {
+                tool.name: tool for tool in tools.tools if tool.name.startswith("render_")
+            }
+            assert set(render_tools) == {
+                "render_document_review",
+                "render_reconciliation_cockpit",
+                "render_ledger_explorer",
+            }
+            for tool in render_tools.values():
+                assert tool.meta["ui"]["resourceUri"] == APP_RESOURCE_URI
+                assert tool.meta["openai/outputTemplate"] == APP_RESOURCE_URI
+
+            resources = await session.list_resources()
+            app_resource = next(
+                resource
+                for resource in resources.resources
+                if str(resource.uri) == APP_RESOURCE_URI
+            )
+            assert app_resource.mimeType == APP_MIME_TYPE
+
+            content = await session.read_resource(APP_RESOURCE_URI)
+            assert content.contents[0].mimeType == APP_MIME_TYPE
+            assert "ui/notifications/tool-result" in content.contents[0].text
+
+    asyncio.run(exercise_protocol())
