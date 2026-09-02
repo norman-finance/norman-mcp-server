@@ -5,6 +5,7 @@ from urllib.parse import urljoin
 
 from norman_mcp.context import Context
 from mcp.server.fastmcp.utilities.types import Image
+from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from norman_mcp import config
@@ -37,6 +38,9 @@ GEWERBE_CHOICES: dict[str, dict[str, str]] = {
     "gender": {"male": "Male", "female": "Female", "diverse": "Diverse"},
 }
 
+READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=False, destructiveHint=False)
+WRITE = ToolAnnotations(readOnlyHint=False, openWorldHint=False, destructiveHint=False)
+
 
 def _gewerbe_url(path: str = "") -> str:
     return urljoin(config.api_base_url, f"api/v1/gewerbe-registrations/{path}")
@@ -65,7 +69,7 @@ def register_gewerbe_registration_tools(mcp):
     line.
     """
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_gewerbe_registration(ctx: Context) -> dict[str, Any]:
         """Get the user's Gewerbeanmeldung, if any. Call this FIRST.
 
@@ -76,12 +80,12 @@ def register_gewerbe_registration_tools(mcp):
         api = ctx.request_context.lifespan_context.get("api")
         return api._make_request("GET", _gewerbe_url("my/"))
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_gewerbe_registration_choices(ctx: Context) -> dict[str, Any]:  # noqa: ARG001
         """Get the valid values for the Gewerbeanmeldung enum fields (value → label)."""
         return GEWERBE_CHOICES
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def create_gewerbe_registration(
         ctx: Context,
         incorporation_public_id: str | None = Field(
@@ -99,7 +103,7 @@ def register_gewerbe_registration_tools(mcp):
         payload = _clean({"source": NORMAN_AGENT_SOURCE, "incorporation": incorporation_public_id})
         return api._make_request("POST", _gewerbe_url(), json_data=payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def update_gewerbe_basic(
         ctx: Context,
         public_id: str = Field(description="Gewerbeanmeldung publicId"),
@@ -111,7 +115,7 @@ def register_gewerbe_registration_tools(mcp):
         payload = _clean({"activityStartDate": activity_start_date, "establishmentType": establishment_type})
         return api._make_request("PATCH", _gewerbe_url(f"{public_id}/"), json_data=payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def update_gewerbe_business(  # noqa: PLR0913
         ctx: Context,
         public_id: str = Field(description="Gewerbeanmeldung publicId"),
@@ -162,7 +166,7 @@ def register_gewerbe_registration_tools(mcp):
         )
         return api._make_request("PATCH", _gewerbe_url(f"{public_id}/"), json_data=payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def update_gewerbe_owner(  # noqa: PLR0913
         ctx: Context,
         public_id: str = Field(description="Gewerbeanmeldung publicId"),
@@ -211,7 +215,7 @@ def register_gewerbe_registration_tools(mcp):
         )
         return api._make_request("PATCH", _gewerbe_url(f"{public_id}/"), json_data=payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def suggest_gewerbe_activity(
         ctx: Context,
         public_id: str = Field(description="Gewerbeanmeldung publicId"),
@@ -226,7 +230,7 @@ def register_gewerbe_registration_tools(mcp):
         api = ctx.request_context.lifespan_context.get("api")
         return api._make_request("POST", _gewerbe_url(f"{public_id}/suggest-activity/"), json_data={"draft": draft})
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def generate_gewerbe_document(
         ctx: Context,
         public_id: str = Field(description="Gewerbeanmeldung publicId"),
@@ -241,7 +245,7 @@ def register_gewerbe_registration_tools(mcp):
         api = ctx.request_context.lifespan_context.get("api")
         return api._make_request("POST", _gewerbe_url(f"{public_id}/documents/"), json_data={})
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_gewerbe_document_preview(
         ctx: Context,
         public_id: str = Field(description="Gewerbeanmeldung publicId"),
@@ -255,7 +259,7 @@ def register_gewerbe_registration_tools(mcp):
             return {"error": "No preview available. Generate the document first."}
         return Image(data=base64.b64decode(preview), format="jpeg")
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_gewerbe_trade_office(
         ctx: Context,
         public_id: str = Field(description="Gewerbeanmeldung publicId"),

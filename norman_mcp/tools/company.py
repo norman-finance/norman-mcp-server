@@ -210,9 +210,9 @@ def register_company_tools(mcp):
     @mcp.tool(
         title="Trigger DATEV Export",
         annotations=ToolAnnotations(
-            readOnlyHint=True,
+            readOnlyHint=False,
             destructiveHint=False,
-            idempotentHint=False,
+            idempotentHint=True,
             openWorldHint=False,
         ),
     )
@@ -221,6 +221,18 @@ def register_company_tools(mcp):
         date_from: str = Field(description="Start date for export in YYYY-MM-DD format"),
         date_to: str = Field(description="End date for export in YYYY-MM-DD format"),
         include_documents: bool = Field(default=True, description="Whether to include attached documents in the ZIP"),
+        advisor_number: Optional[str] = Field(
+            default=None,
+            description="DATEV advisor number; uses the value saved on the company when omitted",
+        ),
+        client_number: Optional[str] = Field(
+            default=None,
+            description="DATEV client/Mandant number; uses the value saved on the company when omitted",
+        ),
+        skr_variant: Optional[str] = Field(
+            default=None,
+            description="SKR03 or SKR04; uses the company's chart of accounts when omitted",
+        ),
     ) -> Dict[str, Any]:
         """
         Trigger a DATEV export for the company's transactions in the specified period.
@@ -233,15 +245,35 @@ def register_company_tools(mcp):
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
         
-        export_url = urljoin(
-            config.api_base_url,
-            f"api/v1/companies/{company_id}/accounting/datev-export/"
-        )
+        company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
+        company = api._make_request("GET", company_url)
+        if company.get("error"):
+            return company
+
+        resolved_advisor_number = advisor_number or company.get("datevAdvisorNumber")
+        resolved_client_number = client_number or company.get("datevClientNumber")
+        if not resolved_advisor_number or not resolved_client_number:
+            return {
+                "error": "DATEV advisor number and client number are required.",
+                "action": (
+                    "Provide advisor_number and client_number, or save them on the company "
+                    "with update_company_details first."
+                ),
+            }
+
+        resolved_skr_variant = skr_variant or str(company.get("chartOfAccounts") or "SKR04").upper()
+        if resolved_skr_variant not in {"SKR03", "SKR04"}:
+            return {"error": "skr_variant must be SKR03 or SKR04."}
+
+        export_url = urljoin(config.api_base_url, "api/v1/accounting/datev-export/")
         
         export_data = {
             "dateFrom": date_from,
             "dateTo": date_to,
             "includeDocuments": include_documents,
+            "advisorNumber": resolved_advisor_number,
+            "clientNumber": resolved_client_number,
+            "skrVariant": resolved_skr_variant,
         }
         
         return api._make_request("POST", export_url, json_data=export_data)

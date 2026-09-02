@@ -5,6 +5,7 @@ from urllib.parse import urljoin
 
 from norman_mcp.context import Context
 from mcp.server.fastmcp.utilities.types import Image
+from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from norman_mcp import config
@@ -20,6 +21,11 @@ INCORPORATION_CHOICE_TYPES = (
     "notarization-types",
     "notarization-timeframes",
 )
+
+READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=False, destructiveHint=False)
+WRITE = ToolAnnotations(readOnlyHint=False, openWorldHint=False, destructiveHint=False)
+DESTRUCTIVE_WRITE = ToolAnnotations(readOnlyHint=False, openWorldHint=False, destructiveHint=True)
+EXTERNAL_IRREVERSIBLE_WRITE = ToolAnnotations(readOnlyHint=False, openWorldHint=True, destructiveHint=True)
 
 
 def _incorporations_url(path: str = "") -> str:
@@ -45,7 +51,7 @@ def register_incorporation_tools(mcp):
     freelancer default) so bookkeeping and taxes are set up correctly from the start.
     """
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_incorporation(ctx: Context) -> dict[str, Any]:
         """Get the user's active company incorporation (GmbH/UG founding), if any.
 
@@ -56,7 +62,7 @@ def register_incorporation_tools(mcp):
         api = ctx.request_context.lifespan_context.get("api")
         return api._make_request("GET", _incorporations_url("my/"))
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_incorporation_choices(
         ctx: Context,
         choice_type: str = Field(
@@ -73,7 +79,7 @@ def register_incorporation_tools(mcp):
             return {"choices": response}
         return response
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def create_incorporation(
         ctx: Context,
         legal_form: str | None = Field(default=None, description="'ug' or 'gmbh' if already known"),
@@ -84,12 +90,15 @@ def register_incorporation_tools(mcp):
         Section 1/5 begins here. Save `publicId` from the response for all subsequent calls.
         Fails with a validation error if an active incorporation already exists —
         use get_incorporation and continue it instead.
+
+        When legal_form is ug or gmbh, Norman also switches the user's account to the
+        corresponding corporate type and provisions the SKR04 chart of accounts.
         """
         api = ctx.request_context.lifespan_context.get("api")
         payload = _clean({"legalForm": legal_form, "locale": locale, "source": NORMAN_AGENT_SOURCE})
         return api._make_request("POST", _incorporations_url(), json_data=payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def update_incorporation_company(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),
@@ -141,7 +150,7 @@ def register_incorporation_tools(mcp):
         )
         return api._make_request("PATCH", _incorporations_url(f"{public_id}/"), json_data=payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def update_incorporation_capital(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),
@@ -162,7 +171,7 @@ def register_incorporation_tools(mcp):
             json_data={"shareCapital": share_capital},
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def add_incorporation_shareholder(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),
@@ -225,7 +234,7 @@ def register_incorporation_tools(mcp):
         )
         return api._make_request("POST", _incorporations_url(f"{public_id}/shareholders/"), json_data=payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def update_incorporation_shareholder(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),
@@ -268,7 +277,7 @@ def register_incorporation_tools(mcp):
             json_data=payload,
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=EXTERNAL_IRREVERSIBLE_WRITE)
     async def invite_incorporation_shareholder(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),
@@ -288,7 +297,7 @@ def register_incorporation_tools(mcp):
             json_data=_clean({"email": email}),
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTRUCTIVE_WRITE)
     async def remove_incorporation_shareholder(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),
@@ -301,7 +310,7 @@ def register_incorporation_tools(mcp):
             _incorporations_url(f"{public_id}/shareholders/{shareholder_public_id}/"),
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def set_incorporation_agreement(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),
@@ -321,7 +330,7 @@ def register_incorporation_tools(mcp):
             json_data={"agreementType": agreement_type},
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def update_incorporation_notary_preferences(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),
@@ -343,7 +352,7 @@ def register_incorporation_tools(mcp):
         )
         return api._make_request("PATCH", _incorporations_url(f"{public_id}/"), json_data=payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def generate_incorporation_documents(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),
@@ -365,7 +374,7 @@ def register_incorporation_tools(mcp):
                 document.pop("previewImage", None)
         return response
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_incorporation_document_preview(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),
@@ -382,7 +391,7 @@ def register_incorporation_tools(mcp):
                 return Image(data=base64.b64decode(document["previewImage"]), format="jpeg")
         return {"error": f"No preview available for '{document_type}'. Generate the documents first."}
 
-    @mcp.tool()
+    @mcp.tool(annotations=EXTERNAL_IRREVERSIBLE_WRITE)
     async def match_incorporation_notaries(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),
@@ -390,7 +399,8 @@ def register_incorporation_tools(mcp):
         """Get up to 3 notaries matching the collected preferences (online capability, city).
 
         Present them to the user as options; they can pick one or request a match without
-        picking (the Norman team assigns one).
+        picking (the Norman team assigns one). The first call records this stage, notifies
+        Norman's incorporation team and may enrich the private directory from public web sources.
         """
         api = ctx.request_context.lifespan_context.get("api")
         response = api._make_request("GET", _incorporations_url(f"{public_id}/notary-matches/"))
@@ -398,7 +408,7 @@ def register_incorporation_tools(mcp):
             return {"notaries": response}
         return response
 
-    @mcp.tool()
+    @mcp.tool(annotations=EXTERNAL_IRREVERSIBLE_WRITE)
     async def request_incorporation_notary(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),
@@ -426,7 +436,7 @@ def register_incorporation_tools(mcp):
             json_data=payload,
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def suggest_incorporation_purpose(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),
@@ -447,7 +457,7 @@ def register_incorporation_tools(mcp):
             json_data={"draft": draft},
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def check_incorporation_name(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),
@@ -471,7 +481,7 @@ def register_incorporation_tools(mcp):
             json_data=payload,
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITE)
     async def complete_incorporation_step(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),

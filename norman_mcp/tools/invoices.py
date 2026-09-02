@@ -393,9 +393,9 @@ def register_invoice_tools(mcp):
         title="Send Invoice via Email",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=False,
-            openWorldHint=False,
+            openWorldHint=True,
         ),
     )
     async def send_invoice(
@@ -449,9 +449,9 @@ def register_invoice_tools(mcp):
         title="Send Overdue Payment Reminder",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=False,
-            openWorldHint=False,
+            openWorldHint=True,
         ),
     )
     async def send_invoice_overdue_reminder(
