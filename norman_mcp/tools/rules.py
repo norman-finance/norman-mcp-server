@@ -444,9 +444,9 @@ def register_rule_tools(mcp):
         title="Approve Rule Execution",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=True,
-            openWorldHint=False,
+            openWorldHint=True,
         ),
     )
     async def approve_rule_execution(
