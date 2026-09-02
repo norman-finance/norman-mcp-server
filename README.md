@@ -61,6 +61,36 @@ Once connected, talk to your books in plain language:
 
 <br/>
 
+### Interactive UI inside your AI assistant
+
+Norman is more than a collection of background tools. In MCP Apps-compatible
+ChatGPT and Claude clients, Norman can render focused accounting workspaces
+directly inside the conversation. You can filter and inspect the underlying
+data, move between related views, and use **Ask AI** to continue the discussion
+with the current accounting context.
+
+| Interactive workspace | Use case |
+|:--|:--|
+| **Document Review** | Review uploaded invoices and receipts, find documents that still need a transaction match, and inspect linked records. |
+| **Reconciliation Cockpit** | Find transactions with missing documents, missing categories, or accounts from a previous SKR before month-end or year-end close. |
+| **Ledger Explorer** | Browse the chart of accounts, inspect balances, and drill into the postings behind an account. |
+| **Tax Preview & Submission** | Review the Finanzamt test PDF, tax lines, period, total, and readiness checks before filing. Submission is a separate explicit action and stays disabled until the user confirms the preview. |
+
+Try prompts such as:
+
+- *"Open my Document Review for the last 60 days."*
+- *"Show my Reconciliation Cockpit and highlight missing documents or categories."*
+- *"Open the Ledger Explorer and show the postings for account 1200."*
+- *"Open my VAT return for July, generate the Finanzamt test preview, and explain anything I should review before submission."*
+
+The Norman API remains the source of truth. Opening or filtering a workspace
+does not change accounting data. Binding actions, including tax submission,
+remain separate MCP tool calls with their normal confirmation and permission
+checks. Clients without MCP Apps support receive the same underlying results as
+structured or text tool output.
+
+<br/>
+
 ### 🏢 Starting a company
 
 Found a German **GmbH or UG (haftungsbeschränkt)** end-to-end — Norman collects the data, prepares the documents, and hands off to a notary:
@@ -133,8 +163,8 @@ Before connecting, [create a free Norman account](https://app.norman.finance/sig
 2. Click **Add**
 3. Find and connect: **Norman Finance**
 
-MCP Apps-compatible Claude hosts can also open Norman's read-only **Document
-Review**, **Reconciliation Cockpit**, and **Ledger Explorer** directly in the
+MCP Apps-compatible Claude hosts can open Norman's [interactive accounting
+workspaces](#interactive-ui-inside-your-ai-assistant) directly in the
 conversation. Other Claude clients receive the same data as normal tool output.
 </details>
 
@@ -162,9 +192,10 @@ claude /plugin install github:norman-finance/norman-mcp-server
 
 1. Install it from the official [ChatGPT Plugins Directory](https://chatgpt.com/plugins/plugin_asdk_app_6981ec32565481919b1c5a1627b1e330).
 
-The plugin includes interactive, read-only views for reviewing documents,
-reconciliation issues, and Ledger accounts. The accounting API remains the
-source of truth; write actions still require their normal tools and approvals.
+The plugin includes Norman's [interactive accounting
+workspaces](#interactive-ui-inside-your-ai-assistant), including Document
+Review, Reconciliation, Ledger Explorer, and the explicit tax preview and
+submission flow.
 
 </details>
 
