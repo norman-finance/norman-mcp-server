@@ -1,10 +1,11 @@
-"""Read-only MCP Apps for Norman's public connector.
+"""Portable MCP Apps for Norman's public connector.
 
 The tools in this module deliberately reuse Norman's existing REST API.  The
 API remains authoritative; the embedded UI only presents compact, normalized
 read models.  Data tools stay useful in hosts without MCP Apps support, while
 the matching render tools progressively enhance the result in compatible
-hosts such as ChatGPT and Claude.
+hosts such as ChatGPT and Claude.  Binding actions remain explicit tool calls;
+the tax UI never submits while rendering or previewing a report.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from norman_mcp import config
 from norman_mcp.context import Context
 
 APP_RESOURCE_URI = "ui://norman/accounting-workbench-v3.html"
+TAX_APP_RESOURCE_URI = "ui://norman/tax-filing-v1.html"
 APP_MIME_TYPE = "text/html;profile=mcp-app"
 
 READ_ONLY = ToolAnnotations(
@@ -193,11 +195,103 @@ def _posting_row(item: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+_SUBMITTED_TAX_STATUSES = {"SUBMIT", "SUBMITTED", "FILED", "SUBMIT_AND_PAID"}
+
+
+def _tax_line_rows(report: Dict[str, Any], limit: int = 80) -> list[Dict[str, Any]]:
+    raw_lines = _first(report, "tax_lines", "taxLines", default={})
+    candidates: list[tuple[str, Any]] = []
+    if isinstance(raw_lines, dict):
+        line_items = _first(raw_lines, "lineItems", "line_items", default=None)
+        if isinstance(line_items, list):
+            candidates.extend((str(index + 1), item) for index, item in enumerate(line_items))
+        else:
+            candidates.extend((str(key), value) for key, value in raw_lines.items())
+    elif isinstance(raw_lines, list):
+        candidates.extend((str(index + 1), item) for index, item in enumerate(raw_lines))
+
+    rows: list[Dict[str, Any]] = []
+    for fallback_code, value in candidates:
+        if not isinstance(value, dict):
+            continue
+        category = _first(value, "category", default={})
+        category_name = _name(category)
+        code = str(
+            _first(
+                value,
+                "positionNumber",
+                "position_number",
+                "code",
+                default=fallback_code,
+            )
+        )
+        label = str(
+            _first(value, "description", "label", "name", default="")
+            or category_name
+            or fallback_code
+        )
+        rows.append(
+            {
+                "code": code,
+                "label": label,
+                "net": _first(value, "netAmount", "net_amount", default=None),
+                "tax": _first(
+                    value,
+                    "taxAmount",
+                    "tax_amount",
+                    "totalVatAmount",
+                    "total_vat_amount",
+                    default=None,
+                ),
+                "gross": _first(
+                    value,
+                    "grossAmount",
+                    "gross_amount",
+                    "amount",
+                    "value",
+                    default=None,
+                ),
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def _tax_report_data(report: Dict[str, Any]) -> Dict[str, Any]:
+    status = str(_first(report, "status", default=""))
+    return {
+        "id": str(_first(report, "pk", "public_id", "publicId", default="")),
+        "type": str(_first(report, "type", default="")),
+        "typeName": str(_first(report, "type_name", "typeName", default="Tax report")),
+        "referenceName": str(
+            _first(report, "reference_name", "referenceName", default="Tax report")
+        ),
+        "dateFrom": str(_first(report, "date_from", "dateFrom", default="")),
+        "dateTo": str(_first(report, "date_to", "dateTo", default="")),
+        "dateDue": str(_first(report, "date_due", "dateDue", default="")),
+        "submissionDate": str(
+            _first(report, "submission_date", "submissionDate", default="") or ""
+        ),
+        "status": status,
+        "statusName": str(_first(report, "status_name", "statusName", default=status or "Draft")),
+        "total": _first(report, "total", default="0"),
+        "currency": _currency(_first(report, "currency", default="EUR")),
+        "reportFile": str(_first(report, "report_file", "reportFile", default="") or ""),
+        "submitted": status.upper() in _SUBMITTED_TAX_STATUSES,
+    }
+
+
 def _error_view(view: str, title: str, error: Any) -> Dict[str, Any]:
     return {"view": view, "title": title, "error": str(error), "items": [], "summary": {}}
 
 
-def _render_result(view: str, title: str, payload: Dict[str, Any]) -> CallToolResult:
+def _render_result(
+    view: str,
+    title: str,
+    payload: Dict[str, Any],
+    widget_meta: Optional[Dict[str, Any]] = None,
+) -> CallToolResult:
     data = dict(payload)
     data["view"] = view
     data["title"] = title
@@ -215,21 +309,23 @@ def _render_result(view: str, title: str, payload: Dict[str, Any]) -> CallToolRe
             )
         ],
         structuredContent=data,
-        _meta={"norman/view": view},
+        _meta={"norman/view": view, **(widget_meta or {})},
     )
 
 
-def _render_meta(invoking: str, invoked: str) -> Dict[str, Any]:
+def _render_meta(
+    invoking: str, invoked: str, resource_uri: str = APP_RESOURCE_URI
+) -> Dict[str, Any]:
     return {
-        "ui": {"resourceUri": APP_RESOURCE_URI},
-        "openai/outputTemplate": APP_RESOURCE_URI,
+        "ui": {"resourceUri": resource_uri},
+        "openai/outputTemplate": resource_uri,
         "openai/toolInvocation/invoking": invoking,
         "openai/toolInvocation/invoked": invoked,
     }
 
 
 def register_public_apps(mcp: Any) -> None:
-    """Register the public connector's portable accounting workbench."""
+    """Register the public connector's portable accounting and tax views."""
 
     @mcp.resource(
         APP_RESOURCE_URI,
@@ -239,14 +335,14 @@ def register_public_apps(mcp: Any) -> None:
         mime_type=APP_MIME_TYPE,
         meta={
             "ui": {
-                "prefersBorder": True,
+                "prefersBorder": False,
                 "csp": {"connectDomains": [], "resourceDomains": []},
             },
             "openai/widgetDescription": (
                 "A read-only Norman accounting workbench for reviewing documents, "
                 "reconciliation issues and Ledger account postings."
             ),
-            "openai/widgetPrefersBorder": True,
+            "openai/widgetPrefersBorder": False,
             "openai/widgetCSP": {
                 "connect_domains": [],
                 "resource_domains": [],
@@ -255,6 +351,179 @@ def register_public_apps(mcp: Any) -> None:
     )
     async def accounting_workbench() -> str:
         return (Path(__file__).with_name("accounting_workbench.html")).read_text(encoding="utf-8")
+
+    @mcp.resource(
+        TAX_APP_RESOURCE_URI,
+        name="norman-tax-filing",
+        title="Norman Tax Filing",
+        description="Interactive Finanzamt preview and explicitly confirmed submission flow.",
+        mime_type=APP_MIME_TYPE,
+        meta={
+            "ui": {
+                "prefersBorder": False,
+                "csp": {"connectDomains": [], "resourceDomains": []},
+            },
+            "openai/widgetDescription": (
+                "A Norman tax filing view for reviewing a test Finanzamt preview and, "
+                "only after explicit user confirmation, submitting the selected report."
+            ),
+            "openai/widgetPrefersBorder": False,
+            "openai/widgetCSP": {"connect_domains": [], "resource_domains": []},
+        },
+    )
+    async def tax_filing() -> str:
+        return (Path(__file__).with_name("tax_filing.html")).read_text(encoding="utf-8")
+
+    async def load_tax_filing(
+        ctx: Context, report_id: str, *, generate_preview: bool
+    ) -> tuple[Dict[str, Any], Optional[str]]:
+        api, company_id, error = _api_and_company(ctx)
+        if error:
+            return _error_view("tax-filing", "Tax filing", error["error"]), None
+        report_id = str(report_id or "").strip()
+        if not report_id:
+            return _error_view("tax-filing", "Tax filing", "A report ID is required."), None
+
+        endpoint = f"taxes/reports/{report_id}/"
+        response = await api.arequest("GET", _company_url(company_id, endpoint))
+        if not isinstance(response, dict) or response.get("error"):
+            message = (
+                response.get("error") if isinstance(response, dict) else "Invalid report response"
+            )
+            return _error_view("tax-filing", "Tax filing", message), None
+
+        report = _tax_report_data(response)
+        rows = _tax_line_rows(response)
+        preview: Dict[str, Any] = {
+            "available": False,
+            "mimeType": "image/jpeg",
+            "downloadUrl": "",
+            "error": "",
+        }
+        preview_image: Optional[str] = None
+
+        if generate_preview and not report["submitted"]:
+            preview_response = await api.arequest(
+                "POST",
+                _company_url(company_id, f"taxes/reports/{report_id}/generate-preview-url/"),
+            )
+            if isinstance(preview_response, dict) and not preview_response.get("error"):
+                preview_image = str(preview_response.get("previewImage") or "") or None
+                preview.update(
+                    {
+                        "available": bool(preview_response.get("downloadUrl") and preview_image),
+                        "mimeType": str(preview_response.get("mimeType") or "image/jpeg"),
+                        "downloadUrl": str(preview_response.get("downloadUrl") or ""),
+                    }
+                )
+                if not preview["available"]:
+                    preview["error"] = "The preview service returned incomplete data."
+            else:
+                preview["error"] = str(
+                    preview_response.get("error", "Preview generation failed")
+                    if isinstance(preview_response, dict)
+                    else "Preview generation failed"
+                )
+
+        submitted_download_url = ""
+        if report["submitted"] and report["reportFile"]:
+            download_response = await api.arequest(
+                "GET",
+                _company_url(company_id, f"taxes/reports/{report_id}/download/"),
+            )
+            if isinstance(download_response, dict):
+                submitted_download_url = str(download_response.get("url") or "")
+
+        can_submit = bool(preview["available"] and not report["submitted"])
+        data = {
+            "view": "tax-filing",
+            "title": "Tax filing",
+            "section": "preview",
+            "report": report,
+            "preview": preview,
+            "submittedDownloadUrl": submitted_download_url,
+            "items": rows,
+            "summary": {"lines": len(rows)},
+            "canSubmit": can_submit,
+            "checks": [
+                {"label": "Tax report loaded", "complete": True},
+                {"label": "Test preview generated", "complete": bool(preview["available"])},
+                {"label": "Not previously submitted", "complete": not report["submitted"]},
+            ],
+        }
+        return data, preview_image
+
+    @mcp.tool(title="Get Tax Filing Data", annotations=READ_ONLY)
+    async def get_tax_filing_data(
+        ctx: Context,
+        report_id: str = Field(description="Public ID of the tax report to review"),
+    ) -> Dict[str, Any]:
+        """Get a compact test-preview and submission-readiness view for one tax report."""
+        data, _preview_image = await load_tax_filing(ctx, report_id, generate_preview=True)
+        return data
+
+    @mcp.tool(title="Get Tax Submission Status Data", annotations=READ_ONLY)
+    async def get_tax_submission_status_data(
+        ctx: Context,
+        report_id: str = Field(description="Public ID of the tax report to refresh"),
+    ) -> Dict[str, Any]:
+        """Refresh filing status after a submission attempt without creating a new preview."""
+        data, _preview_image = await load_tax_filing(ctx, report_id, generate_preview=False)
+        data["section"] = "submission"
+        return data
+
+    @mcp.tool(
+        title="Render Tax Preview",
+        description=(
+            "Open a test Finanzamt preview for a tax report. This never submits the report. "
+            "Call this directly with the report ID."
+        ),
+        annotations=READ_ONLY,
+        meta=_render_meta(
+            "Generating Finanzamt preview…",
+            "Tax preview ready",
+            TAX_APP_RESOURCE_URI,
+        ),
+    )
+    async def render_tax_preview(
+        ctx: Context,
+        report_id: str = Field(description="Public ID of the tax report to preview"),
+    ) -> CallToolResult:
+        data, preview_image = await load_tax_filing(ctx, report_id, generate_preview=True)
+        data["section"] = "preview"
+        return _render_result(
+            "tax-filing",
+            "Tax filing",
+            data,
+            {"norman/previewImage": preview_image} if preview_image else None,
+        )
+
+    @mcp.tool(
+        title="Render Tax Submission",
+        description=(
+            "Open the confirmation step for a tax report. Rendering never submits anything. "
+            "The user must review the generated test preview, check the explicit confirmation "
+            "box and invoke the destructive submission tool from the UI."
+        ),
+        annotations=READ_ONLY,
+        meta=_render_meta(
+            "Preparing tax submission review…",
+            "Submission review ready",
+            TAX_APP_RESOURCE_URI,
+        ),
+    )
+    async def render_tax_submission(
+        ctx: Context,
+        report_id: str = Field(description="Public ID of the tax report to review for submission"),
+    ) -> CallToolResult:
+        data, preview_image = await load_tax_filing(ctx, report_id, generate_preview=True)
+        data["section"] = "submission"
+        return _render_result(
+            "tax-filing",
+            "Tax filing",
+            data,
+            {"norman/previewImage": preview_image} if preview_image else None,
+        )
 
     @mcp.tool(title="Get Document Review Data", annotations=READ_ONLY)
     async def get_document_review_data(

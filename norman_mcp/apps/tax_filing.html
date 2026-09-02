@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Norman Tax Filing</title>
+  <style>
+    :root { color-scheme:light dark; --ink:#171717; --muted:#6d6d6d; --line:#dededc; --panel:#f7f7f5; --accent:#111; --bad:#9b2c2c; --warn:#8a5a00; --good:#17643b; --surface:#fff; }
+    @media (prefers-color-scheme:dark) { :root { --ink:#f5f5f2; --muted:#aaa; --line:#3b3b38; --panel:#222220; --accent:#fff; --bad:#ff9a9a; --warn:#ffc565; --good:#7ee2a8; --surface:#171716; } }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-width:0; width:100%; }
+    body { background:var(--surface); color:var(--ink); font:14px/1.5 "Plus Jakarta Sans",ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    button,input { appearance:none; -webkit-appearance:none; border-radius:0; font:inherit; }
+    button { color:inherit; }
+    button:focus-visible,input:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+    .app { min-height:420px; min-width:0; overflow:hidden; padding:20px; position:relative; }
+    .top { align-items:flex-start; display:flex; gap:16px; justify-content:space-between; }
+    h1 { font-size:22px; font-weight:650; letter-spacing:-.02em; line-height:1.2; margin:0; }
+    h2 { font-size:16px; font-weight:650; margin:0; }
+    .eyebrow { color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.12em; margin-bottom:6px; text-transform:uppercase; }
+    .primary,.ghost,.tab { background:transparent; border:0; cursor:pointer; white-space:nowrap; }
+    .primary { background:var(--accent); border:1px solid var(--accent); color:var(--surface); font-weight:650; padding:9px 14px; }
+    .primary:hover { opacity:.82; }
+    .primary:disabled { background:var(--line); border-color:var(--line); color:var(--muted); cursor:not-allowed; opacity:1; }
+    .ghost { border:1px solid var(--line); padding:8px 12px; }
+    .ghost:hover { border-color:var(--ink); }
+    .tabs { border-bottom:1px solid var(--line); display:flex; gap:24px; margin:22px 0 20px; overflow:auto; }
+    .tab { border-bottom:2px solid transparent; color:var(--muted); margin-bottom:-1px; padding:0 0 10px; }
+    .tab:hover,.tab.active { color:var(--ink); }
+    .tab.active { border-bottom-color:var(--ink); font-weight:650; }
+    .overview { border:1px solid var(--line); display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); margin-bottom:18px; }
+    .metric { border-right:1px solid var(--line); min-width:0; padding:12px 14px; }
+    .metric:last-child { border-right:0; }
+    .metric strong { display:block; font-size:17px; font-weight:650; line-height:1.3; overflow-wrap:anywhere; }
+    .metric span { color:var(--muted); display:block; font-size:10px; letter-spacing:.05em; margin-top:3px; text-transform:uppercase; }
+    .notice { border:1px solid var(--line); margin-bottom:18px; padding:12px 14px; }
+    .notice strong { display:block; margin-bottom:2px; }
+    .notice.warn { border-left:3px solid var(--warn); }
+    .notice.good { border-left:3px solid var(--good); }
+    .notice.bad { border-left:3px solid var(--bad); color:var(--bad); }
+    .preview-grid { display:grid; gap:18px; grid-template-columns:minmax(0,1fr); }
+    .section-head { align-items:center; display:flex; gap:12px; justify-content:space-between; margin-bottom:12px; }
+    .paper { align-items:flex-start; background:var(--panel); border:1px solid var(--line); display:flex; justify-content:center; min-height:360px; overflow:auto; padding:16px; }
+    .paper img { background:#fff; box-shadow:0 1px 4px rgb(0 0 0 / 14%); display:block; height:auto; max-width:min(100%,620px); }
+    .placeholder { align-self:center; color:var(--muted); max-width:340px; text-align:center; }
+    .table-wrap { border:1px solid var(--line); max-width:100%; overflow:auto; }
+    table { border-collapse:collapse; min-width:420px; width:100%; }
+    th { color:var(--muted); font-size:10px; font-weight:650; letter-spacing:.08em; text-align:left; text-transform:uppercase; }
+    th,td { border-bottom:1px solid var(--line); padding:11px 12px; vertical-align:top; }
+    tr:last-child td { border-bottom:0; }
+    .num { font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; }
+    .submission-grid { display:grid; gap:18px; grid-template-columns:minmax(0,1fr) minmax(280px,.55fr); }
+    .checks { border:1px solid var(--line); }
+    .check { align-items:center; border-bottom:1px solid var(--line); display:flex; gap:10px; padding:13px 14px; }
+    .check:last-child { border-bottom:0; }
+    .mark { align-items:center; border:1px solid var(--line); display:inline-flex; flex:0 0 18px; height:18px; justify-content:center; width:18px; }
+    .check.complete .mark { background:var(--ink); border-color:var(--ink); color:var(--surface); }
+    .check.complete .mark::after { content:"✓"; font-size:11px; font-weight:700; }
+    .confirm-panel { background:var(--panel); border:1px solid var(--line); padding:16px; }
+    .confirm { align-items:flex-start; cursor:pointer; display:flex; gap:10px; margin:16px 0; }
+    .confirm input { background:var(--surface); border:1px solid var(--ink); flex:0 0 18px; height:18px; margin:2px 0 0; width:18px; }
+    .confirm input:checked { background:var(--ink); box-shadow:inset 0 0 0 4px var(--surface); }
+    .confirm-panel .primary { width:100%; }
+    .muted { color:var(--muted); }
+    .status { font-size:12px; margin-top:10px; min-height:18px; }
+    .status.bad { color:var(--bad); }
+    .loading { align-items:center; background:color-mix(in srgb,var(--surface) 88%,transparent); display:none; inset:0; justify-content:center; position:absolute; z-index:3; }
+    .loading.show { display:flex; }
+    @media (max-width:760px) { .app{padding:14px}.top{display:block}.top .primary{margin-top:12px}.overview{grid-template-columns:repeat(2,minmax(0,1fr))}.metric:nth-child(even){border-right:0}.metric:nth-child(n+3){border-top:1px solid var(--line)}.submission-grid{grid-template-columns:1fr}.tabs{gap:18px} }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div id="loading" class="loading">Working…</div>
+    <div class="top">
+      <div><div class="eyebrow">Norman Finance</div><h1 id="title">Tax filing</h1></div>
+      <button id="ask" class="primary" type="button">Ask AI</button>
+    </div>
+    <nav class="tabs" aria-label="Tax filing steps">
+      <button class="tab" data-section="preview" type="button">1. Preview</button>
+      <button class="tab" data-section="submission" type="button">2. Submission</button>
+    </nav>
+    <section id="content" aria-live="polite"><div class="notice">Waiting for Norman tax data…</div></section>
+  </main>
+  <script>
+    (() => {
+      const state={data:null,section:"preview",confirmed:false,previewImage:"",pending:new Map(),requestId:1,bridgeReady:false};
+      const title=document.getElementById("title");
+      const content=document.getElementById("content");
+      const loading=document.getElementById("loading");
+      const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
+      const date=value=>value?esc(String(value).slice(0,10)):"—";
+      const money=(value,currency="EUR")=>{const parsed=Number(value??0);try{return new Intl.NumberFormat(document.documentElement.lang||"en",{style:"currency",currency:currency||"EUR"}).format(Number.isFinite(parsed)?parsed:0)}catch{return `${Number.isFinite(parsed)?parsed.toFixed(2):value} ${currency||""}`.trim()}};
+      const getStructured=result=>{if(result?.structuredContent)return result.structuredContent;const text=result?.content?.find?.(item=>item.type==="text")?.text;if(text){try{return JSON.parse(text)}catch{}}return result};
+      function request(method,params,timeout=12000){const id=state.requestId++;window.parent.postMessage({jsonrpc:"2.0",id,method,params},"*");return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{state.pending.delete(id);reject(new Error("Host request timed out"))},timeout);state.pending.set(id,{resolve,reject,timer})})}
+      async function initializeApp(){try{await request("ui/initialize",{protocolVersion:"2026-01-26",appInfo:{name:"Norman Tax Filing",version:"1.0.0"},appCapabilities:{availableDisplayModes:["inline"]}},5000);state.bridgeReady=true;window.parent.postMessage({jsonrpc:"2.0",method:"ui/notifications/initialized",params:{}},"*")}catch{}}
+      async function callTool(name,args={}){if(state.bridgeReady||!window.openai?.callTool)return request("tools/call",{name,arguments:args});return window.openai.callTool(name,args)}
+      async function sendMessage(prompt){if(state.bridgeReady||!window.openai?.sendFollowUpMessage)return request("ui/message",{role:"user",content:[{type:"text",text:prompt}]},5000);return window.openai.sendFollowUpMessage({prompt})}
+      async function openLink(url){if(!url)return;if(state.bridgeReady)return request("ui/open-link",{url},5000);if(window.openai?.openExternal)return window.openai.openExternal({href:url});window.open(url,"_blank","noopener,noreferrer")}
+      function showLoading(show){loading.classList.toggle("show",show)}
+      function mergeToolData(data,meta={}){if(!data||typeof data!=="object")return;state.data=data;state.section=data.section||state.section;const image=meta?.["norman/previewImage"]||data.previewImage;if(image)state.previewImage=image;render()}
+      function overview(report={}){const period=report.dateFrom&&report.dateTo?`${date(report.dateFrom)} – ${date(report.dateTo)}`:"—";return `<div class="overview"><div class="metric"><strong>${esc(report.typeName||report.type||"Tax report")}</strong><span>Report</span></div><div class="metric"><strong>${period}</strong><span>Period</span></div><div class="metric"><strong>${date(report.dateDue)}</strong><span>Due date</span></div><div class="metric"><strong>${money(report.total,report.currency)}</strong><span>Total</span></div></div>`}
+      function imageSource(){if(!state.previewImage)return "";if(state.previewImage.startsWith("data:"))return state.previewImage;return `data:${state.data?.preview?.mimeType||"image/jpeg"};base64,${state.previewImage}`}
+      function lineTable(){const rows=state.data?.items||[];if(!rows.length)return '<div class="notice">No detailed tax lines were returned for this report.</div>';return `<div class="table-wrap"><table><thead><tr><th>Line</th><th>Description</th><th class="num">Net</th><th class="num">VAT</th><th class="num">Gross</th></tr></thead><tbody>${rows.map(row=>`<tr><td>${esc(row.code)}</td><td>${esc(row.label)}</td><td class="num">${row.net==null?"—":money(row.net,state.data.report.currency)}</td><td class="num">${row.tax==null?"—":money(row.tax,state.data.report.currency)}</td><td class="num">${row.gross==null?"—":money(row.gross,state.data.report.currency)}</td></tr>`).join("")}</tbody></table></div>`}
+      function previewView(){const data=state.data,report=data.report||{},preview=data.preview||{};if(report.submitted){return `<div class="notice good"><strong>Already submitted</strong>This report was filed${report.submissionDate?` on ${date(report.submissionDate)}`:""}. The submitted document is the authoritative copy.</div>${data.submittedDownloadUrl?`<button class="ghost open-link" data-url="${esc(data.submittedDownloadUrl)}" type="button">Download submitted PDF</button>`:""}`};const src=imageSource();return `<div class="notice"><strong>Test preview</strong>This preview uses ELSTER test mode and does not submit anything to the Finanzamt.</div>${preview.error?`<div class="notice bad">${esc(preview.error)}</div>`:""}<div class="preview-grid"><div><div class="section-head"><h2>Finanzamt preview</h2>${preview.downloadUrl?`<button class="ghost open-link" data-url="${esc(preview.downloadUrl)}" type="button">Download PDF</button>`:""}</div><div class="paper">${src?`<img src="${esc(src)}" alt="First page of the Finanzamt test preview">`:'<div class="placeholder">Preview image is unavailable. Resolve the reported issue before continuing to submission.</div>'}</div></div><aside><div class="section-head"><h2>Tax lines</h2></div>${lineTable()}</aside></div>`}
+      function submissionView(){const data=state.data,report=data.report||{};if(report.submitted){return `<div class="notice good"><strong>Submission completed</strong>${esc(report.statusName||"Filed")}${report.submissionDate?` · ${date(report.submissionDate)}`:""}</div>${data.submittedDownloadUrl?`<button class="ghost open-link" data-url="${esc(data.submittedDownloadUrl)}" type="button">Download submitted PDF</button>`:""}`};const checks=(data.checks||[]).map(check=>`<div class="check ${check.complete?"complete":""}"><span class="mark" aria-hidden="true"></span><span>${esc(check.label)}</span></div>`).join("");return `<div class="notice warn"><strong>Binding submission</strong>Submitting sends this report to the Finanzamt. It cannot be undone from Norman.</div><div class="submission-grid"><div><div class="section-head"><h2>Readiness</h2></div><div class="checks">${checks}</div></div><aside class="confirm-panel"><h2>Confirm submission</h2><p class="muted">Open and review the complete test PDF before continuing. Norman is a calculation tool; you remain responsible for the filing.</p><label class="confirm"><input id="confirm" type="checkbox" ${state.confirmed?"checked":""} ${data.canSubmit?"":"disabled"}><span>I reviewed the Finanzamt preview and confirm that this report should be submitted.</span></label><button id="submit" class="primary" type="button" ${data.canSubmit&&state.confirmed?"":"disabled"}>Submit to Finanzamt</button><div id="action-status" class="status ${data.canSubmit?"":"bad"}">${data.canSubmit?"A separate host confirmation may be shown.":"A valid test preview is required before submission."}</div></aside></div>`}
+      function render(){const data=state.data;if(!data||typeof data!=="object")return;title.textContent=data.report?.referenceName||data.title||"Tax filing";document.querySelectorAll(".tab").forEach(tab=>tab.classList.toggle("active",tab.dataset.section===state.section));if(data.error)content.innerHTML=`<div class="notice bad">${esc(data.error)}</div>`;else content.innerHTML=`${overview(data.report)}${state.section==="submission"?submissionView():previewView()}`;bind()}
+      function bind(){document.querySelectorAll(".open-link").forEach(button=>button.addEventListener("click",()=>openLink(button.dataset.url)));document.getElementById("confirm")?.addEventListener("change",event=>{state.confirmed=event.target.checked;render()});document.getElementById("submit")?.addEventListener("click",submitReport)}
+      async function submitReport(){const reportId=state.data?.report?.id;if(!reportId||!state.confirmed||!state.data?.canSubmit)return;showLoading(true);try{const result=await callTool("submit_tax_report",{report_id:reportId});const raw=getStructured(result);if(result?.isError||raw?.error)throw new Error(raw?.message||raw?.error||"Submission failed");const refreshed=await callTool("get_tax_submission_status_data",{report_id:reportId});const refreshedData=getStructured(refreshed);state.confirmed=false;mergeToolData({...state.data,...refreshedData,section:"submission"},refreshed?._meta||{});const status=document.getElementById("action-status");if(status&&!refreshedData?.report?.submitted)status.textContent="Submission was accepted; final status is still updating."}catch(error){const status=document.getElementById("action-status");if(status){status.classList.add("bad");status.textContent=error?.message||String(error)}}finally{showLoading(false)}}
+      document.querySelectorAll(".tab").forEach(tab=>tab.addEventListener("click",()=>{state.section=tab.dataset.section;render()}));
+      document.getElementById("ask").addEventListener("click",()=>sendMessage(`Review Norman tax report ${state.data?.report?.id||""}. Explain the figures, blockers and next safe step. Do not submit or change anything without my explicit confirmation.`));
+      window.addEventListener("message",event=>{if(event.source!==window.parent)return;const message=event.data;if(!message||message.jsonrpc!=="2.0")return;if(message.id!==undefined&&state.pending.has(message.id)){const pending=state.pending.get(message.id);state.pending.delete(message.id);clearTimeout(pending.timer);message.error?pending.reject(message.error):pending.resolve(message.result);return}if(message.method==="ui/notifications/tool-result")mergeToolData(message.params?.structuredContent,message.params?._meta||{})},{passive:true});
+      initializeApp();
+      if(window.openai?.toolOutput)mergeToolData(window.openai.toolOutput,window.openai.toolResponseMetadata||{});
+    })();
+  </script>
+</body>
+</html>
