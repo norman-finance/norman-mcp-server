@@ -3,8 +3,8 @@
       <img width="140px" src="https://github.com/user-attachments/assets/d2cb1df3-69f1-460e-b675-beb677577b06" alt="Norman" />
    </a>
    <h1>Norman MCP Server</h1>
-   <p>German accounting, from daily transactions to the annual close, inside your AI assistant.<br/>
-   Norman connects invoicing, SKR03/SKR04 bookkeeping, the Ledger, assets, taxes, and company workflows to any MCP-compatible AI.</p>
+   <p>AI-powered bookkeeping, accounting, and taxes, inside your AI assistant.<br/>
+   Norman connects invoicing, transactions, receipts, ledgers, reports, taxes, and company workflows to any MCP-compatible AI.</p>
    <br/>
    <p>
       <img src="https://img.shields.io/badge/Protocol-MCP-black?style=flat-square" alt="MCP" />
@@ -50,6 +50,8 @@
 **Company Formation** — Found a German **GmbH or UG**: collect the founders' data, check the name against the Handelsregister, generate the founding documents (Musterprotokoll, Gesellschafterliste), match with a notary, and track every step through to registration
 
 **Documents** — Create receipts, invoices, and supporting documents from Norman upload references, HTTPS URLs, small base64 payloads, and structured metadata
+
+Norman is built as a multi-market accounting platform. Market-specific capabilities are added as Norman expands; current German coverage includes SKR03/SKR04, DATEV, ELSTER, ZUGFeRD, and GmbH/UG workflows.
 
 <br/>
 

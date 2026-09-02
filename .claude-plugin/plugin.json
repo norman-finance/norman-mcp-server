@@ -1,6 +1,6 @@
 {
   "name": "norman-finance",
-  "description": "German accounting via MCP: invoices, transactions, vendors, SKR03/SKR04 ledgers, assets, annual close, documents, and ELSTER tax previews.",
+  "description": "AI-powered bookkeeping, accounting, invoicing, and tax workflows through MCP.",
   "version": "1.0.0",
   "author": {
     "name": "Norman Finance",
