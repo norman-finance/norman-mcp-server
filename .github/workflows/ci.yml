@@ -86,7 +86,6 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: root
           key: ${{ secrets.SSH_KEY }}
-          script_stop: true
           script: |
             set -eu
             service="norman_mcp"
