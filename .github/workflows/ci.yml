@@ -93,18 +93,47 @@ jobs:
             image="ghcr.io/${{ steps.image.outputs.lowercase }}/norman-mcp-server:${{ github.sha }}"
 
             diagnostics() {
-              docker service inspect "$service" --pretty || true
+              # Never print the full service spec here: it contains runtime
+              # environment variables and can expose credentials in CI logs.
+              docker service inspect "$service" \
+                --format 'UpdateStatus={{if .UpdateStatus}}{{.UpdateStatus.State}}: {{.UpdateStatus.Message}}{{else}}unknown{{end}}' || true
+              docker service inspect "$service" \
+                --format 'Image={{.Spec.TaskTemplate.ContainerSpec.Image}}' || true
               docker service ps "$service" --no-trunc || true
               docker service logs "$service" --tail 200 || true
             }
 
             docker service update "$service" --image "$image" --with-registry-auth
 
-            state=$(docker service inspect "$service" --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{else}}unknown{{end}}')
+            # `docker service update` can report "Service converged" a few
+            # seconds before Swarm changes UpdateStatus from updating to
+            # completed. Wait for the terminal state instead of failing that
+            # successful deployment race.
+            state="unknown"
+            attempt=0
+            while [ "$attempt" -lt 60 ]; do
+              state=$(docker service inspect "$service" \
+                --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{else}}unknown{{end}}' 2>/dev/null || echo unknown)
+
+              case "$state" in
+                completed)
+                  break
+                  ;;
+                rollback_started|rollback_paused|rollback_completed|paused)
+                  echo "Deployment entered a failure state: $state" >&2
+                  diagnostics
+                  exit 1
+                  ;;
+              esac
+
+              attempt=$((attempt + 1))
+              sleep 2
+            done
+
             running_image=$(docker service inspect "$service" --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}')
 
             if [ "$state" != "completed" ]; then
-              echo "Deployment did not complete successfully: update state is $state" >&2
+              echo "Deployment did not reach completed state within 120 seconds: $state" >&2
               diagnostics
               exit 1
             fi
