@@ -12,6 +12,7 @@ from mcp.types import CallToolResult
 from norman_mcp.apps.public import (
     APP_MIME_TYPE,
     APP_RESOURCE_URI,
+    TAX_APP_RESOURCE_URI,
     register_public_apps,
 )
 
@@ -52,6 +53,37 @@ class FakeApi:
 
     async def arequest(self, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
         self.requests.append((method, url, kwargs))
+        if url.endswith("/taxes/reports/report-1/generate-preview-url/"):
+            return {
+                "downloadUrl": "https://api.norman.finance/previews/report-1.pdf",
+                "previewImage": "dGVzdC1wcmV2aWV3",
+                "mimeType": "image/jpeg",
+            }
+        if url.endswith("/taxes/reports/report-1/"):
+            return {
+                "pk": "report-1",
+                "type": "ADVANCE_SALEX_TAX",
+                "type_name": "Advance VAT return",
+                "reference_name": "UStVA July 2026",
+                "date_from": "2026-07-01",
+                "date_to": "2026-07-31",
+                "date_due": "2026-08-10",
+                "submission_date": None,
+                "status": "DRAFT",
+                "status_name": "Draft",
+                "total": "119.00",
+                "currency": "EUR",
+                "report_file": None,
+                "tax_lines": {
+                    "81": {
+                        "positionNumber": "81",
+                        "description": "Taxable sales",
+                        "netAmount": "100.00",
+                        "taxAmount": "19.00",
+                        "grossAmount": "119.00",
+                    }
+                },
+            }
         if url.endswith("/attachments/"):
             return {
                 "results": [
@@ -127,10 +159,17 @@ def test_registers_portable_resource_and_decoupled_tools() -> None:
     mcp, _api = _registered()
 
     assert APP_RESOURCE_URI in mcp.resources
+    assert TAX_APP_RESOURCE_URI in mcp.resources
     assert mcp.resource_options[APP_RESOURCE_URI]["mime_type"] == APP_MIME_TYPE
+    assert mcp.resource_options[TAX_APP_RESOURCE_URI]["mime_type"] == APP_MIME_TYPE
     assert mcp.resource_options[APP_RESOURCE_URI]["meta"]["ui"]["csp"] == {
         "connectDomains": [],
         "resourceDomains": [],
+    }
+    assert mcp.resource_options[APP_RESOURCE_URI]["meta"]["ui"]["prefersBorder"] is False
+    assert mcp.resource_options[TAX_APP_RESOURCE_URI]["meta"]["ui"] == {
+        "prefersBorder": False,
+        "csp": {"connectDomains": [], "resourceDomains": []},
     }
     assert {
         "get_document_review_data",
@@ -139,6 +178,10 @@ def test_registers_portable_resource_and_decoupled_tools() -> None:
         "render_reconciliation_cockpit",
         "get_ledger_explorer_data",
         "render_ledger_explorer",
+        "get_tax_filing_data",
+        "get_tax_submission_status_data",
+        "render_tax_preview",
+        "render_tax_submission",
     } == set(mcp.tools)
     for name in (
         "render_document_review",
@@ -148,6 +191,10 @@ def test_registers_portable_resource_and_decoupled_tools() -> None:
         meta = mcp.tool_options[name]["meta"]
         assert meta["ui"]["resourceUri"] == APP_RESOURCE_URI
         assert meta["openai/outputTemplate"] == APP_RESOURCE_URI
+    for name in ("render_tax_preview", "render_tax_submission"):
+        meta = mcp.tool_options[name]["meta"]
+        assert meta["ui"]["resourceUri"] == TAX_APP_RESOURCE_URI
+        assert meta["openai/outputTemplate"] == TAX_APP_RESOURCE_URI
 
 
 def test_widget_is_self_contained_and_uses_standard_bridge() -> None:
@@ -162,6 +209,35 @@ def test_widget_is_self_contained_and_uses_standard_bridge() -> None:
     assert "state.bridgeReady=true" in html
     assert 'request("tools/call"' in html
     assert 'request("ui/message"' in html
+    assert "https://" not in html
+
+
+def test_widget_uses_flat_norman_layout_without_wasting_table_width() -> None:
+    mcp, _api = _registered()
+    html = asyncio.run(mcp.resources[APP_RESOURCE_URI]())
+
+    assert "Plus Jakarta Sans" in html
+    assert "border-radius:999px" not in html
+    assert "border-radius:8px" not in html
+    assert ".detail.with-inspector" in html
+    assert 'class="detail ${inspector?"with-inspector":""}"' in html
+
+
+def test_tax_widget_uses_portable_bridge_and_requires_explicit_confirmation() -> None:
+    mcp, _api = _registered()
+    html = asyncio.run(mcp.resources[TAX_APP_RESOURCE_URI]())
+
+    assert "ui/notifications/tool-result" in html
+    assert 'request("ui/initialize"' in html
+    assert 'request("tools/call"' in html
+    assert 'request("ui/message"' in html
+    assert 'request("ui/open-link"' in html
+    assert 'callTool("submit_tax_report"' in html
+    assert "I reviewed the Finanzamt preview" in html
+    assert "if(!reportId||!state.confirmed||!state.data?.canSubmit)return" in html
+    assert "toolResponseMetadata" in html
+    assert "border-radius:999px" not in html
+    assert "border-radius:8px" not in html
     assert "https://" not in html
 
 
@@ -222,6 +298,77 @@ def test_ledger_data_drills_down_without_mutation() -> None:
     assert all(method == "GET" for method, _url, _kwargs in api.requests)
 
 
+def test_tax_data_generates_preview_without_exposing_image_to_the_model() -> None:
+    mcp, api = _registered()
+
+    data = asyncio.run(mcp.tools["get_tax_filing_data"](_context(api), "report-1"))
+
+    assert data["report"] == {
+        "id": "report-1",
+        "type": "ADVANCE_SALEX_TAX",
+        "typeName": "Advance VAT return",
+        "referenceName": "UStVA July 2026",
+        "dateFrom": "2026-07-01",
+        "dateTo": "2026-07-31",
+        "dateDue": "2026-08-10",
+        "submissionDate": "",
+        "status": "DRAFT",
+        "statusName": "Draft",
+        "total": "119.00",
+        "currency": "EUR",
+        "reportFile": "",
+        "submitted": False,
+    }
+    assert data["preview"] == {
+        "available": True,
+        "mimeType": "image/jpeg",
+        "downloadUrl": "https://api.norman.finance/previews/report-1.pdf",
+        "error": "",
+    }
+    assert "previewImage" not in data
+    assert data["canSubmit"] is True
+    assert data["items"] == [
+        {
+            "code": "81",
+            "label": "Taxable sales",
+            "net": "100.00",
+            "tax": "19.00",
+            "gross": "119.00",
+        }
+    ]
+    assert [(method, url) for method, url, _kwargs in api.requests] == [
+        (
+            "GET",
+            "https://api.norman.finance/api/v1/companies/company-1/taxes/reports/report-1/",
+        ),
+        (
+            "POST",
+            "https://api.norman.finance/api/v1/companies/company-1/taxes/reports/report-1/"
+            "generate-preview-url/",
+        ),
+    ]
+
+
+def test_tax_rendering_never_calls_the_submission_endpoint() -> None:
+    mcp, api = _registered()
+    ctx = _context(api)
+
+    preview = asyncio.run(mcp.tools["render_tax_preview"](ctx, "report-1"))
+    submission = asyncio.run(mcp.tools["render_tax_submission"](ctx, "report-1"))
+
+    assert preview.structuredContent["section"] == "preview"
+    assert submission.structuredContent["section"] == "submission"
+    assert preview.meta == {
+        "norman/view": "tax-filing",
+        "norman/previewImage": "dGVzdC1wcmV2aWV3",
+    }
+    assert submission.meta == {
+        "norman/view": "tax-filing",
+        "norman/previewImage": "dGVzdC1wcmV2aWV3",
+    }
+    assert all("/submit-report/" not in url for _method, url, _kwargs in api.requests)
+
+
 def test_render_tools_return_structured_content_and_widget_only_meta() -> None:
     mcp, api = _registered()
     result = asyncio.run(
@@ -253,21 +400,31 @@ def test_app_contract_survives_real_mcp_protocol_serialization() -> None:
                 "render_document_review",
                 "render_reconciliation_cockpit",
                 "render_ledger_explorer",
+                "render_tax_preview",
+                "render_tax_submission",
             }
-            for tool in render_tools.values():
+            for name in (
+                "render_document_review",
+                "render_reconciliation_cockpit",
+                "render_ledger_explorer",
+            ):
+                tool = render_tools[name]
                 assert tool.meta["ui"]["resourceUri"] == APP_RESOURCE_URI
                 assert tool.meta["openai/outputTemplate"] == APP_RESOURCE_URI
+            for name in ("render_tax_preview", "render_tax_submission"):
+                tool = render_tools[name]
+                assert tool.meta["ui"]["resourceUri"] == TAX_APP_RESOURCE_URI
+                assert tool.meta["openai/outputTemplate"] == TAX_APP_RESOURCE_URI
 
             resources = await session.list_resources()
-            app_resource = next(
-                resource
-                for resource in resources.resources
-                if str(resource.uri) == APP_RESOURCE_URI
-            )
-            assert app_resource.mimeType == APP_MIME_TYPE
+            for uri in (APP_RESOURCE_URI, TAX_APP_RESOURCE_URI):
+                app_resource = next(
+                    resource for resource in resources.resources if str(resource.uri) == uri
+                )
+                assert app_resource.mimeType == APP_MIME_TYPE
 
-            content = await session.read_resource(APP_RESOURCE_URI)
-            assert content.contents[0].mimeType == APP_MIME_TYPE
-            assert "ui/notifications/tool-result" in content.contents[0].text
+                content = await session.read_resource(uri)
+                assert content.contents[0].mimeType == APP_MIME_TYPE
+                assert "ui/notifications/tool-result" in content.contents[0].text
 
     asyncio.run(exercise_protocol())
