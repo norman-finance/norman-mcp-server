@@ -19,7 +19,7 @@ from pydantic import Field
 from norman_mcp import config
 from norman_mcp.context import Context
 
-APP_RESOURCE_URI = "ui://norman/accounting-workbench-v2.html"
+APP_RESOURCE_URI = "ui://norman/accounting-workbench-v3.html"
 APP_MIME_TYPE = "text/html;profile=mcp-app"
 
 READ_ONLY = ToolAnnotations(

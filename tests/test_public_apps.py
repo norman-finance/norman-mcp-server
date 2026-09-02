@@ -165,6 +165,17 @@ def test_widget_is_self_contained_and_uses_standard_bridge() -> None:
     assert "https://" not in html
 
 
+def test_widget_uses_flat_norman_layout_without_wasting_table_width() -> None:
+    mcp, _api = _registered()
+    html = asyncio.run(mcp.resources[APP_RESOURCE_URI]())
+
+    assert "Plus Jakarta Sans" in html
+    assert "border-radius:999px" not in html
+    assert "border-radius:8px" not in html
+    assert ".detail.with-inspector" in html
+    assert 'class="detail ${inspector?"with-inspector":""}"' in html
+
+
 def test_document_and_reconciliation_data_are_compact_and_actionable() -> None:
     mcp, api = _registered()
     ctx = _context(api)

@@ -5,46 +5,58 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Norman Accounting Workbench</title>
   <style>
-    :root { color-scheme: light dark; --ink:#171717; --muted:#6b6b6b; --line:#e7e7e5; --panel:#f7f7f5; --accent:#111; --bad:#9b2c2c; --warn:#8a5a00; --good:#17643b; --surface:#fff; }
-    @media (prefers-color-scheme:dark) { :root { --ink:#f5f5f2; --muted:#aaa; --line:#363634; --panel:#222220; --accent:#fff; --bad:#ff9a9a; --warn:#ffc565; --good:#7ee2a8; --surface:#171716; } }
+    :root { color-scheme:light dark; --ink:#171717; --muted:#6d6d6d; --line:#dededc; --panel:#f7f7f5; --accent:#111; --bad:#9b2c2c; --warn:#8a5a00; --good:#17643b; --surface:#fff; }
+    @media (prefers-color-scheme:dark) { :root { --ink:#f5f5f2; --muted:#aaa; --line:#3b3b38; --panel:#222220; --accent:#fff; --bad:#ff9a9a; --warn:#ffc565; --good:#7ee2a8; --surface:#171716; } }
     * { box-sizing:border-box; }
-    body { margin:0; background:var(--surface); color:var(--ink); font:14px/1.45 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-    button,input,select { font:inherit; }
+    html,body { margin:0; min-width:0; width:100%; }
+    body { background:var(--surface); color:var(--ink); font:14px/1.5 "Plus Jakarta Sans",ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    button,input,select { appearance:none; -webkit-appearance:none; border-radius:0; font:inherit; }
     button { color:inherit; }
-    .app { min-height:360px; padding:18px; }
+    button:focus-visible,input:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+    .app { min-height:360px; min-width:0; overflow:hidden; padding:20px; }
     .top { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
-    h1 { font-size:20px; line-height:1.2; margin:0; }
-    .eyebrow { color:var(--muted); font-size:11px; font-weight:700; letter-spacing:.09em; margin-bottom:5px; text-transform:uppercase; }
-    .tabs { display:flex; gap:4px; margin:16px 0; padding-bottom:10px; border-bottom:1px solid var(--line); overflow:auto; }
-    .tab,.filter,.ghost,.primary { border:1px solid transparent; background:transparent; border-radius:999px; cursor:pointer; padding:7px 11px; white-space:nowrap; }
-    .tab:hover,.filter:hover,.ghost:hover { background:var(--panel); }
-    .tab.active,.filter.active { border-color:var(--ink); }
-    .primary { border-radius:6px; background:var(--accent); color:var(--surface); font-weight:650; }
-    .ghost { border-color:var(--line); border-radius:6px; }
-    .summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(115px,1fr)); gap:8px; margin-bottom:14px; }
-    .metric { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
-    .metric strong { display:block; font-size:19px; }
-    .metric span { color:var(--muted); font-size:12px; }
-    .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
-    .toolbar input { min-width:180px; flex:1; border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:6px; padding:8px 10px; }
-    .filters { display:flex; flex-wrap:wrap; gap:4px; }
-    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:8px; }
-    table { width:100%; border-collapse:collapse; min-width:650px; }
-    th { color:var(--muted); font-size:11px; letter-spacing:.04em; text-align:left; text-transform:uppercase; }
-    th,td { border-bottom:1px solid var(--line); padding:10px 12px; vertical-align:top; }
+    h1 { font-size:22px; font-weight:650; letter-spacing:-.02em; line-height:1.2; margin:0; }
+    .eyebrow { color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.12em; margin-bottom:6px; text-transform:uppercase; }
+    .tabs { border-bottom:1px solid var(--line); display:flex; gap:24px; margin:22px 0 20px; overflow:auto; }
+    .tab,.filter,.ghost,.primary { background:transparent; border:0; cursor:pointer; white-space:nowrap; }
+    .tab { border-bottom:2px solid transparent; color:var(--muted); margin-bottom:-1px; padding:0 0 10px; }
+    .tab:hover,.tab.active { color:var(--ink); }
+    .tab.active { border-bottom-color:var(--ink); font-weight:650; }
+    .primary { background:var(--accent); border:1px solid var(--accent); color:var(--surface); font-weight:650; padding:9px 14px; }
+    .primary:hover { opacity:.82; }
+    .ghost { border:1px solid var(--line); padding:7px 10px; }
+    .ghost:hover { border-color:var(--ink); }
+    .summary { border:1px solid var(--line); display:grid; grid-template-columns:repeat(auto-fit,minmax(112px,1fr)); margin-bottom:18px; }
+    .metric { background:var(--surface); border-right:1px solid var(--line); min-width:0; padding:12px 14px; }
+    .metric:last-child { border-right:0; }
+    .metric strong { display:block; font-size:20px; font-weight:650; line-height:1.25; }
+    .metric span { color:var(--muted); display:block; font-size:11px; margin-top:3px; text-transform:capitalize; }
+    .toolbar { align-items:flex-end; display:flex; flex-wrap:wrap; gap:18px; margin-bottom:16px; }
+    .toolbar input { background:var(--surface); border:0; border-bottom:1px solid var(--line); color:var(--ink); flex:1; min-width:190px; padding:8px 2px; }
+    .toolbar input:focus { border-bottom-color:var(--ink); }
+    .filters { display:flex; flex-wrap:wrap; gap:18px; }
+    .filter { border-bottom:2px solid transparent; color:var(--muted); padding:8px 0 6px; }
+    .filter:hover,.filter.active { color:var(--ink); }
+    .filter.active { border-bottom-color:var(--ink); font-weight:650; }
+    .table-wrap { border:1px solid var(--line); max-width:100%; overflow:auto; scrollbar-gutter:stable; }
+    table { border-collapse:collapse; min-width:720px; width:100%; }
+    th { color:var(--muted); font-size:10px; font-weight:650; letter-spacing:.08em; text-align:left; text-transform:uppercase; }
+    th,td { border-bottom:1px solid var(--line); padding:13px 14px; vertical-align:top; }
     tr:last-child td { border-bottom:0; }
     tbody tr[data-selectable="true"] { cursor:pointer; }
     tbody tr[data-selectable="true"]:hover { background:var(--panel); }
     .num { font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; }
-    .badge { display:inline-block; border:1px solid var(--line); border-radius:999px; font-size:11px; margin:1px 3px 1px 0; padding:2px 7px; white-space:nowrap; }
+    .badge { display:inline-block; border:1px solid var(--line); font-size:10px; margin:1px 3px 1px 0; padding:2px 6px; white-space:nowrap; }
     .badge.bad { border-color:color-mix(in srgb,var(--bad) 45%,transparent); color:var(--bad); }
     .badge.warn { border-color:color-mix(in srgb,var(--warn) 45%,transparent); color:var(--warn); }
     .badge.good { border-color:color-mix(in srgb,var(--good) 45%,transparent); color:var(--good); }
     .muted { color:var(--muted); }
-    .empty,.error { border:1px dashed var(--line); border-radius:8px; color:var(--muted); padding:30px; text-align:center; }
+    .empty,.error { border:1px solid var(--line); color:var(--muted); padding:30px; text-align:center; }
     .error { border-color:var(--bad); color:var(--bad); }
-    .detail { display:grid; grid-template-columns:minmax(0,1fr) 260px; gap:14px; }
-    .inspector { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
+    .detail { display:block; min-width:0; }
+    .detail > div { min-width:0; }
+    .detail.with-inspector { display:grid; gap:16px; grid-template-columns:minmax(0,1fr) 260px; }
+    .inspector { background:var(--panel); border:1px solid var(--line); padding:14px; }
     .inspector h2 { font-size:15px; margin:0 0 10px; }
     .kv { display:grid; grid-template-columns:90px 1fr; gap:6px 10px; margin-bottom:14px; }
     .kv dt { color:var(--muted); }
@@ -52,7 +64,7 @@
     .loading { align-items:center; background:color-mix(in srgb,var(--surface) 88%,transparent); display:none; inset:0; justify-content:center; position:absolute; z-index:3; }
     .loading.show { display:flex; }
     .shell { position:relative; }
-    @media (max-width:720px) { .app{padding:12px}.detail{grid-template-columns:1fr}.inspector{order:-1}.top{display:block}.primary{margin-top:10px} }
+    @media (max-width:720px) { .app{padding:14px}.detail.with-inspector{grid-template-columns:1fr}.inspector{order:-1}.top{display:block}.primary{margin-top:12px}.summary{grid-template-columns:repeat(2,minmax(0,1fr))}.metric:nth-child(even){border-right:0}.metric:nth-child(n+3){border-top:1px solid var(--line)}.tabs,.filters{gap:16px} }
   </style>
 </head>
 <body>
@@ -60,7 +72,7 @@
     <div id="loading" class="loading">Loading…</div>
     <div class="top">
       <div><div class="eyebrow">Norman Finance</div><h1 id="title">Accounting Workbench</h1></div>
-      <button id="ask" class="primary" type="button">Ask AI about this</button>
+      <button id="ask" class="primary" type="button">Ask AI</button>
     </div>
     <nav class="tabs" aria-label="Accounting views">
       <button class="tab" data-view="documents" type="button">Document Review</button>
@@ -139,7 +151,7 @@
         const selected=state.selected && (data.items||[]).find(item=>item.id===state.selected);
         const table=`<div class="table-wrap"><table><thead><tr><th>Document</th><th>Supplier</th><th>Date</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>${rows.map(item=>`<tr data-selectable="true" data-id="${esc(item.id)}"><td><strong>${esc(item.fileName||"Untitled")}</strong><br><span class="muted">${esc(item.type||"")}</span></td><td>${esc(item.brand||item.description||"—")}</td><td>${date(item.date)}</td><td class="num">${num(item.amount,item.currency)}</td><td><span class="badge ${item.linked?"good":"warn"}">${esc(item.status)}</span></td></tr>`).join("")}</tbody></table></div>`;
         const inspector=selected?`<aside class="inspector"><h2>${esc(selected.fileName)}</h2><dl class="kv"><dt>Supplier</dt><dd>${esc(selected.brand||"—")}</dd><dt>Number</dt><dd>${esc(selected.number||"—")}</dd><dt>VAT</dt><dd>${esc(selected.vatRate??"—")}%</dd><dt>Linked</dt><dd>${selected.linked?"Yes":"No"}</dd></dl><button class="ghost row-ask" data-kind="document" data-id="${esc(selected.id)}" type="button">Review in chat</button></aside>`:"";
-        return `${metrics(data.summary)}${toolbar([["all","All"],["unmatched","Needs match"],["linked","Linked"]])}<div class="detail"><div>${rows.length?table:'<div class="empty">No documents match this filter.</div>'}</div>${inspector}</div>`;
+        return `${metrics(data.summary)}${toolbar([["all","All"],["unmatched","Needs match"],["linked","Linked"]])}<div class="detail ${inspector?"with-inspector":""}"><div>${rows.length?table:'<div class="empty">No documents match this filter.</div>'}</div>${inspector}</div>`;
       }
       function reconciliationView(data) {
         const rows=(data.items||[]).filter(item => {
