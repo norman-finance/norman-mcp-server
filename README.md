@@ -3,8 +3,8 @@
       <img width="140px" src="https://github.com/user-attachments/assets/d2cb1df3-69f1-460e-b675-beb677577b06" alt="Norman" />
    </a>
    <h1>Norman MCP Server</h1>
-   <p>AI-powered bookkeeping, accounting, and taxes, inside your AI assistant.<br/>
-   Norman connects invoicing, transactions, receipts, ledgers, reports, taxes, and company workflows to any MCP-compatible AI.</p>
+   <p>Your finances, inside your AI assistant.<br/>
+   Norman connects your accounting, invoicing, and VAT filing directly to Claude, Cursor, and any MCP-compatible AI.</p>
    <br/>
    <p>
       <img src="https://img.shields.io/badge/Protocol-MCP-black?style=flat-square" alt="MCP" />
@@ -31,19 +31,13 @@
 
 **Invoicing** — Create, send, and track invoices including recurring and ZUGFeRD e-invoices
 
-**Daily bookkeeping** — Categorize transactions, split line items, match receipts, manage vendors, and verify entries
-
-**Company accounting** — Configure SKR03/SKR04 charts of accounts, inspect the accounting setup, create manual postings, and export DATEV data
-
-**Ledger & reports** — Review the journal, trial balance (SuSa), account sheets, open items, cash book, profit and loss, and balance sheet
-
-**Assets & annual close** — Maintain the asset register, calculate depreciation, add closing entries, and review annual-close workbooks
+**Bookkeeping** — Categorize transactions, match receipts, and verify entries
 
 **Automation rules** — "Always book Telekom to Internet costs": preview, create, and manage rules that categorize matching transactions automatically
 
 **Client Management** — Maintain your client database and contact details
 
-**Tax workflows** — Review tax reports, validate tax data, generate ELSTER previews, and track deadlines before an explicitly confirmed submission
+**Tax Filing** — Generate Finanzamt previews, file VAT returns, and track deadlines
 
 **Company Overview** — Check your balance, revenue, and financial health at a glance
 
@@ -51,19 +45,15 @@
 
 **Documents** — Create receipts, invoices, and supporting documents from Norman upload references, HTTPS URLs, small base64 payloads, and structured metadata
 
-Norman is built as a multi-market accounting platform. Market-specific capabilities are added as Norman expands; current German coverage includes SKR03/SKR04, DATEV, ELSTER, ZUGFeRD, and GmbH/UG workflows.
-
 <br/>
 
 ### 💬 Try asking
 
 Once connected, talk to your books in plain language:
 
-- *"Generate the ELSTER preview for last month's UStVA and show me what needs attention."*
+- *"Prepare and file my UStVA for last month."*
 - *"Send a €1,200 invoice to ACME for consulting."*
 - *"What did I spend on software this quarter?"*
-- *"Show the newest Ledger postings and explain the tax treatment."*
-- *"Review the 2025 trial balance before I start the annual close."*
 - *"Find tax deductions I might have missed."*
 - *"Which invoices are overdue? Send reminders."*
 
@@ -81,29 +71,6 @@ Found a German **GmbH or UG (haftungsbeschränkt)** end-to-end — Norman collec
 - *"What's left before my company is officially registered?"*
 
 > A GmbH or UG can keep its books with **SKR03 or SKR04**. Norman can provision the selected framework and preserve imported or custom accounts. Formation documents are drafts to prepare the notary appointment — not legal advice.
-
-<br/>
-
-### How company accounting fits together
-
-Transactions, vendors, assets, payroll, opening balances, and manual entries are the inputs. Norman turns them into balanced postings in the Ledger. The Ledger then powers the journal, SuSa, open items, cash book, P&L, balance sheet, year-end review, and company tax workflows.
-
-```text
-Transactions + Assets + Opening data + Manual entries
-                         │
-                         ▼
-                       Ledger
-                         │
-             ┌───────────┼───────────┐
-             ▼           ▼           ▼
-          Reports   Annual close   Tax previews
-```
-
-The remote MCP server is the recommended connection. It uses OAuth and keeps the active Norman company in the authenticated session.
-
-For tax workflows, **preview and submission are separate operations**. A client or agent should inspect the preview and ask for explicit user confirmation immediately before any irreversible filing or other external action.
-
-See [MCP priorities and parity roadmap](docs/MCP_ROADMAP.md) for shipped coverage and the next product priorities.
 
 <br/>
 

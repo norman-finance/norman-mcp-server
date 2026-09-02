@@ -1,7 +1,7 @@
 {
   "name": "norman-finance",
   "version": "1.0.0",
-  "description": "AI-powered bookkeeping, accounting, invoicing, and tax workflows through MCP.",
+  "description": "AI-powered bookkeeping and tax filing automation for entrepreneurs at the heart of the European economy.",
   "author": {
     "name": "Norman Finance",
     "email": "support@norman.finance"
@@ -11,16 +11,12 @@
   "license": "MIT",
   "keywords": [
     "finance",
-    "ai",
-    "automation",
     "bookkeeping",
     "accounting",
     "invoicing",
     "taxes",
-    "receipts",
-    "documents",
+    "german",
     "freelancer",
-    "ledger",
     "mcp",
     "oauth"
   ],

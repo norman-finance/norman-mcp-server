@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "finance.norman/mcp-server",
-  "title": "Norman Finance — AI Bookkeeping, Accounting & Taxes",
-  "description": "AI-powered bookkeeping and accounting via MCP: invoices, transactions, receipts, ledgers, reports, documents, taxes, and company workflows.",
+  "title": "Norman Finance — Accounting, Bookkeeping & Taxes (Germany)",
+  "description": "AI accounting for German businesses: bookkeeping, invoices, receipts, VAT & tax filing via ELSTER.",
   "icons": [
     {
       "src": "https://norman.finance/icon.png",

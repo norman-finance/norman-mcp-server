@@ -5,14 +5,14 @@
     "email": "support@norman.finance"
   },
   "metadata": {
-    "description": "AI-powered bookkeeping, accounting, invoicing, and tax workflows through MCP.",
+    "description": "AI-powered bookkeeping and tax filing automation for entrepreneurs at the heart of the European economy.",
     "version": "1.0.0"
   },
   "plugins": [
     {
       "name": "norman-finance",
       "source": "./",
-      "description": "Connect Norman Finance to your AI for bookkeeping, invoices, transactions, documents, ledgers, reports, and tax workflows.",
+      "description": "Connect to Norman Finance to manage clients, invoices, transactions, taxes, and documents from your AI chat.",
       "version": "1.0.0",
       "author": {
         "name": "Norman Finance"
@@ -22,16 +22,12 @@
       "license": "MIT",
       "keywords": [
         "finance",
-        "ai",
-        "automation",
         "bookkeeping",
         "accounting",
         "invoicing",
         "taxes",
-        "receipts",
-        "documents",
+        "german",
         "freelancer",
-        "ledger",
         "mcp",
         "oauth"
       ],
@@ -43,9 +39,7 @@
         "finanzamt",
         "umsatzsteuer",
         "kleinunternehmer",
-        "freiberufler",
-        "hauptbuch",
-        "jahresabschluss"
+        "freiberufler"
       ]
     }
   ]
