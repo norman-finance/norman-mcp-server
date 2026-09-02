@@ -86,7 +86,37 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: root
           key: ${{ secrets.SSH_KEY }}
-          script: docker service update norman_mcp --image ghcr.io/${{ steps.image.outputs.lowercase }}/norman-mcp-server:${{ github.sha }} --with-registry-auth
+          script_stop: true
+          script: |
+            set -eu
+            service="norman_mcp"
+            image="ghcr.io/${{ steps.image.outputs.lowercase }}/norman-mcp-server:${{ github.sha }}"
+
+            diagnostics() {
+              docker service inspect "$service" --pretty || true
+              docker service ps "$service" --no-trunc || true
+              docker service logs "$service" --tail 200 || true
+            }
+
+            docker service update "$service" --image "$image" --with-registry-auth
+
+            state=$(docker service inspect "$service" --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{else}}unknown{{end}}')
+            running_image=$(docker service inspect "$service" --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}')
+
+            if [ "$state" != "completed" ]; then
+              echo "Deployment did not complete successfully: update state is $state" >&2
+              diagnostics
+              exit 1
+            fi
+
+            case "$running_image" in
+              "$image"|"$image"@*) ;;
+              *)
+                echo "Deployment image mismatch: expected $image, running $running_image" >&2
+                diagnostics
+                exit 1
+                ;;
+            esac
 
       - name: finalize sentry release
         uses: getsentry/action-release@v1

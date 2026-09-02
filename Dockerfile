@@ -15,7 +15,8 @@ COPY . /app/
 
 # Install the package and additional dependencies
 RUN pip install -e . && \
-    pip install fastapi uvicorn pydantic pdf2image pillow requests sentry-sdk
+    pip install fastapi uvicorn pydantic pdf2image pillow requests sentry-sdk && \
+    python -c "import norman_mcp.server"
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
