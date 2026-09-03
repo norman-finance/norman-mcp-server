@@ -32,7 +32,6 @@ from mcp.server.auth.provider import (
     AuthorizationCode,
     AuthorizationParams,
     OAuthAuthorizationServerProvider,
-    RegistrationError,
     RefreshToken,
     construct_redirect_uri,
 )
@@ -299,27 +298,50 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
 
         return client
     
+    def add_redirect_uri(self, client_id: str, redirect_uri: str) -> None:
+        """Add a redirect URI to an existing client (for dynamic registration)."""
+        if not is_allowed_redirect_uri(redirect_uri):
+            logger.warning(f"Refusing to add disallowed redirect URI for {client_id[:8]}: {redirect_uri}")
+            return
+        client = self.clients.get(client_id)
+        if client and redirect_uri not in [str(uri) for uri in client.redirect_uris]:
+            # Create new client with updated redirect URIs
+            new_uris = list(client.redirect_uris) + [AnyUrl(redirect_uri)]
+            self.clients[client_id] = OAuthClientInformationFull(
+                client_id=client.client_id,
+                client_name=client.client_name,
+                client_secret=client.client_secret,
+                redirect_uris=new_uris,
+                token_endpoint_auth_method=client.token_endpoint_auth_method,
+                grant_types=client.grant_types,
+                response_types=client.response_types,
+                scope=client.scope,
+            )
+            logger.info(f"Added redirect URI for client {client_id[:8]}: {redirect_uri}")
+            self._save_state()
+
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         """Register a new OAuth client via Dynamic Client Registration.
 
-        Open DCR is intentional (MCP clients self-register). Validate only the
-        transport here; the SDK requires the authorization request to use an
-        exact redirect URI registered for this client.
+        Open DCR is intentional (MCP clients self-register), but we drop any
+        redirect URI that is not on the server allow-list so an attacker cannot
+        persist a code-exfiltration target. The authoritative check still runs
+        per /authorize request via validate_redirect_uri.
         """
-        dropped = [
-            str(uri)
-            for uri in (client_info.redirect_uris or [])
-            if not is_allowed_redirect_uri(str(uri))
-        ]
+        allowed_uris = [u for u in (client_info.redirect_uris or []) if is_allowed_redirect_uri(str(u))]
+        dropped = [str(u) for u in (client_info.redirect_uris or []) if not is_allowed_redirect_uri(str(u))]
         if dropped:
-            logger.warning(
-                "DCR for %s rejected %d disallowed redirect URI(s)",
-                client_info.client_id,
-                len(dropped),
-            )
-            raise RegistrationError(
-                error="invalid_redirect_uri",
-                error_description="One or more redirect_uris use an unsupported transport",
+            logger.warning(f"DCR for {client_info.client_id}: dropping disallowed redirect_uris: {dropped}")
+        if list(allowed_uris) != list(client_info.redirect_uris or []):
+            client_info = OAuthClientInformationFull(
+                client_id=client_info.client_id,
+                client_name=client_info.client_name,
+                client_secret=client_info.client_secret,
+                redirect_uris=allowed_uris,
+                token_endpoint_auth_method=client_info.token_endpoint_auth_method or "none",
+                grant_types=client_info.grant_types or ["authorization_code", "refresh_token"],
+                response_types=client_info.response_types or ["code"],
+                scope=client_info.scope,
             )
         if not client_info.scope or not any(s in client_info.scope for s in SUPPORTED_SCOPES):
             client_info = OAuthClientInformationFull(
@@ -344,7 +366,10 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         
         logger.info(f"Authorization request from client: {client.client_id[:8]}...")
         
+        # Dynamically add the redirect URI if not already registered
         redirect_uri_str = str(params.redirect_uri)
+        if redirect_uri_str not in [str(uri) for uri in client.redirect_uris]:
+            self.add_redirect_uri(client.client_id, redirect_uri_str)
         
         # Store state mapping for callback
         self.state_mapping[state] = {
