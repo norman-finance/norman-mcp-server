@@ -32,6 +32,7 @@ from mcp.server.auth.provider import (
     AuthorizationCode,
     AuthorizationParams,
     OAuthAuthorizationServerProvider,
+    RegistrationError,
     RefreshToken,
     construct_redirect_uri,
 )
@@ -323,25 +324,25 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         """Register a new OAuth client via Dynamic Client Registration.
 
-        Open DCR is intentional (MCP clients self-register), but we drop any
-        redirect URI that is not on the server allow-list so an attacker cannot
-        persist a code-exfiltration target. The authoritative check still runs
-        per /authorize request via validate_redirect_uri.
+        Open DCR is intentional (MCP clients self-register), but every redirect
+        URI must be on the server allow-list so an attacker cannot persist a
+        code-exfiltration target. The authoritative check still runs per
+        /authorize request via validate_redirect_uri.
         """
-        allowed_uris = [u for u in (client_info.redirect_uris or []) if is_allowed_redirect_uri(str(u))]
-        dropped = [str(u) for u in (client_info.redirect_uris or []) if not is_allowed_redirect_uri(str(u))]
+        dropped = [
+            str(uri)
+            for uri in (client_info.redirect_uris or [])
+            if not is_allowed_redirect_uri(str(uri))
+        ]
         if dropped:
-            logger.warning(f"DCR for {client_info.client_id}: dropping disallowed redirect_uris: {dropped}")
-        if list(allowed_uris) != list(client_info.redirect_uris or []):
-            client_info = OAuthClientInformationFull(
-                client_id=client_info.client_id,
-                client_name=client_info.client_name,
-                client_secret=client_info.client_secret,
-                redirect_uris=allowed_uris,
-                token_endpoint_auth_method=client_info.token_endpoint_auth_method or "none",
-                grant_types=client_info.grant_types or ["authorization_code", "refresh_token"],
-                response_types=client_info.response_types or ["code"],
-                scope=client_info.scope,
+            logger.warning(
+                "DCR for %s rejected %d disallowed redirect URI(s)",
+                client_info.client_id,
+                len(dropped),
+            )
+            raise RegistrationError(
+                error="invalid_redirect_uri",
+                error_description="One or more redirect_uris are not allowed",
             )
         if not client_info.scope or not any(s in client_info.scope for s in SUPPORTED_SCOPES):
             client_info = OAuthClientInformationFull(

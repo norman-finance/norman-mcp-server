@@ -1,7 +1,12 @@
 """Redirect-URI allow-list tests (OAuth authorization-code phishing defense)."""
 
-import pytest
+import asyncio
 
+import pytest
+from mcp.server.auth.provider import RegistrationError
+from mcp.shared.auth import OAuthClientInformationFull
+
+from norman_mcp.auth.provider import NormanOAuthProvider
 from norman_mcp.security.redirects import is_allowed_redirect_uri
 
 
@@ -16,6 +21,16 @@ def test_allows_known_connector_https_hosts():
     assert is_allowed_redirect_uri("https://claude.ai/api/mcp/auth_callback")
     # Subdomain of an allow-listed base domain.
     assert is_allowed_redirect_uri("https://mcp.norman.finance/oauth/callback")
+
+
+def test_allows_published_connector_callbacks_only():
+    assert is_allowed_redirect_uri("https://www.perplexity.ai/rest/connections/oauth_callback")
+    assert is_allowed_redirect_uri("https://vertexaisearch.cloud.google.com/oauth-redirect")
+
+    # Do not turn a single documented callback into trust for the entire
+    # vendor-controlled domain or for lookalike paths.
+    assert is_allowed_redirect_uri("https://www.perplexity.ai/attacker-callback") is False
+    assert is_allowed_redirect_uri("https://vertexaisearch.cloud.google.com/other") is False
 
 
 def test_allows_http_loopback_any_port():
@@ -63,3 +78,22 @@ def test_sdk_validate_patch_enforces_allowlist():
         fn(_DummyClient(), "https://attacker.com/steal")
 
     assert fn(_DummyClient(), "https://chatgpt.com/cb") == "https://chatgpt.com/cb"
+
+
+def test_dcr_rejects_disallowed_redirect_without_persisting_client():
+    provider = object.__new__(NormanOAuthProvider)
+    provider.clients = {}
+    provider._save_state = lambda: None
+    client = OAuthClientInformationFull(
+        client_id="untrusted-client",
+        redirect_uris=["https://attacker.example/callback"],
+        token_endpoint_auth_method="none",
+        grant_types=["authorization_code", "refresh_token"],
+        response_types=["code"],
+    )
+
+    with pytest.raises(RegistrationError) as exc_info:
+        asyncio.run(provider.register_client(client))
+
+    assert exc_info.value.error == "invalid_redirect_uri"
+    assert provider.clients == {}

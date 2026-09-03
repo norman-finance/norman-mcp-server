@@ -40,6 +40,15 @@ _DEFAULT_ALLOWED_HTTPS_HOSTS = {
     "claude.com",
 }
 
+# Connector callbacks published as exact redirect URIs by their vendors. Keep
+# these path-scoped instead of trusting the vendor's whole domain: with open
+# Dynamic Client Registration, every accepted redirect is a potential
+# authorization-code destination.
+_DEFAULT_ALLOWED_HTTPS_REDIRECT_URIS = {
+    "https://www.perplexity.ai/rest/connections/oauth_callback",
+    "https://vertexaisearch.cloud.google.com/oauth-redirect",
+}
+
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
@@ -86,6 +95,8 @@ def is_allowed_redirect_uri(uri: str) -> bool:
         # remote HTTP host is a valid code-exfiltration target.
         return host in _LOOPBACK_HOSTS
     if scheme == "https":
+        if uri in _DEFAULT_ALLOWED_HTTPS_REDIRECT_URIS:
+            return True
         return _host_is_allowed(host)
     if scheme and scheme not in ("http", "https"):
         # Custom scheme: native-app deep link (cursor://, vscode://, ...).
