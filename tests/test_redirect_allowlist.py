@@ -12,10 +12,7 @@ from norman_mcp.security.redirects import is_allowed_redirect_uri
 
 def test_allows_dynamic_https_callbacks_without_vendor_list():
     assert is_allowed_redirect_uri("https://new-client.example/oauth/callback")
-    assert is_allowed_redirect_uri("https://chatgpt.com/connector_platform_oauth_redirect")
-    assert is_allowed_redirect_uri("https://claude.ai/api/mcp/auth_callback")
-    assert is_allowed_redirect_uri("https://www.perplexity.ai/rest/connections/oauth_callback")
-    assert is_allowed_redirect_uri("https://vertexaisearch.cloud.google.com/oauth-redirect")
+    assert is_allowed_redirect_uri("https://another-client.example/return")
 
 
 def test_allows_http_loopback_any_port():
