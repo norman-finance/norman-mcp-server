@@ -14,7 +14,7 @@
    </p>
    <code>https://mcp.norman.finance/mcp</code>
    <br/><br/>
-   <strong>Claude</strong> &nbsp;·&nbsp; <strong>ChatGPT</strong> &nbsp;·&nbsp; <strong>Cursor</strong> &nbsp;·&nbsp; <strong>OpenClaw</strong> &nbsp;·&nbsp; <strong>n8n</strong> &nbsp;·&nbsp; <strong>Any MCP Client</strong>
+   <strong>Claude</strong> &nbsp;·&nbsp; <strong>ChatGPT</strong> &nbsp;·&nbsp; <strong>Gemini</strong> &nbsp;·&nbsp; <strong>Grok</strong> &nbsp;·&nbsp; <strong>Perplexity</strong> &nbsp;·&nbsp; <strong>Cursor</strong> &nbsp;·&nbsp; <strong>Any MCP Client</strong>
 </div>
 <br/>
 <div align="center">
@@ -197,6 +197,61 @@ workspaces](#interactive-ui-inside-your-ai-assistant), including Document
 Review, Reconciliation, Ledger Explorer, and the explicit tax preview and
 submission flow.
 
+</details>
+
+<details>
+<summary><strong>Gemini</strong></summary>
+<br/>
+
+**Gemini CLI extension**
+
+```bash
+gemini extensions install https://github.com/norman-finance/norman-mcp-server
+```
+
+Start Gemini CLI and authenticate the remote server when prompted, or run:
+
+```text
+/mcp auth norman-finance
+```
+
+**Gemini Spark custom app**
+
+Create a Spark, add a custom app, and use
+`https://mcp.norman.finance/mcp` as its MCP server URL. Availability depends on
+your Gemini account and region. See Google's [custom app
+guide](https://support.google.com/gemini/answer/17209137).
+</details>
+
+<details>
+<summary><strong>Perplexity</strong></summary>
+<br/>
+
+1. Open **Account settings → Connectors**
+2. Click **+ Custom Connector** and select **Remote**
+3. Enter **Norman Finance** and `https://mcp.norman.finance/mcp`
+4. Save the connector and complete Norman OAuth
+
+Organization administrators can share the remote connector with their team.
+</details>
+
+<details>
+<summary><strong>Grok</strong></summary>
+<br/>
+
+**Grok web**
+
+1. Go to [Grok Connectors](https://grok.com/connectors)
+2. Click **New Connector → Custom**
+3. Enter `https://mcp.norman.finance/mcp` and complete Norman OAuth
+
+**Grok CLI**
+
+```bash
+grok mcp add --transport http norman-finance https://mcp.norman.finance/mcp
+```
+
+Grok CLI also discovers this repository's `.mcp.json` automatically.
 </details>
 
 <details>
