@@ -78,42 +78,6 @@ def patched_build_metadata(*args, **kwargs):
     return metadata
 mcp.server.auth.routes.build_metadata = patched_build_metadata
 
-# Patch redirect-URI validation to an allow-list (Cursor, Inspector use random
-# loopback ports; ChatGPT/Claude use known HTTPS origins). This is the
-# authoritative gate against authorization-code phishing: the SDK calls it on
-# every /authorize request *before* the provider's authorize() runs, so an
-# attacker-controlled redirect (e.g. https://attacker.com/steal) is rejected
-# here regardless of what redirect_uris a client self-registered via DCR.
-from mcp.shared.auth import OAuthClientInformationFull, InvalidRedirectUriError
-from norman_mcp.security.redirects import is_allowed_redirect_uri
-
-def _flexible_validate_redirect_uri(self, redirect_uri):
-    """Validate a redirect URI against the server-level allow-list.
-
-    Security model (see norman_mcp.security.redirects):
-    - HTTP loopback (localhost/127.0.0.1/[::1], any port): accepted per RFC 8252
-    - Custom schemes (cursor://, etc.): accepted (native-app deep links)
-    - HTTPS: accepted ONLY for allow-listed connector hosts
-    - Everything else (incl. https to arbitrary hosts): rejected
-
-    Note: we deliberately do NOT trust the client's own registered redirect_uris
-    here — with open Dynamic Client Registration an attacker controls that list,
-    so the only meaningful check is the server-level allow-list above.
-    """
-    if redirect_uri is not None:
-        uri_str = str(redirect_uri)
-        if is_allowed_redirect_uri(uri_str):
-            return redirect_uri
-        raise InvalidRedirectUriError(f"redirect_uri not allowed: {uri_str}")
-    elif self.redirect_uris is not None and len(self.redirect_uris) == 1:
-        return self.redirect_uris[0]
-    else:
-        raise InvalidRedirectUriError(
-            "redirect_uri must be specified when client has multiple registered URIs"
-        )
-
-OAuthClientInformationFull.validate_redirect_uri = _flexible_validate_redirect_uri
-
 # Patch ClientAuthenticator to also extract client_id from Basic Auth header.
 # Some clients (e.g. n8n) send client_id only in the Authorization header,
 # but the MCP SDK only checks the form body.
