@@ -32,7 +32,6 @@ from mcp.server.auth.provider import (
     AuthorizationCode,
     AuthorizationParams,
     OAuthAuthorizationServerProvider,
-    RegistrationError,
     RefreshToken,
     construct_redirect_uri,
 )
@@ -324,28 +323,11 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         """Register a new OAuth client via Dynamic Client Registration.
 
-        Open DCR is intentional (MCP clients self-register), but every redirect
-        URI must be on the server allow-list. Reject the complete registration
-        if any URI is disallowed so the SDK can return the RFC 7591 error
-        response instead of rebuilding invalid metadata with no redirect URIs.
-        The authoritative check still runs per /authorize request via
-        validate_redirect_uri.
+        Open DCR is intentional (MCP clients self-register), so preserve the
+        metadata they submit and return a conforming RFC 7591 success response.
+        Redirect trust is enforced authoritatively on every /authorize request
+        via validate_redirect_uri, before an authorization code can be issued.
         """
-        disallowed_uris = [
-            str(uri)
-            for uri in (client_info.redirect_uris or [])
-            if not is_allowed_redirect_uri(str(uri))
-        ]
-        if disallowed_uris:
-            logger.warning(
-                "Rejecting DCR for %s: disallowed redirect_uris: %s",
-                client_info.client_id,
-                disallowed_uris,
-            )
-            raise RegistrationError(
-                error="invalid_redirect_uri",
-                error_description="One or more redirect_uris are not allowed",
-            )
         if not client_info.scope or not any(s in client_info.scope for s in SUPPORTED_SCOPES):
             client_info = OAuthClientInformationFull(
                 client_id=client_info.client_id,

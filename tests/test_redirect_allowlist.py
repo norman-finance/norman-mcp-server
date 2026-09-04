@@ -6,9 +6,7 @@ import json
 import pytest
 
 from mcp.server.auth.handlers.register import RegistrationHandler
-from mcp.server.auth.provider import RegistrationError
 from mcp.server.auth.settings import ClientRegistrationOptions
-from mcp.shared.auth import OAuthClientInformationFull
 from starlette.requests import Request
 
 from norman_mcp.auth.provider import NormanOAuthProvider
@@ -142,36 +140,12 @@ def test_dcr_handler_registers_dynamic_smithery_callback():
     assert response_body["client_id"] in handler.provider.clients
 
 
-def test_dcr_handler_returns_oauth_error_for_disallowed_redirect():
+def test_dcr_handler_accepts_dynamic_external_client_metadata():
     handler = _registration_handler()
 
     response = asyncio.run(_register_request(handler, "https://attacker.com/steal"))
 
-    assert response.status_code == 400
-    assert json.loads(response.body) == {
-        "error": "invalid_redirect_uri",
-        "error_description": "One or more redirect_uris are not allowed",
-    }
-    assert handler.provider.clients == {}
-
-
-def test_dcr_rejects_entire_registration_when_one_redirect_is_disallowed():
-    provider = _provider_without_external_state()
-    client_info = OAuthClientInformationFull(
-        client_id="mixed-redirect-client",
-        client_secret=None,
-        redirect_uris=[
-            "https://connect.smithery.ai/smithery-deployments/deployment-id/auth",
-            "https://attacker.com/steal",
-        ],
-        token_endpoint_auth_method="none",
-        grant_types=["authorization_code", "refresh_token"],
-        response_types=["code"],
-        scope="read",
-    )
-
-    with pytest.raises(RegistrationError) as exc_info:
-        asyncio.run(provider.register_client(client_info))
-
-    assert exc_info.value.error == "invalid_redirect_uri"
-    assert provider.clients == {}
+    assert response.status_code == 201
+    response_body = json.loads(response.body)
+    assert response_body["redirect_uris"] == ["https://attacker.com/steal"]
+    assert response_body["client_id"] in handler.provider.clients
