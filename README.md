@@ -371,6 +371,7 @@ Ready-to-use skills compatible with **Claude Code**, **OpenClaw**, and the [Agen
 <br/>
 
 <p align="center">
+   <a href="https://smithery.ai/servers/norman-finance/norman"><img src="https://smithery.ai/badge/norman-finance/norman" alt="smithery"></a>
    <a href="https://mcpbeat.com/mcp-servers/norman/mcp-server/"><img src="https://mcpbeat.com/badge/norman/mcp-server.svg" alt="mcpbeat"></a>
    <a href="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server"><img src="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server/badge" alt="Norman Finance MCP server" width="200" /></a>&nbsp;&nbsp;&nbsp;
 </p>
