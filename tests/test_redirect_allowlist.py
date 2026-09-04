@@ -1,7 +1,15 @@
 """Redirect-URI allow-list tests (OAuth authorization-code phishing defense)."""
 
+import asyncio
+import json
+
 import pytest
 
+from mcp.server.auth.handlers.register import RegistrationHandler
+from mcp.server.auth.settings import ClientRegistrationOptions
+from starlette.requests import Request
+
+from norman_mcp.auth.provider import NormanOAuthProvider
 from norman_mcp.security.redirects import is_allowed_redirect_uri
 
 
@@ -9,11 +17,15 @@ def test_rejects_external_https():
     # The reported attack: attacker-controlled HTTPS exfiltration target.
     assert is_allowed_redirect_uri("https://attacker.com/steal") is False
     assert is_allowed_redirect_uri("https://norman.finance.attacker.com/cb") is False
+    assert is_allowed_redirect_uri("https://connect.smithery.ai.attacker.com/auth") is False
 
 
 def test_allows_known_connector_https_hosts():
     assert is_allowed_redirect_uri("https://chatgpt.com/connector_platform_oauth_redirect")
     assert is_allowed_redirect_uri("https://claude.ai/api/mcp/auth_callback")
+    assert is_allowed_redirect_uri(
+        "https://connect.smithery.ai/smithery-deployments/deployment-id/auth"
+    )
     # Subdomain of an allow-listed base domain.
     assert is_allowed_redirect_uri("https://mcp.norman.finance/oauth/callback")
 
@@ -63,3 +75,77 @@ def test_sdk_validate_patch_enforces_allowlist():
         fn(_DummyClient(), "https://attacker.com/steal")
 
     assert fn(_DummyClient(), "https://chatgpt.com/cb") == "https://chatgpt.com/cb"
+
+
+def _provider_without_external_state() -> NormanOAuthProvider:
+    provider = object.__new__(NormanOAuthProvider)
+    provider.clients = {}
+    provider._save_state = lambda: None
+    return provider
+
+
+async def _register_request(handler: RegistrationHandler, redirect_uri: str):
+    body = json.dumps(
+        {
+            "client_name": "Connector test client",
+            "redirect_uris": [redirect_uri],
+            "token_endpoint_auth_method": "none",
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"],
+            "scope": "read",
+        }
+    ).encode()
+
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/register",
+            "headers": [(b"content-type", b"application/json")],
+        },
+        receive,
+    )
+    return await handler.handle(request)
+
+
+def _registration_handler() -> RegistrationHandler:
+    return RegistrationHandler(
+        provider=_provider_without_external_state(),
+        options=ClientRegistrationOptions(
+            enabled=True,
+            valid_scopes=["read"],
+            default_scopes=["read"],
+        ),
+    )
+
+
+def test_dcr_handler_registers_dynamic_smithery_callback():
+    handler = _registration_handler()
+
+    response = asyncio.run(
+        _register_request(
+            handler,
+            "https://connect.smithery.ai/smithery-deployments/deployment-id/auth",
+        )
+    )
+
+    assert response.status_code == 201
+    response_body = json.loads(response.body)
+    assert response_body["redirect_uris"] == [
+        "https://connect.smithery.ai/smithery-deployments/deployment-id/auth"
+    ]
+    assert response_body["client_id"] in handler.provider.clients
+
+
+def test_dcr_handler_accepts_dynamic_external_client_metadata():
+    handler = _registration_handler()
+
+    response = asyncio.run(_register_request(handler, "https://attacker.com/steal"))
+
+    assert response.status_code == 201
+    response_body = json.loads(response.body)
+    assert response_body["redirect_uris"] == ["https://attacker.com/steal"]
+    assert response_body["client_id"] in handler.provider.clients
