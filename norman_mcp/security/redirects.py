@@ -38,6 +38,7 @@ _DEFAULT_ALLOWED_HTTPS_HOSTS = {
     "chatgpt.com",
     "claude.ai",
     "claude.com",
+    "connect.smithery.ai",
 }
 
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
