@@ -91,8 +91,13 @@ def register_invoice_tools(mcp):
         
         Args:
             client_id: ID of the client for the invoice
-            items: List of invoice items, each containing name, quantity, rate, vatRate and total. 
+            items: List of invoice items, each containing name, quantity, rate, vatRate and total.
                 Example: [{"name": "Software Development", "quantity": 3, "rate": 30000, "vatRate": 19, "total": 1071}] // VAT rates might be 0, 7, 19. By default it's 19. Rate and total are in cents.
+                Optional per item: "description" (text printed under the name, max 500 chars),
+                "unit" (one of items, hours, days, kilograms, liters, meters, square_meters) and
+                "productId" (a catalog product's publicId from list_products). When a product is used,
+                copy its name, description, unit and vatRate onto the item and take rate from priceNet
+                (priceGross when is_vat_included is True).
             invoice_number: Optional invoice number (will be auto-generated if not provided)
             issued: Issue date in YYYY-MM-DD format
             due_to: Due date in YYYY-MM-DD format
@@ -247,7 +252,8 @@ def register_invoice_tools(mcp):
 
         Args:
             client_id: ID of the client for the invoice
-            items: List of invoice items, each containing name, quantity, rate, vatRate and total
+            items: List of invoice items, each containing name, quantity, rate, vatRate and total.
+                Optional per item: "description", "unit" and "productId", as in create_invoice.
             frequency_type: How often to generate invoices ("weekly", "monthly")
             frequency_unit: Number of units for frequency (e.g. 1 for monthly = every month, 2 = every 2 months)
             starts_from_date: Date to start generating invoices from (YYYY-MM-DD)

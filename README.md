@@ -37,6 +37,8 @@
 
 **Client Management** — Maintain your client database and contact details
 
+**Products & Services** — Keep a catalog of what you sell, with prices, VAT rates and units, and fill invoice lines from it
+
 **Tax Filing** — Generate Finanzamt previews, file VAT returns, and track deadlines
 
 **Company Overview** — Check your balance, revenue, and financial health at a glance
@@ -341,6 +343,7 @@ Ready-to-use skills compatible with **Claude Code**, **OpenClaw**, and the [Agen
 | `financial-overview` | Full dashboard — balance, transactions, invoices, and tax status |
 | `create-invoice` | Step-by-step invoice creation and sending |
 | `manage-clients` | List, create, and update client records |
+| `manage-products` | List, create, update, and archive catalog products; fill invoice lines from them |
 | `tax-report` | Review, preview, and file tax reports with the Finanzamt |
 | `categorize-transactions` | Categorize and verify bank transactions |
 | `find-receipts` | Find missing receipts from Gmail or email and attach them |
