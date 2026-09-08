@@ -108,6 +108,9 @@ def test_every_exposed_tool_sets_all_required_submission_hints() -> None:
 
 
 class _DatevApi:
+    async def arequest(self, method, url, params=None, json_data=None):
+        return self._make_request(method, url, params=params, json_data=json_data)
+
     company_id = "company-1"
 
     def __init__(self) -> None:

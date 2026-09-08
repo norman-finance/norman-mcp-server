@@ -2,7 +2,8 @@
 
 import norman_mcp
 from unittest.mock import patch
-from norman_mcp.server import Config, NormanAPI
+from norman_mcp.config.settings import Config
+from norman_mcp.api.client import NormanAPI
 
 
 def test_version():
@@ -28,7 +29,7 @@ def test_norman_api_class():
     """Test the NormanAPI class initialization without actual API calls."""
     # With missing credentials
     with patch.dict('os.environ', {'NORMAN_EMAIL': '', 'NORMAN_PASSWORD': ''}):
-        api = NormanAPI()
+        api = NormanAPI(authenticate_on_init=False)
         assert api.access_token is None
         assert api.refresh_token is None
         assert api.company_id is None 

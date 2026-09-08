@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 def register_company_tools(mcp):
     """Register all company-related tools with the MCP server."""
+    from norman_mcp.tools.financial_overview import register_financial_overview_tools
+
+    register_financial_overview_tools(mcp)
     
     @mcp.tool(
         title="Get Company Details",
@@ -31,7 +34,7 @@ def register_company_tools(mcp):
             return {"error": "No company available. Please authenticate first."}
         
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
-        return api._make_request("GET", company_url)
+        return await api.arequest("GET", company_url)
 
     @mcp.tool(
         title="Get Company Balance",
@@ -60,7 +63,7 @@ def register_company_tools(mcp):
             f"api/v1/companies/{company_id}/balance/"
         )
         
-        return api._make_request("GET", balance_url)
+        return await api.arequest("GET", balance_url)
 
     @mcp.tool(
         title="Update Company Details",
@@ -129,7 +132,7 @@ def register_company_tools(mcp):
             update_data["datevClientNumber"] = datev_client_number
 
         if not update_data:
-            current_data = api._make_request("GET", company_url)
+            current_data = await api.arequest("GET", company_url)
             return {"message": "No fields provided for update.", "company": current_data}
         
         updated_company = api._make_request("PATCH", company_url, json_data=update_data)
@@ -185,7 +188,7 @@ def register_company_tools(mcp):
         if include_inactive:
             params["includeInactive"] = "true"
         
-        return api._make_request("GET", categories_url, params=params)
+        return await api.arequest("GET", categories_url, params=params)
 
     @mcp.tool(
         title="List Chart of Accounts Templates",
@@ -205,7 +208,7 @@ def register_company_tools(mcp):
             "api/v1/accounting/company-categories/templates/"
         )
         
-        return api._make_request("GET", templates_url)
+        return await api.arequest("GET", templates_url)
 
     @mcp.tool(
         title="Trigger DATEV Export",
@@ -246,7 +249,7 @@ def register_company_tools(mcp):
             return {"error": "No company available. Please authenticate first."}
         
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
-        company = api._make_request("GET", company_url)
+        company = await api.arequest("GET", company_url)
         if company.get("error"):
             return company
 
