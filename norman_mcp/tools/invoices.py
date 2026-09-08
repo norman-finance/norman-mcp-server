@@ -152,7 +152,7 @@ def register_invoice_tools(mcp):
                 config.api_base_url, 
                 f"api/v1/companies/{company_id}/invoices/next-invoice-number/"
             )
-            next_invoice_data = api._make_request("GET", next_invoice_url)
+            next_invoice_data = await api.arequest("GET", next_invoice_url)
             invoice_number = next_invoice_data.get("nextInvoiceNumber")
         
         invoice_data = {
@@ -302,7 +302,7 @@ def register_invoice_tools(mcp):
                 config.api_base_url,
                 f"api/v1/companies/{company_id}/invoices/next-invoice-number/"
             )
-            next_invoice_data = api._make_request("GET", next_invoice_url)
+            next_invoice_data = await api.arequest("GET", next_invoice_url)
             invoice_number = next_invoice_data.get("nextInvoiceNumber")
 
         invoice_data = {
@@ -392,7 +392,7 @@ def register_invoice_tools(mcp):
             f"api/v1/companies/{company_id}/invoices/{invoice_id}/"
         )
         
-        result = api._make_request("GET", invoice_url)
+        result = await api.arequest("GET", invoice_url)
         return _enrich_invoice_response(result, api=api, company_id=company_id)
 
     @mcp.tool(
@@ -651,7 +651,7 @@ def register_invoice_tools(mcp):
         if name:
             params["name"] = name
         
-        result = api._make_request("GET", invoices_url, params=params)
+        result = await api.arequest("GET", invoices_url, params=params)
         return _enrich_invoice_response(result)
 
     @mcp.tool(
@@ -688,7 +688,7 @@ def register_invoice_tools(mcp):
         )
 
         try:
-            result = api._make_request("GET", preview_url)
+            result = await api.arequest("GET", preview_url)
         except Exception as e:
             logger.error("Failed to get invoice preview: %s", e)
             return CallToolResult(content=[

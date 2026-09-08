@@ -48,7 +48,7 @@ def register_tax_tools(mcp):
         
         taxes_url = urljoin(config.api_base_url, "api/v1/taxes/reports/")
         
-        return api._make_request("GET", taxes_url)
+        return await api.arequest("GET", taxes_url)
 
     @mcp.tool(
         title="Get Tax Report",
@@ -79,7 +79,7 @@ def register_tax_tools(mcp):
             f"api/v1/taxes/reports/{report_id}/"
         )
         
-        result = api._make_request("GET", report_url)
+        result = await api.arequest("GET", report_url)
         return _enrich_report_download_url(result, api=api, report_id=report_id)
 
     @mcp.tool(
@@ -239,7 +239,7 @@ def register_tax_tools(mcp):
         
         states_url = urljoin(config.api_base_url, "api/v1/taxes/states/")
         
-        return api._make_request("GET", states_url)
+        return await api.arequest("GET", states_url)
 
     @mcp.tool(
         title="List Tax Settings",
@@ -261,7 +261,7 @@ def register_tax_tools(mcp):
         
         settings_url = urljoin(config.api_base_url, "api/v1/taxes/tax-settings/")
         
-        return api._make_request("GET", settings_url)
+        return await api.arequest("GET", settings_url)
 
     @mcp.tool(
         title="Update Tax Setting",
@@ -347,7 +347,7 @@ def register_tax_tools(mcp):
             f"api/v1/companies/{company_id}/company-tax-statistic/"
         )
         
-        return api._make_request("GET", stats_url)
+        return await api.arequest("GET", stats_url)
 
     @mcp.tool(
         title="Get Next VAT Report",
@@ -376,4 +376,4 @@ def register_tax_tools(mcp):
             f"api/v1/companies/{company_id}/vat-next-report-amount/"
         )
         
-        return api._make_request("GET", vat_url)
+        return await api.arequest("GET", vat_url)
