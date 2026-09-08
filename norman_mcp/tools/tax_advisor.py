@@ -438,6 +438,15 @@ def register_tax_advisor_tools(mcp):
 
         api.set_company(company_id)
 
+        # Remember the choice server-side as well. The per-token selection above is lost
+        # when the MCP token is refreshed (~24h); the API's last-active company is not,
+        # and it is what a request without an X-Company-Id header resolves to.
+        activate_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/activate/")
+        try:
+            api._make_request("POST", activate_url)
+        except Exception as e:  # noqa: BLE001 - best effort, the switch itself already happened
+            logger.warning(f"Could not mark {company_id} as the last active company: {e}")
+
         return {
             "previousCompanyId": previous_id,
             "activeCompanyId": company_id,

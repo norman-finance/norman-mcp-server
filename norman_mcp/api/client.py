@@ -340,7 +340,10 @@ class NormanAPI:
                 logger.warning("No companies found for user")
                 return None
 
-            # Use the first company
+            # First entry = the company this user activated most recently (the API orders
+            # the list by the caller's own last_active_at), so a caller who switched
+            # companies lands back on that one even after their MCP token was refreshed
+            # and the per-token selection was lost.
             company_id = companies[0].get("publicId")
             if company_id:
                 logger.info(f"✅ Using company ID from API: {company_id}")
@@ -419,6 +422,19 @@ class NormanAPI:
             "X-Frame-Options": "DENY",
         }
 
+        # The active company, as the API expects it. Tools scope most calls through the
+        # URL (/companies/<id>/...), but every endpoint that resolves the company itself
+        # reads this header; without it the backend falls back to the caller's
+        # last-activated company, which is not necessarily the one selected here.
+        # `self.company_id` is request-scoped (see the property), so this can only ever
+        # be the calling user's own company. The companies list is not scoped: it is how
+        # a caller discovers which companies they have.
+        if not url.endswith("companies/"):
+            company_id = self.company_id
+            if company_id:
+                logger.debug(f"Using company ID for request: {company_id}")
+                headers["X-Company-Id"] = company_id
+
         # Log token source for debugging
         logger.debug(
             f"Making API request to {url} with token source: {self.token_source}"
@@ -426,16 +442,6 @@ class NormanAPI:
 
         if params is None:
             params = {}
-
-        # Add company ID to params if we have one and the URL requires it.
-        # `self.company_id` is request-scoped (see the property), so this can
-        # only ever be the calling user's own company.
-        if not url.endswith("companies/"):
-            company_id = self.company_id
-            if company_id:
-                logger.debug(f"Using company ID for request: {company_id}")
-                if "companyId" not in params:
-                    params["companyId"] = company_id
 
         # Sanitize parameters to prevent injection
         if params:
