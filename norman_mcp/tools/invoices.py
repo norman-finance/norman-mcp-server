@@ -9,6 +9,7 @@ from pydantic import Field
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
+from norman_mcp.tools.contracts import register_contract_tools
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ def _enrich_invoice_response(data: dict, api=None, company_id: str | None = None
 
 def register_invoice_tools(mcp):
     """Register all invoice-related tools with the MCP server."""
+    register_contract_tools(mcp)
     
     @mcp.tool(
         title="Create Invoice",
@@ -80,6 +82,7 @@ def register_invoice_tools(mcp):
         service_start_date: Optional[str] = None,
         service_end_date: Optional[str] = None,
         delivery_date: Optional[str] = None,
+        source_contract_id: str | None = None,
     ) -> Dict[str, Any]:
         """
         Create a new invoice. Ask for additional information if needed, for example:
@@ -89,7 +92,11 @@ def register_invoice_tools(mcp):
         - If the invoice type is SERVICES, ask for the service start and end dates.
         - If the invoice should be sent to the client, ask for the email data.
         
+        For a contract, use prepare_invoice_from_contract and review its proposal first.
+        Preserve source_contract_id on creation to link the original document.
+
         Args:
+            source_contract_id: Source contract ID in the active company.
             client_id: ID of the client for the invoice
             items: List of invoice items, each containing name, quantity, rate, vatRate and total.
                 Example: [{"name": "Software Development", "quantity": 3, "rate": 30000, "vatRate": 19, "total": 1071}] // VAT rates might be 0, 7, 19. By default it's 19. Rate and total are in cents.
@@ -171,6 +178,8 @@ def register_invoice_tools(mcp):
             "companyEmail": config.NORMAN_EMAIL
         }
         
+        if source_contract_id is not None:
+            invoice_data["sourceContract"] = source_contract_id
         invoice_data["dueTo"] = due_to if due_to else (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
         invoice_data["paymentTerms"] = payment_terms if payment_terms else ""
         invoice_data["notes"] = notes if notes else ""
@@ -232,6 +241,10 @@ def register_invoice_tools(mcp):
         service_start_date: Optional[str] = None,
         service_end_date: Optional[str] = None,
         delivery_date: Optional[str] = None,
+        source_contract_id: str | None = None,
+        payment_due_days: int | None = None,
+        billing_in_advance: bool = False,
+        is_ongoing: bool = False,
     ) -> Dict[str, Any]:
         """
         Create a recurring invoice that will automatically generate new invoices based on specified frequency.
@@ -250,10 +263,17 @@ def register_invoice_tools(mcp):
             - If the payment terms are not provided, ask for it.
             - If the bank details are not provided, ask for it.
 
+        For a contract, use prepare_invoice_from_contract and review its proposal first.
+        Preserve source_contract_id on creation to link the original document.
+
         Args:
+            source_contract_id: Source contract ID in the active company.
             client_id: ID of the client for the invoice
             items: List of invoice items, each containing name, quantity, rate, vatRate and total.
                 Optional per item: "description", "unit" and "productId", as in create_invoice.
+            is_ongoing: Continue until cancelled; omit both end conditions when true.
+            payment_due_days: Days after each issue date until payment is due (0-365).
+            billing_in_advance: True bills the upcoming service period; false bills in arrears.
             frequency_type: How often to generate invoices ("weekly", "monthly")
             frequency_unit: Number of units for frequency (e.g. 1 for monthly = every month, 2 = every 2 months)
             starts_from_date: Date to start generating invoices from (YYYY-MM-DD)
@@ -326,16 +346,23 @@ def register_invoice_tools(mcp):
             "companyEmail": config.NORMAN_EMAIL
         }
 
+        invoice_data["isOngoing"] = is_ongoing
         # Add conditional end parameters
         if ends_on_date:
             invoice_data["endsOnDate"] = ends_on_date
         if ends_on_invoice_count:
             invoice_data["endsOnInvoiceCount"] = ends_on_invoice_count
         
-        if not ends_on_date and not ends_on_invoice_count:
+        if not is_ongoing and not ends_on_date and not ends_on_invoice_count:
             invoice_data["endsOnInvoiceCount"] = 3
 
+        if payment_due_days is not None:
+            invoice_data["paymentDueDays"] = payment_due_days
+        invoice_data["billingInAdvance"] = billing_in_advance
+
         # Add optional fields
+        if source_contract_id is not None:
+            invoice_data["sourceContract"] = source_contract_id
         invoice_data["dueTo"] = due_to if due_to else (datetime.strptime(issued, "%Y-%m-%d") + timedelta(days=30)).strftime("%Y-%m-%d")
         invoice_data["paymentTerms"] = payment_terms if payment_terms else ""
         invoice_data["notes"] = notes if notes else ""
