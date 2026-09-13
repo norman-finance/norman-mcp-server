@@ -40,6 +40,9 @@ _SENSITIVE_KEY_PARTS = (
     "apikey",
     "session-id",
     "session_id",
+    "signature",
+    "x-amz-credential",
+    "awsaccesskeyid",
     # OAuth authorization-code flow: both halves are single-use credentials.
     "code",
     "state",
@@ -56,9 +59,13 @@ _QUERY_SECRET_RE = re.compile(
     r"\b("
     r"code|state|token|access_token|refresh_token|id_token"
     r"|client_secret|api_key|apikey|password"
+    r"|x-amz-[a-z0-9-]+|awsaccesskeyid|signature"
     r")=[^&\s\"'}\]]+",
     re.IGNORECASE,
 )
+
+_URL_RE = re.compile(r"""https?://[^\s"'<>]+""", re.IGNORECASE)
+_SIGNED_QUERY_RE = re.compile(r"(?:^|&)(?:x-amz-|awsaccesskeyid=|signature=)", re.IGNORECASE)
 
 
 def _is_sensitive_key(key: Any) -> bool:
@@ -72,7 +79,18 @@ def scrub_text(value: Any) -> Any:
     """Redact credentials embedded in free text (messages, URLs, values)."""
     if not isinstance(value, str):
         return value
-    scrubbed = _AUTH_SCHEME_RE.sub(lambda m: f"{m.group(1)} {FILTERED}", value)
+
+    # requests/Sentry may add HTTP breadcrumbs independently of our logger.
+    # Strip signed URL queries there too, before ordinary key redaction.
+    def redact_signed_url(match):
+        url = match.group(0)
+        try:
+            return strip_query(url) if _SIGNED_QUERY_RE.search(urlsplit(url).query) else url
+        except ValueError:
+            return FILTERED
+
+    scrubbed = _URL_RE.sub(redact_signed_url, value)
+    scrubbed = _AUTH_SCHEME_RE.sub(lambda m: f"{m.group(1)} {FILTERED}", scrubbed)
     scrubbed = _QUERY_SECRET_RE.sub(lambda m: f"{m.group(1)}={FILTERED}", scrubbed)
     return scrubbed
 
