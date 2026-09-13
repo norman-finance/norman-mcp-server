@@ -13,6 +13,7 @@ from pydantic import Field
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
+from norman_mcp.files.download import FileDownloadError, download_file
 
 logger = logging.getLogger(__name__)
 
@@ -62,41 +63,6 @@ def is_url(path: str) -> bool:
         return all([result.scheme, result.netloc]) and result.scheme in ['http', 'https']
     except Exception:
         return False
-
-def download_file(url: str) -> Optional[str]:
-    """Download a file from URL to a temporary location and return its path."""
-    try:
-        response = requests.get(url, stream=True, timeout=30)
-        response.raise_for_status()
-        
-        # Extract filename from URL or Content-Disposition header
-        filename = None
-        
-        if "Content-Disposition" in response.headers:
-            # Try to get filename from Content-Disposition header
-            content_disposition = response.headers["Content-Disposition"]
-            match = re.search(r'filename="?([^"]+)"?', content_disposition)
-            if match:
-                filename = match.group(1)
-        
-        # If no filename found in header, extract from URL
-        if not filename:
-            url_path = urlparse(url).path
-            filename = os.path.basename(url_path) or "downloaded_file"
-        
-        # Create a temporary file
-        temp_dir = tempfile.mkdtemp(prefix="norman_")
-        temp_path = os.path.join(temp_dir, filename)
-        
-        # Write the file
-        with open(temp_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-                
-        return temp_path
-    except Exception as e:
-        logger.error(f"Error downloading file from {url}: {str(e)}")
-        return None
 
 def _strip_base64_prefix(raw: str) -> str:
     """Remove data-URI prefix (e.g. 'data:application/pdf;base64,') if present."""
@@ -174,13 +140,13 @@ def _validate_structured_document(document: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _resolve_structured_document_file(document: Dict[str, Any]) -> tuple[Optional[str], bool, Optional[str]]:
+async def _resolve_structured_document_file(document: Dict[str, Any]) -> tuple[Optional[str], bool, Optional[str]]:
     """Return (path, is_temporary, error) for one portable document input."""
     if file_url := document.get("file_url"):
         if not is_url(file_url):
             return None, False, "file_url must be a valid HTTP(S) URL."
-        path = download_file(file_url)
-        return (path, True, None) if path else (None, False, "Failed to download file_url.")
+        path = await download_file(file_url)
+        return path, True, None
 
     if file_ref := document.get("file_ref"):
         from norman_mcp.files.upload import resolve_ref
@@ -291,6 +257,7 @@ def register_document_tools(mcp):
 
         temp_files = []
         opened_files = []
+        download_errors = []
 
         try:
             files = []
@@ -298,16 +265,20 @@ def register_document_tools(mcp):
 
             # Priority 1: file_urls
             all_urls = list(file_urls or []) + [p for p in (file_paths or []) if is_url(p)]
-            for url in all_urls:
+            for index, url in enumerate(all_urls):
                 if not is_url(url):
-                    logger.warning("Skipping non-URL: %s", url)
+                    download_errors.append({
+                        "index": index, "code": "invalid_file_url",
+                        "error": "file_url must be a valid HTTP(S) URL.",
+                    })
                     continue
-                downloaded = download_file(url)
-                if downloaded:
-                    valid_paths.append(downloaded)
-                    temp_files.append(downloaded)
-                else:
-                    logger.warning("Failed to download: %s", url)
+                try:
+                    downloaded = await download_file(url)
+                except FileDownloadError as exc:
+                    download_errors.append({"index": index, **exc.as_result()})
+                    continue
+                valid_paths.append(downloaded)
+                temp_files.append(downloaded)
 
             # Priority 2: file_refs
             if file_refs:
@@ -332,7 +303,7 @@ def register_document_tools(mcp):
                         temp_files.append(tmp)
                 
             if not valid_paths:
-                return {"error": "No valid files found for upload"}
+                return {"error": "No valid files found for upload", "download_errors": download_errors}
                 
             # Open and prepare valid files
             for path in valid_paths:
@@ -346,22 +317,10 @@ def register_document_tools(mcp):
                 
             response = api._make_request("POST", upload_url, json_data=data, files=files)
             
-            # Close all opened file handles
-            for file_handle in opened_files:
-                file_handle.close()
-                
-            # Clean up temporary files
-            for temp_file in temp_files:
-                try:
-                    if os.path.exists(temp_file):
-                        os.remove(temp_file)
-                        os.rmdir(os.path.dirname(temp_file))
-                        logger.info(f"Removed temporary file: {temp_file}")
-                except Exception as e:
-                    logger.warning(f"Failed to remove temporary file {temp_file}: {str(e)}")
-                    
+            if download_errors:
+                response = {**response, "download_errors": download_errors}
             return response
-            
+
         except FileNotFoundError as e:
             return {"error": f"File not found: {str(e)}"}
         except PermissionError as e:
@@ -440,7 +399,12 @@ def register_document_tools(mcp):
                 failed_count += 1
                 continue
 
-            path, is_temporary, error = _resolve_structured_document_file(document)
+            try:
+                path, is_temporary, error = await _resolve_structured_document_file(document)
+            except FileDownloadError as exc:
+                results.append({"index": index, **exc.as_result()})
+                failed_count += 1
+                continue
             if error or not path:
                 results.append({"index": index, "error": error or "File is unavailable."})
                 failed_count += 1
@@ -555,7 +519,7 @@ def register_document_tools(mcp):
     )
     async def create_attachment(
         ctx: Context,
-        file_url: Optional[str] = Field(default=None, description="BEST OPTION: HTTP(S) URL to a publicly accessible file. The server downloads it directly — nothing goes through the LLM context. Use this whenever the file has a URL."),
+        file_url: Optional[str] = Field(default=None, description="BEST OPTION: HTTP(S) download URL, including a valid presigned URL with query parameters. Must be accessible without additional headers. The server downloads it directly; the file does not go through the LLM context."),
         file_ref: Optional[str] = Field(default=None, description="Reference token from a prior POST /files/upload call. Use when the client uploaded the file directly to the MCP server."),
         file_content_base64: Optional[str] = Field(default=None, description="LAST RESORT — only for tiny files (<50 KB). Do NOT use for images, PDFs, or scanned documents — the base64 string will exceed the context window. Prefer file_url or file_ref."),
         file_name: Optional[str] = Field(default=None, description="Original filename with extension (e.g. 'invoice.pdf'). Required when using file_content_base64."),
@@ -636,21 +600,19 @@ def register_document_tools(mcp):
             f"api/v1/companies/{company_id}/attachments/"
         )
 
+        temp_file_path = None
+        files = {}
         try:
-            temp_file_path = None
             actual_file_path = None
 
             # Priority 1: file_url — download from URL
             if file_url:
                 if not is_url(file_url):
                     return {
-                        "error": f"file_url must be a valid HTTP(S) URL. Got: {file_url}. "
+                        "error": "file_url must be a valid HTTP(S) URL. "
                         "The MCP server cannot access local filesystem paths."
                     }
-                logger.info("Downloading file from URL: %s", file_url)
-                temp_file_path = download_file(file_url)
-                if not temp_file_path:
-                    return {"error": f"Failed to download file from URL: {file_url}"}
+                temp_file_path = await download_file(file_url)
                 actual_file_path = temp_file_path
 
             # Priority 2: file_ref — previously uploaded via POST /files/upload
@@ -728,31 +690,21 @@ def register_document_tools(mcp):
                 
             response = api._make_request("POST", attachments_url, json_data=data, files=files)
             
-            files["file"].close()
-            
-            if temp_file_path and os.path.exists(temp_file_path):
-                try:
-                    os.remove(temp_file_path)
-                    os.rmdir(os.path.dirname(temp_file_path))
-                    logger.info(f"Removed temporary file: {temp_file_path}")
-                except Exception as e:
-                    logger.warning(f"Failed to remove temporary file: {str(e)}")
-                    
             return _enrich_attachment_download_urls(response, api=api, company_id=company_id)
+        except FileDownloadError as exc:
+            return exc.as_result()
         except FileNotFoundError:
             return {"error": "File not found. Provide a file_url or upload via POST /files/upload."}
         except PermissionError:
             return {"error": "Permission denied when accessing the file."}
         except Exception as e:
-            # Clean up temporary file if there was an error
-            if temp_file_path and os.path.exists(temp_file_path):
-                try:
-                    os.remove(temp_file_path)
-                    os.rmdir(os.path.dirname(temp_file_path))
-                except Exception:
-                    pass
             logger.error(f"Error uploading file: {str(e)}")
             return {"error": f"Error uploading file: {str(e)}"}
+        finally:
+            for file_handle in files.values():
+                file_handle.close()
+            _remove_temp_file(temp_file_path)
+
 
     @mcp.tool(
         title="Link Attachment to Transaction",

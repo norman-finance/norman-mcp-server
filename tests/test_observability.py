@@ -100,6 +100,33 @@ class TestScrubStructure:
 
 
 class TestScrubEvent:
+    def test_scrubs_presigned_urls_in_http_breadcrumbs_and_errors(self):
+        signed = "https://files.example/receipt.pdf?X-Amz-Credential=key%2Fdate&X-Amz-Signature=secret-signature&X-Amz-Security-Token=secret-session"
+        event = {
+            "logentry": {"message": f"Download failed: {signed}"},
+            "exception": {"values": [{"value": f"HTTP 403 for {signed}"}]},
+            "breadcrumbs": {"values": [{"data": {"url": signed, "status_code": 403}}]},
+            "extra": {"X-Amz-Signature": "secret-signature", "X-Amz-Credential": "key/date"},
+        }
+        out = scrub_event(event)
+        assert out["breadcrumbs"]["values"][0]["data"]["url"] == "https://files.example/receipt.pdf"
+        assert out["logentry"]["message"] == "Download failed: https://files.example/receipt.pdf"
+        assert (
+            out["exception"]["values"][0]["value"]
+            == "HTTP 403 for https://files.example/receipt.pdf"
+        )
+        assert out["extra"]["X-Amz-Signature"] == FILTERED
+        assert out["extra"]["X-Amz-Credential"] == FILTERED
+
+    def test_scrubs_legacy_signed_url_and_bare_query(self):
+        assert (
+            scrub_text("https://files.example/a?AWSAccessKeyId=key&Signature=secret&Expires=1")
+            == "https://files.example/a"
+        )
+        out = scrub_text("X-Amz-Signature=secret&X-Amz-Security-Token=session")
+        assert "=secret" not in out
+        assert "=session" not in out
+
     def test_scrubs_request_block(self):
         event = {
             "request": {
@@ -122,9 +149,7 @@ class TestScrubEvent:
     def test_scrubs_exception_value(self):
         event = {
             "exception": {
-                "values": [
-                    {"type": "HTTPError", "value": "401 for Bearer eyJsecrettokenvalue"}
-                ]
+                "values": [{"type": "HTTPError", "value": "401 for Bearer eyJsecrettokenvalue"}]
             }
         }
         out = scrub_event(event)

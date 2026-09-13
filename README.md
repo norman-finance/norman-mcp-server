@@ -47,6 +47,23 @@
 
 **Documents** — Upload and attach receipts, invoices, and supporting files
 
+`create_attachment.file_url`, bulk `file_urls`, and structured document imports
+accept HTTP(S) download links, including unexpired presigned S3 URLs with query
+parameters. Pass the entire link unchanged; the file host must accept the request
+without additional authorization headers. The URL downloader has no domain allowlist,
+URL-length cap, or explicit file-size cap. Its connect/read timeout is 30 seconds
+(not a total download deadline). The separate browser upload route defaults to
+50 MiB, configurable with `MCP_UPLOAD_MAX_SIZE`; API file validation still applies.
+
+URL download failures return an `error` message and `code`: `download_http_error`
+(with `http_status`), `download_timeout`, `download_network_error`,
+`download_storage_error`, or `download_error`. A 403 from the file host can mean an
+expired or rejected signature; obtain a fresh link and check the host response.
+Bulk uploads include `download_errors` for failed URLs, indexed within `file_urls`
+followed by URL entries from the deprecated `file_paths` alias; successfully fetched
+files are still uploaded. Structured imports report errors per document. Download
+errors omit signed URLs, and temporary downloads are cleaned up after use or cancellation.
+
 Norman is built as a multi-market European accounting platform. Market-specific capabilities are added as Norman expands; current German coverage includes SKR03/SKR04, DATEV, ELSTER, ZUGFeRD, and GmbH/UG workflows.
 
 <br/>
