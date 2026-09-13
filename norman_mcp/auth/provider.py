@@ -8,6 +8,7 @@ authentication to Norman's OAuth server. It:
 4. Issues MCP tokens that map to Norman tokens
 """
 
+import asyncio
 import json as _json
 import os
 import logging
@@ -33,6 +34,7 @@ from mcp.server.auth.provider import (
     AuthorizationParams,
     OAuthAuthorizationServerProvider,
     RefreshToken,
+    TokenError,
     construct_redirect_uri,
 )
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
@@ -92,6 +94,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         self.token_to_company_id: Dict[str, str] = {}
 
         self._persist_lock = threading.Lock()
+        self._refresh_locks: Dict[str, threading.Lock] = {}
         self._load_state()
         self._register_norman_client()
 
@@ -593,79 +596,43 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         refresh_token: RefreshToken,
         scopes: list[str],
     ) -> OAuthToken:
-        """Exchange refresh token for new access token."""
-        norman_refresh = self.token_mapping.get(refresh_token.token)
-        if not norman_refresh:
-            raise ValueError("Norman refresh token not found")
-        
-        # Refresh with Norman's token endpoint
-        token_payload = {
-            "grant_type": "refresh_token",
-            "refresh_token": norman_refresh,
-            "client_id": get_norman_oauth_client_id(),
-        }
-        
-        # Add client secret if configured
-        client_secret = get_norman_oauth_client_secret()
-        if client_secret:
-            token_payload["client_secret"] = client_secret
-        
-        try:
-            async with httpx.AsyncClient() as http_client:
-                response = await http_client.post(
-                    self.norman_token_url,
-                    data=token_payload,
-                    timeout=config.NORMAN_API_TIMEOUT
-                )
-                
-                if response.status_code != 200:
-                    raise ValueError(f"Norman refresh failed: {response.status_code}")
-                
-                auth_data = response.json()
-                new_norman_token = auth_data.get("access_token")
-                new_norman_refresh = auth_data.get("refresh_token")
-                
-                if not new_norman_token:
-                    raise ValueError("No access token in refresh response")
-                
-                # Generate new MCP access token
-                new_mcp_token = f"mcp_{secrets.token_hex(32)}"
-                
+        """Refresh off the event loop, sharing the lock with transparent refresh."""
+        return await asyncio.to_thread(
+            self._exchange_refresh_token_sync, client, refresh_token, scopes
+        )
+
+    def _exchange_refresh_token_sync(
+        self,
+        client: OAuthClientInformationFull,
+        refresh_token: RefreshToken,
+        scopes: list[str],
+    ) -> OAuthToken:
+        with self._refresh_lock_for(refresh_token.token):
+            # Recheck after waiting: the client may have revoked it meanwhile.
+            if refresh_token.token not in self.refresh_tokens:
+                raise TokenError("invalid_grant", "Refresh token no longer available")
+            norman_token, norman_refresh = self._refresh_norman_credentials(refresh_token.token)
+            # Company selection still belongs to the previous MCP access token;
+            # this refresh fix does not migrate that existing per-token state.
+            new_mcp_token = f"mcp_{secrets.token_hex(32)}"
+            with self._persist_lock:
                 self.tokens[new_mcp_token] = AccessToken(
                     token=new_mcp_token,
                     client_id=client.client_id,
                     scopes=scopes or refresh_token.scopes,
                     expires_at=int(time.time()) + 86400,
                 )
-                
-                self.token_mapping[new_mcp_token] = new_norman_token
+                self.token_mapping[new_mcp_token] = norman_token
+                self.token_mapping[f"refresh_for_{new_mcp_token}"] = norman_refresh
+            self._save_state()
 
-                # Update refresh token if new one provided
-                if new_norman_refresh:
-                    self.token_mapping[refresh_token.token] = new_norman_refresh
-                self.token_mapping[f"refresh_for_{new_mcp_token}"] = (
-                    new_norman_refresh or self.token_mapping.get(refresh_token.token)
-                )
-                
-                # Known limitation: the company selected via switch_company is
-                # keyed by MCP access token, so a refresh (>=24h) drops back to
-                # the caller's default company. Carrying it over would need a
-                # session identity spanning token rotations, which the provider
-                # does not have -- deliberately not invented here.
-                logger.info(f"✅ Refreshed MCP token: {new_mcp_token[:15]}...")
-                self._save_state()
-
-                return OAuthToken(
-                    access_token=new_mcp_token,
-                    token_type="bearer",
-                    expires_in=86400,
-                    scope=" ".join(scopes or refresh_token.scopes),
-                    refresh_token=refresh_token.token,
-                )
-                
-        except httpx.RequestError as e:
-            logger.error(f"Network error during token refresh: {e}")
-            raise ValueError(f"Failed to refresh token: {e}")
+            return OAuthToken(
+                access_token=new_mcp_token,
+                token_type="bearer",
+                expires_in=86400,
+                scope=" ".join(scopes or refresh_token.scopes),
+                refresh_token=refresh_token.token,
+            )
 
     async def revoke_token(self, token: str, token_type_hint: Optional[str] = None) -> None:
         """Revoke a token."""
@@ -727,13 +694,50 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         new Norman access token, or None if refresh is impossible
         (no stored refresh token, or refresh call failed).
         """
+        previous_token = self.token_mapping.get(mcp_token)
+        with self._refresh_lock_for(f"refresh_for_{mcp_token}"):
+            current_token = self.token_mapping.get(mcp_token)
+            if current_token and current_token != previous_token:
+                # Another request already refreshed while this one was waiting.
+                return current_token
+            try:
+                norman_token, _ = self._refresh_norman_credentials(f"refresh_for_{mcp_token}")
+            except (TokenError, HTTPException) as exc:
+                # Never log response bodies or request payloads containing tokens.
+                error_code = exc.error if isinstance(exc, TokenError) else exc.status_code
+                logger.warning("Transparent Norman refresh failed: %s", error_code)
+                return None
+            self._save_state()
+            return norman_token
+
+    def _refresh_lock_for(self, mapping_key: str):
+        """Use the stable MCP refresh handle as the lock identity for a grant.
+
+        Existing state already links both refresh paths by the exact opaque
+        upstream refresh token. Never group by client_id: one MCP client can
+        belong to many independent Norman accounts.
+        """
+        with self._persist_lock:
+            norman_refresh = self.token_mapping.get(mapping_key)
+            lock_key = mapping_key
+            if norman_refresh:
+                lock_key = next(
+                    (
+                        key
+                        for key in list(self.refresh_tokens)
+                        if self.token_mapping.get(key) == norman_refresh
+                    ),
+                    mapping_key,
+                )
+            return self._refresh_locks.setdefault(lock_key, threading.Lock())
+
+    def _refresh_norman_credentials(self, mapping_key: str) -> tuple[str, str]:
+        """Rotate all aliases of one upstream grant; caller holds its refresh lock."""
         import requests as _requests
 
-        norman_refresh = self.token_mapping.get(f"refresh_for_{mcp_token}")
+        norman_refresh = self.token_mapping.get(mapping_key)
         if not norman_refresh:
-            logger.warning("No Norman refresh token stored for mcp_token %s...", mcp_token[:12])
-            return None
-
+            raise TokenError("invalid_grant", "Norman refresh token no longer available")
         token_payload = {
             "grant_type": "refresh_token",
             "refresh_token": norman_refresh,
@@ -749,26 +753,53 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 data=token_payload,
                 timeout=config.NORMAN_API_TIMEOUT,
             )
-        except _requests.exceptions.RequestException as e:
-            logger.error("Network error during Norman refresh: %s", e)
-            return None
+        except _requests.exceptions.RequestException:
+            raise HTTPException(
+                503,
+                "Norman authorization service temporarily unavailable",
+                headers={"Retry-After": "5"},
+            ) from None
 
-        if response.status_code != 200:
-            logger.error(
-                "Norman refresh failed for mcp_token %s...: %s",
-                mcp_token[:12], response.status_code,
+        if response.status_code == 429 or response.status_code >= 500:
+            raise HTTPException(
+                503,
+                "Norman authorization service temporarily unavailable",
+                headers={"Retry-After": "5"},
             )
-            return None
-
-        data = response.json()
+        try:
+            data = response.json()
+        except ValueError:
+            raise HTTPException(502, "Invalid response from Norman authorization service") from None
+        if not isinstance(data, dict):
+            raise HTTPException(502, "Invalid response from Norman authorization service")
+        if response.status_code != 200:
+            if response.status_code == 400 and data.get("error") == "invalid_grant":
+                raise TokenError("invalid_grant", "Norman authorization expired; please reconnect")
+            raise HTTPException(502, "Norman authorization service rejected the refresh request")
         new_norman_token = data.get("access_token")
         new_norman_refresh = data.get("refresh_token")
-        if not new_norman_token:
-            return None
+        if new_norman_refresh is None:
+            new_norman_refresh = norman_refresh
+        if (
+            not isinstance(new_norman_token, str)
+            or not new_norman_token
+            or not isinstance(new_norman_refresh, str)
+            or not new_norman_refresh
+        ):
+            raise HTTPException(502, "Invalid response from Norman authorization service")
 
-        self.token_mapping[mcp_token] = new_norman_token
-        if new_norman_refresh:
-            self.token_mapping[f"refresh_for_{mcp_token}"] = new_norman_refresh
-        self._save_state()
-        logger.info("✅ Refreshed Norman token for mcp_token %s...", mcp_token[:12])
-        return new_norman_token
+        # Keep the persisted format compatible with existing sessions. Update
+        # both the client-facing refresh handle and every still-live MCP access
+        # token that shares this exact upstream grant, in either refresh path.
+        with self._persist_lock:
+            for key, value in list(self.token_mapping.items()):
+                if value != norman_refresh:
+                    continue
+                if key in self.refresh_tokens:
+                    self.token_mapping[key] = new_norman_refresh
+                elif key.startswith("refresh_for_"):
+                    self.token_mapping[key] = new_norman_refresh
+                    access_key = key.removeprefix("refresh_for_")
+                    if access_key in self.tokens:
+                        self.token_mapping[access_key] = new_norman_token
+        return new_norman_token, new_norman_refresh
