@@ -405,3 +405,7 @@ Ready-to-use skills compatible with **Claude Code**, **OpenClaw**, and the [Agen
 </p>
 
 <!-- mcp-name: finance.norman/mcp-server -->
+
+### Mixed VAT and documented input tax
+
+See [the VAT item workflow](docs/vat-item-workflows.md) for item-level treatments, fixed documented EUR input VAT, refunds and manual VAT-only corrections. Requires the corresponding API migrations and calculation updates.

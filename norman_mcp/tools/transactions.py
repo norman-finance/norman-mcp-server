@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 from typing import Dict, Any, Optional, List
 from urllib.parse import urljoin
 from datetime import datetime
@@ -13,14 +14,34 @@ logger = logging.getLogger(__name__)
 ITEMS_TOTAL_TOLERANCE = 0.02
 
 
+ITEM_TAX_FIELDS = {
+    "public_id": "publicId", "tax_treatment": "taxTreatment",
+    "vat_amount_mode": "vatAmountMode", "vat_document_id": "vatDocumentId",
+    "professional_use_part": "professionalUsePart", "metadata": "metadata",
+}
+ITEM_TAX_DESCRIPTION = (
+    " DE GmbH/UG expense items also accept public_id (preserve existing IDs on update), "
+    "tax_treatment (null to inherit, DOMESTIC_NO_VAT, DOMESTIC_INPUT_VAT, "
+    "DOMESTIC_REVERSE_CHARGE, EU_SERVICE_REVERSE_CHARGE, EU_GOODS_ACQUISITION, "
+    "THIRD_COUNTRY_SERVICE_REVERSE_CHARGE), professional_use_part (0..1), "
+    "vat_amount_mode (AUTO or DOCUMENTED_GERMAN_INPUT_VAT), documented_vat_amount_eur "
+    "(nonnegative decimal string, including zero), vat_document_id (existing company document). "
+    "Documented EUR VAT requires DOMESTIC_INPUT_VAT; never use it for reverse charge. "
+    "Returning to AUTO requires explicit null documented_vat_amount_eur and vat_document_id. "
+    "Read existing items first; omitted fields are preserved by public_id. "
+    "Amounts use document orientation: purchases positive, discounts negative; refunds are normalized automatically."
+)
+
+
 def _build_items_payload(items: List[dict], *, negate: bool) -> List[dict]:
-    """Translate positive document lines into the transaction API's signed rows."""
+    """Normalize the whole document's orientation without erasing discounts."""
+    amounts = [Decimal(str(item.get("amount") or 0)) for item in items]
+    orientation = Decimal(-1 if negate else 1) * (-1 if sum(amounts) < 0 else 1)
     payload = []
-    for order, item in enumerate(items):
-        amount = abs(float(item.get("amount") or 0))
+    for order, (item, amount) in enumerate(zip(items, amounts)):
         entry: Dict[str, Any] = {
             "description": str(item.get("description") or ""),
-            "amount": -amount if negate else amount,
+            "amount": float(amount * orientation),
             "vatRate": item.get("vat_rate"),
             "vatType": item.get("vat_type") or "VAT_INCLUDED",
             "order": order,
@@ -29,14 +50,20 @@ def _build_items_payload(items: List[dict], *, negate: bool) -> List[dict]:
             entry["category"] = item["category_id"]
         if item.get("company_category_id"):
             entry["companyCategory"] = item["company_category_id"]
+        for source, target in ITEM_TAX_FIELDS.items():
+            if source in item:
+                entry[target] = item[source]
+        if "documented_vat_amount_eur" in item:
+            value = item["documented_vat_amount_eur"]
+            entry["documentedVatAmountEur"] = None if value is None else str(Decimal(str(value)))
         payload.append(entry)
     return payload
 
 
 def _items_total_mismatch(items: List[dict], amount: float) -> Optional[Dict[str, Any]]:
-    items_total = sum(abs(float(item.get("amount") or 0)) for item in items)
-    difference = abs(items_total - abs(amount))
-    if difference <= ITEMS_TOTAL_TOLERANCE * max(len(items), 1):
+    items_total = abs(sum((Decimal(str(item.get("amount") or 0)) for item in items), Decimal(0)))
+    difference = abs(items_total - abs(Decimal(str(amount))))
+    if difference <= Decimal(str(ITEMS_TOTAL_TOLERANCE)) * max(len(items), 1):
         return None
     return {
         "error": (
@@ -261,6 +288,7 @@ def register_transaction_tools(mcp):
                 "Complete split lines for documents with multiple categories or VAT rates. "
                 "Each line: {description, amount (positive gross), vat_rate, vat_type?, "
                 "category_id? or company_category_id?}; lines must sum to the transaction total."
+                + ITEM_TAX_DESCRIPTION
             ),
         ),
     ) -> Dict[str, Any]:
@@ -285,7 +313,7 @@ def register_transaction_tools(mcp):
         )
 
         transaction_data = {
-            "amount": abs(amount) if cashflow_type == "INCOME" else -abs(amount),
+            "amount": -abs(amount) if (cashflow_type == "EXPENSE") != is_refund else abs(amount),
             "description": description,
             "cashflowType": cashflow_type,
             "valueDate": date,
@@ -324,7 +352,7 @@ def register_transaction_tools(mcp):
                 return mismatch
             transaction_data["items"] = _build_items_payload(
                 items,
-                negate=cashflow_type == "EXPENSE",
+                negate=(cashflow_type == "EXPENSE") != is_refund,
             )
             transaction_data.pop("amount", None)
             transaction_data.pop("vatRate", None)
@@ -425,6 +453,7 @@ def register_transaction_tools(mcp):
             description=(
                 "Replace all split items with this COMPLETE list. Each line contains a positive "
                 "gross amount, VAT rate and category; lines must sum to the transaction total."
+                + ITEM_TAX_DESCRIPTION
             ),
         ),
     ) -> Dict[str, Any]:
@@ -442,7 +471,7 @@ def register_transaction_tools(mcp):
 
         update_data = {}
         existing = None
-        if items or (amount is not None and cashflow_type is None):
+        if items or amount is not None:
             existing = await api.arequest("GET", transaction_url)
         if items:
             existing_amount = (existing or {}).get("amount")
@@ -450,6 +479,10 @@ def register_transaction_tools(mcp):
                 is_expense = float(existing_amount) < 0
             except (TypeError, ValueError):
                 is_expense = (existing or {}).get("cashflowType") == "EXPENSE"
+            effective_cashflow = cashflow_type or (existing or {}).get("cashflowType")
+            if effective_cashflow:
+                effective_refund = is_refund if is_refund is not None else (existing or {}).get("isRefund", False)
+                is_expense = (effective_cashflow == "EXPENSE") != effective_refund
             reference_total = amount if amount is not None else existing_amount
             if reference_total is not None:
                 try:
@@ -464,7 +497,9 @@ def register_transaction_tools(mcp):
                 "cashflowType"
             )
             update_data["amount"] = (
-                abs(amount) if effective_cashflow_type == "INCOME" else -abs(amount)
+                (-abs(amount) if (effective_cashflow_type == "EXPENSE") != (
+                    is_refund if is_refund is not None else (existing or {}).get("isRefund", False)
+                ) else abs(amount))
             )
         if description is not None:
             update_data["description"] = description
