@@ -48,3 +48,5 @@ Recalculate only the relevant company's draft reports after reviewing a scoped p
 ### DATEV scope for nonstandard deductions
 
 Explicit German input-VAT items export their actual EUR ledger legs for both automatic and documented amounts, including partial deductions and open vendor accounts. Fully deductible RC items keep their normal keys; services without input deduction use the corresponding non-deductible key. Partial RC deduction and EU acquisitions without deduction are rejected by DATEV export with a clear error until their export representation is validated. They remain available in the ledger/GDPdU and VAT calculations. The export must never silently claim full input VAT for such an item.
+
+Manual ledger tools require the existing authenticated company/OAuth permissions. They are not added to the restricted `nrm_` public API-key surface by this change; its OpenAPI export covers the transaction item fields.

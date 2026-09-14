@@ -49,7 +49,8 @@ def test_documented_fields_preserve_zero_null_ids_and_precision() -> None:
     assert cleared["documentedVatAmountEur"] is None
     assert cleared["vatDocumentId"] is None
     assert cleared["taxTreatment"] is None
-    assert _build_items_payload([{"documented_vat_amount_eur": "0.00"}], negate=False)[0]["documentedVatAmountEur"] == "0.00"
+    zero = _build_items_payload([{"documented_vat_amount_eur": "0.00"}], negate=False)[0]
+    assert zero["documentedVatAmountEur"] == "0.00"
 
 
 def test_discounts_keep_their_relative_sign_for_expenses_and_refunds() -> None:
