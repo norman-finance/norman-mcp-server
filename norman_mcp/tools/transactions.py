@@ -478,11 +478,11 @@ def register_transaction_tools(mcp):
             try:
                 is_expense = float(existing_amount) < 0
             except (TypeError, ValueError):
-                is_expense = (existing or {}).get("cashflowType") == "EXPENSE"
+                is_expense = str((existing or {}).get("cashflowType", "")).upper() == "EXPENSE"
             effective_cashflow = cashflow_type or (existing or {}).get("cashflowType")
             if effective_cashflow:
                 effective_refund = is_refund if is_refund is not None else (existing or {}).get("isRefund", False)
-                is_expense = (effective_cashflow == "EXPENSE") != effective_refund
+                is_expense = (effective_cashflow.upper() == "EXPENSE") != effective_refund
             reference_total = amount if amount is not None else existing_amount
             if reference_total is not None:
                 try:
@@ -497,7 +497,7 @@ def register_transaction_tools(mcp):
                 "cashflowType"
             )
             update_data["amount"] = (
-                (-abs(amount) if (effective_cashflow_type == "EXPENSE") != (
+                (-abs(amount) if (str(effective_cashflow_type).upper() == "EXPENSE") != (
                     is_refund if is_refund is not None else (existing or {}).get("isRefund", False)
                 ) else abs(amount))
             )

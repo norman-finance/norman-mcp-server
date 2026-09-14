@@ -2,6 +2,7 @@ import asyncio
 import inspect
 from types import SimpleNamespace
 
+import pytest
 from pydantic.fields import FieldInfo
 from norman_mcp.tools.transactions import register_transaction_tools
 
@@ -20,13 +21,14 @@ class Registry:
 class Api:
     company_id = "company-1"
 
-    def __init__(self):
+    def __init__(self, cashflow_type="EXPENSE"):
         self.requests = []
+        self.cashflow_type = cashflow_type
 
     async def arequest(self, method, url, **kwargs):
         self.requests.append((method, kwargs))
         if method == "GET":
-            return {"amount": "102.00", "cashflowType": "EXPENSE", "isRefund": True}
+            return {"amount": "102.00", "cashflowType": self.cashflow_type, "isRefund": True}
         return {"ok": True}
 
 
@@ -43,8 +45,9 @@ def invoke(fn, api, **overrides):
     return asyncio.run(fn(**args))
 
 
-def test_create_and_edit_refund_keep_positive_payment_and_fee_without_rc():
-    registry, api = Registry(), Api()
+@pytest.mark.parametrize("cashflow_type", ["EXPENSE", "Expense"])
+def test_create_and_edit_refund_keep_positive_payment_and_fee_without_rc(cashflow_type):
+    registry, api = Registry(), Api(cashflow_type)
     register_transaction_tools(registry)
     items = [
         {"amount": "100.00", "vat_rate": 19, "tax_treatment": "THIRD_COUNTRY_SERVICE_REVERSE_CHARGE"},
@@ -65,6 +68,15 @@ def test_create_and_edit_refund_keep_positive_payment_and_fee_without_rc():
     invoke(registry.tools["update_transaction"], api, transaction_id="txn-1", items=items, is_refund=False)
     payload = api.requests[-1][1].get("json", api.requests[-1][1].get("json_data"))
     assert [row["amount"] for row in payload["items"]] == [-100, -2]
+
+
+@pytest.mark.parametrize("cashflow_type", ["EXPENSE", "Expense"])
+def test_edit_single_amount_preserves_refund_direction(cashflow_type):
+    registry, api = Registry(), Api(cashflow_type)
+    register_transaction_tools(registry)
+    invoke(registry.tools["update_transaction"], api, transaction_id="txn-1", amount=102)
+    payload = api.requests[-1][1].get("json", api.requests[-1][1].get("json_data"))
+    assert payload["amount"] == 102
 
 
 def test_manual_actual_tax_correction_is_transmitted_without_rate_calculation():
