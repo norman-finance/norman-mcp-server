@@ -44,3 +44,7 @@ Use the entry's existing reverse endpoint/tool to cancel it; do not create an un
 Deploy additive migrations 0195/0196, compatible API and every currency/OCR/repair worker first, then the web/mobile/MCP clients. The manual-correction patch can ship independently. The documented-VAT API patch is stacked on item treatment. Once documented values exist, do not roll back to old workers that do not understand them. Disabling controls does not protect stored source values; use a compatible rollback or forward fix.
 
 Recalculate only the relevant company's draft reports after reviewing a scoped preview. Do not rewrite original/manual records, filed snapshots or locked periods. Existing ambiguous historical 0% split rows need review; the migration does not guess their treatment. Local regression and ERiC validation are distinct from deployment, customer-data verification and an actual DATEV import.
+
+### DATEV scope for nonstandard deductions
+
+Explicit German input-VAT items export their actual EUR ledger legs for both automatic and documented amounts, including partial deductions and open vendor accounts. Fully deductible RC items keep their normal keys; services without input deduction use the corresponding non-deductible key. Partial RC deduction and EU acquisitions without deduction are rejected by DATEV export with a clear error until their export representation is validated. They remain available in the ledger/GDPdU and VAT calculations. The export must never silently claim full input VAT for such an item.
