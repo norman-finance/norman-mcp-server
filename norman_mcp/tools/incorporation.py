@@ -457,7 +457,9 @@ def register_incorporation_tools(mcp):
             json_data={"draft": draft},
         )
 
-    @mcp.tool(annotations=READ_ONLY)
+    @mcp.tool(annotations=ToolAnnotations(
+        readOnlyHint=True, openWorldHint=True, destructiveHint=False,
+    ))
     async def check_incorporation_name(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),

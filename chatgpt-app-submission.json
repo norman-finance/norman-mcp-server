@@ -1,0 +1,1652 @@
+{
+  "$schema": "https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json",
+  "schema_version": 1,
+  "app_info": {
+    "display_name": "Norman",
+    "subtitle": "Accounting and tax workspace",
+    "description": "Connect your existing Norman account to review receipts, reconcile transactions, manage invoices and explore Ledger data in ChatGPT. Prepare non-binding tax previews and review filing status; sending invoices and submitting tax reports require explicit confirmation. Personal registration questionnaires and payment initiation take place independently in the authenticated Norman workspace, not in ChatGPT. Do not provide personal government IDs, passwords or payment-card details in chat.",
+    "category": "FINANCE"
+  },
+  "tools": {
+    "list_clients": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves the company's saved client records without changing them.",
+        "open_world_justification": "List Clients is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Clients does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_client": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves one saved client and its details without changing the record.",
+        "open_world_justification": "Get Client Details is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Client Details does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "create_client": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a client record in the selected company's address book.",
+        "open_world_justification": "Create Client is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Create Client does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "update_client": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Updates the selected client's supplied contact and billing fields.",
+        "open_world_justification": "Update Client is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Update Client does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "delete_client": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes the selected client record from the company's address book.",
+        "open_world_justification": "Delete Client is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Deletes the selected client record from the company's address book."
+      }
+    },
+    "list_products": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves catalog products matching the requested filters without changing invoice lines.",
+        "open_world_justification": "List Products is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Products does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_product": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves a catalog product and its invoice usage without modifying it.",
+        "open_world_justification": "Get Product is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Product does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "create_product": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a reusable product or service in the company catalog.",
+        "open_world_justification": "Create Product is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Create Product does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "update_product": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Changes the supplied catalog-product fields without rewriting existing invoices.",
+        "open_world_justification": "Update Product is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Update Product does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "archive_product": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Archives a product so it is no longer offered for new invoices, retaining existing invoice lines.",
+        "open_world_justification": "Archive Product is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Archives a product so it is no longer offered for new invoices, retaining existing invoice lines."
+      }
+    },
+    "list_vendors": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves the company's saved supplier records without changing them.",
+        "open_world_justification": "List Vendors is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Vendors does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_vendor": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves one saved supplier's details without modifying its record.",
+        "open_world_justification": "Get Vendor Details is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Vendor Details does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "create_vendor": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a supplier record, including only the supplied business billing details.",
+        "open_world_justification": "Create Vendor is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Create Vendor does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "update_vendor": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Changes the supplied fields of a saved supplier record.",
+        "open_world_justification": "Update Vendor is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Update Vendor does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "delete_vendor": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes the selected supplier record.",
+        "open_world_justification": "Delete Vendor is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Deletes the selected supplier record."
+      }
+    },
+    "list_bills": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves incoming supplier invoices without modifying their status or initiating payments.",
+        "open_world_justification": "List Bills is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Bills does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_bill": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves one incoming bill without modifying it or contacting a bank.",
+        "open_world_justification": "Get Bill Details is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Bill Details does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "update_bill": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Updates the selected bill's bookkeeping status without starting a payment.",
+        "open_world_justification": "Update Bill is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Update Bill does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "mark_bill_paid": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Records that a bill was paid by changing its bookkeeping status, without moving money.",
+        "open_world_justification": "Mark Bill as Paid is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Mark Bill as Paid does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "delete_bill": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes the selected incoming bill record.",
+        "open_world_justification": "Delete Bill is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Deletes the selected incoming bill record."
+      }
+    },
+    "cancel_recurring_invoice": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Cancels future generation and scheduled sends for a recurring series while retaining issued invoices.",
+        "open_world_justification": "cancel recurring invoice is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Cancels future generation and scheduled sends for a recurring series while retaining issued invoices."
+      }
+    },
+    "prepare_invoice_from_contract": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Saves a source contract and extracts an editable proposal without creating or sending an invoice.",
+        "open_world_justification": "prepare invoice from contract is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "prepare invoice from contract does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "create_invoice": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates an invoice and can enqueue delivery to the client when automatic sending is requested.",
+        "open_world_justification": "Can send invoice or quote emails to user-specified external recipients.",
+        "destructive_justification": "Creates an invoice and can enqueue delivery to the client when automatic sending is requested."
+      }
+    },
+    "create_recurring_invoice": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates a recurring invoice series that can generate and email future invoices when automatic sending is requested.",
+        "open_world_justification": "Can send invoice or quote emails to user-specified external recipients.",
+        "destructive_justification": "Creates a recurring invoice series that can generate and email future invoices when automatic sending is requested."
+      }
+    },
+    "get_invoice": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves an invoice and its temporary PDF download link without changing the invoice.",
+        "open_world_justification": "Get Invoice Details is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Invoice Details does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "send_invoice": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Sends the selected invoice by email to the specified client and additional recipients.",
+        "open_world_justification": "Can send invoice or quote emails to user-specified external recipients.",
+        "destructive_justification": "Sends the selected invoice by email to the specified client and additional recipients."
+      }
+    },
+    "send_invoice_overdue_reminder": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Sends an overdue-invoice reminder by email to the specified recipients.",
+        "open_world_justification": "Can send invoice or quote emails to user-specified external recipients.",
+        "destructive_justification": "Sends an overdue-invoice reminder by email to the specified recipients."
+      }
+    },
+    "link_transaction": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Links an existing transaction to the selected invoice in the company's books.",
+        "open_world_justification": "Link Transaction to Invoice is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Link Transaction to Invoice does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_einvoice_xml": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves an existing invoice's electronic-invoice XML without changing or submitting it.",
+        "open_world_justification": "Get E-Invoice XML is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get E-Invoice XML does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "list_invoices": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves invoices matching the supplied filters without changing or sending them.",
+        "open_world_justification": "List Invoices is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Invoices does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_invoice_preview": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves the selected invoice's existing preview image without creating or sending an invoice.",
+        "open_world_justification": "Get Invoice Preview is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Invoice Preview does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "create_offer": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates a quote and can enqueue email delivery when automatic sending is requested.",
+        "open_world_justification": "Can send invoice or quote emails to user-specified external recipients.",
+        "destructive_justification": "Creates a quote and can enqueue email delivery when automatic sending is requested."
+      }
+    },
+    "list_offers": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves the company's saved quotes without modifying or sending them.",
+        "open_world_justification": "List Offers is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Offers does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_offer": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves one saved quote and its temporary PDF download link without modifying it.",
+        "open_world_justification": "Get Offer Details is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Offer Details does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "send_offer": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Emails the selected quote to the specified client and additional recipients.",
+        "open_world_justification": "Can send invoice or quote emails to user-specified external recipients.",
+        "destructive_justification": "Emails the selected quote to the specified client and additional recipients."
+      }
+    },
+    "convert_offer_to_invoice": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates an invoice from the selected quote and removes the original quote.",
+        "open_world_justification": "Convert Offer to Invoice is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Creates an invoice from the selected quote and removes the original quote."
+      }
+    },
+    "list_tax_reports": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves available tax-report records without generating a preview or submitting a return.",
+        "open_world_justification": "List Tax Reports is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Tax Reports does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_tax_report": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves one tax report and any existing filed-report download link without submitting it.",
+        "open_world_justification": "Get Tax Report is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Tax Report does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "validate_tax_number": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Validates a business tax number through Norman's validation service without changing a registration.",
+        "open_world_justification": "Validate Tax Number is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Validate Tax Number does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "generate_finanzamt_preview": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Generates and stores a new temporary test-preview PDF without submitting a tax return.",
+        "open_world_justification": "Generate Finanzamt Preview is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Generate Finanzamt Preview does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "submit_tax_report": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Submits the selected tax report to the Finanzamt after the user explicitly confirms filing.",
+        "open_world_justification": "Transmits a tax return to the external Finanzamt filing service.",
+        "destructive_justification": "Submits the selected tax report to the Finanzamt after the user explicitly confirms filing."
+      }
+    },
+    "list_tax_states": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves supported tax-state reference data without changing account settings.",
+        "open_world_justification": "List German Tax States is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List German Tax States does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "list_tax_settings": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves the company's current tax settings without changing them.",
+        "open_world_justification": "List Tax Settings is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Tax Settings does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "update_tax_setting": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Changes the supplied tax-configuration fields without filing a return.",
+        "open_world_justification": "Update Tax Setting is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Update Tax Setting does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_company_tax_statistics": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves the company's current tax statistics without changing its reports.",
+        "open_world_justification": "Get Company Tax Statistics is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Company Tax Statistics does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_vat_next_report": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves the next VAT-period estimate without generating or filing a return.",
+        "open_world_justification": "Get Next VAT Report is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Next VAT Report does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "search_transactions": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves transactions matching the supplied filters without changing bookkeeping records.",
+        "open_world_justification": "Search Transactions is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Search Transactions does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_transaction": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves one transaction with its split items and VAT fields without modifying it.",
+        "open_world_justification": "Get Transaction is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Transaction does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "create_transaction": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a manual bookkeeping transaction and its supplied split items.",
+        "open_world_justification": "Create Transaction is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Create Transaction does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "update_transaction": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Updates the selected transaction and supplied accounting or split-item fields.",
+        "open_world_justification": "Update Transaction is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Update Transaction does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "delete_transaction": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes a transaction and its regenerable Ledger postings after confirmation.",
+        "open_world_justification": "Delete Transaction is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Deletes a transaction and its regenerable Ledger postings after confirmation."
+      }
+    },
+    "categorize_transaction": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Computes an AI category suggestion from transaction details without applying it to the books.",
+        "open_world_justification": "Categorize Transaction is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Categorize Transaction does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "change_transaction_verification": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Changes a transaction's verified or unverified bookkeeping status.",
+        "open_world_justification": "Change Transaction Verification Status is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Change Transaction Verification Status does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_accounting_setup": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves fiscal-year opening and cutover status without changing the books.",
+        "open_world_justification": "Get Accounting Setup is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Accounting Setup does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "analyze_accounting_cutover_documents": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Analyzes uploaded migration files without importing their rows into the Ledger.",
+        "open_world_justification": "Analyze Accounting Migration Files is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Analyze Accounting Migration Files does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "preview_accounting_cutover": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Computes migration validation and reconciliation findings without applying the migration.",
+        "open_world_justification": "Preview Accounting Migration is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Preview Accounting Migration does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "apply_accounting_cutover": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Imports the explicitly confirmed opening and cutover data into the company's books.",
+        "open_world_justification": "Apply Accounting Migration is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Imports the explicitly confirmed opening and cutover data into the company's books."
+      }
+    },
+    "list_chart_of_accounts_templates": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves available country-specific account frameworks without switching the company framework.",
+        "open_world_justification": "List Chart of Accounts Templates is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Chart of Accounts Templates does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "list_chart_of_accounts": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves the company's account master with search and pagination without modifying it.",
+        "open_world_justification": "List Chart of Accounts is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Chart of Accounts does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "create_chart_of_accounts_account": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a custom account in the company's Ledger account master.",
+        "open_world_justification": "Create Chart of Accounts Account is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Create Chart of Accounts Account does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "update_chart_of_accounts_account": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Edits a custom account or changes the visibility of a built-in account.",
+        "open_world_justification": "Update Chart of Accounts Account is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Update Chart of Accounts Account does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "deactivate_chart_of_accounts_account": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deactivates an account while retaining its existing immutable postings.",
+        "open_world_justification": "Deactivate Chart of Accounts Account is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Deactivates an account while retaining its existing immutable postings."
+      }
+    },
+    "switch_account_framework": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Changes the company's accounting framework only with the required explicit confirmation.",
+        "open_world_justification": "Switch Account Framework is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Changes the company's accounting framework only with the required explicit confirmation."
+      }
+    },
+    "list_assets": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves fixed assets and depreciation schedules without changing them.",
+        "open_world_justification": "List Assets is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Assets does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_asset": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves one asset and its source and depreciation details without changing it.",
+        "open_world_justification": "Get Asset is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Asset does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "create_asset": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates an asset record, optionally linked to an existing transaction or split item.",
+        "open_world_justification": "Create Asset is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Create Asset does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "update_asset": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Updates the selected asset through Norman's audited asset service.",
+        "open_world_justification": "Update Asset is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Update Asset does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "delete_asset": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes the selected asset subject to the backend's audit and reversal rules.",
+        "open_world_justification": "Delete Asset is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Deletes the selected asset subject to the backend's audit and reversal rules."
+      }
+    },
+    "list_ledger_journal": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves the filtered chronological double-entry journal without changing postings.",
+        "open_world_justification": "List Ledger Journal is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Ledger Journal does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "list_ledger_account_balances": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves account debit, credit and balance totals without changing the Ledger.",
+        "open_world_justification": "List Ledger Account Balances is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Ledger Account Balances does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_ledger_account": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves one account's postings and running balances without modifying them.",
+        "open_world_justification": "Get Ledger Account is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Ledger Account does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "list_ledger_open_items": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves derived debtor and creditor open items and ageing without altering balances.",
+        "open_world_justification": "List Ledger Open Items is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Ledger Open Items does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_cash_book": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves the cash register derived from recorded cash transactions without changing it.",
+        "open_world_justification": "Get Cash Book is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Cash Book does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_ledger_profit_and_loss": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Computes the profit-and-loss view from existing Ledger postings without modifying them.",
+        "open_world_justification": "Get Ledger Profit and Loss is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Ledger Profit and Loss does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_ledger_balance_sheet": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Computes the balance-sheet view from existing Ledger postings without modifying them.",
+        "open_world_justification": "Get Ledger Balance Sheet is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Ledger Balance Sheet does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "create_manual_ledger_entry": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a balanced manual posting with the supplied tax treatment.",
+        "open_world_justification": "Create Manual Ledger Entry is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Create Manual Ledger Entry does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_manual_ledger_entry": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves a manual posting and its reversal links without changing the journal.",
+        "open_world_justification": "Get Manual Ledger Entry is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Manual Ledger Entry does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "reverse_manual_ledger_entry": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates a reversal posting that cancels a manual entry's effect while retaining the original entry.",
+        "open_world_justification": "Reverse Manual Ledger Entry is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Creates a reversal posting that cancels a manual entry's effect while retaining the original entry."
+      }
+    },
+    "list_annual_closes": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves fiscal-year close workspaces and their status without locking or submitting them.",
+        "open_world_justification": "List Annual Closes is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Annual Closes does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "create_annual_close": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a draft annual-close workspace without locking or submitting the fiscal year.",
+        "open_world_justification": "Create Annual Close is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Create Annual Close does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_annual_close": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves one annual-close workspace without changing its state.",
+        "open_world_justification": "Get Annual Close is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Annual Close does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "create_annual_close_entry": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a closing adjustment in an editable draft annual close.",
+        "open_world_justification": "Create Annual Close Entry is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Create Annual Close Entry does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_annual_close_workbook": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves annual-close statements and validation findings without locking or submitting the year.",
+        "open_world_justification": "Get Annual Close Workbook is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Annual Close Workbook does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "list_rules": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves accounting rules, usage summaries and limits without running their actions.",
+        "open_world_justification": "List Automation Rules is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Automation Rules does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "preview_rule": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Computes sample condition matches without creating a rule or applying its actions.",
+        "open_world_justification": "Preview Automation Rule is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Preview Automation Rule does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "create_rule": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a category-only automation for future matching transactions in the selected company.",
+        "open_world_justification": "Create Automation Rule is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Create Automation Rule does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "delete_rule": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes the selected accounting automation rule after confirmation.",
+        "open_world_justification": "Delete Automation Rule is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Deletes the selected accounting automation rule after confirmation."
+      }
+    },
+    "list_rule_executions": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves automation execution records without approving or running their actions.",
+        "open_world_justification": "List Rule Executions is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Rule Executions does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "list_pending_approvals": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves pending decisions without approving automations or payments.",
+        "open_world_justification": "List Pending Approvals is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Pending Approvals does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "undo_rule_execution": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Restores reversible bookkeeping changes from an automation and reports actions that cannot be undone.",
+        "open_world_justification": "Undo Rule Execution is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Undo Rule Execution does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "list_agents": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves automation cards and counters without enabling agents or initiating payments.",
+        "open_world_justification": "List Agents is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Agents does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "dismiss_rule_execution": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Dismisses a pending automation execution without performing its proposed actions.",
+        "open_world_justification": "Dismiss Rule Execution is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Dismiss Rule Execution does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "request_file_upload": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a short-lived browser-upload session for a document in Norman.",
+        "open_world_justification": "Create File Upload Link is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Create File Upload Link does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "upload_bulk_attachments": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Downloads supplied document URLs when provided and stores multiple attachments in Norman.",
+        "open_world_justification": "Can retrieve documents from arbitrary user-supplied HTTP or HTTPS download URLs.",
+        "destructive_justification": "Upload Bulk Attachments does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "upload_structured_attachments": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Downloads supplied document URLs when provided and stores structured documents without creating transactions.",
+        "open_world_justification": "Can retrieve documents from arbitrary user-supplied HTTP or HTTPS download URLs.",
+        "destructive_justification": "Import Structured Documents (No OCR) does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "list_attachments": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves saved document metadata and temporary download links without changing the documents.",
+        "open_world_justification": "List Attachments is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Attachments does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "create_attachment": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Downloads a supplied document URL when provided and creates an attachment with the requested metadata.",
+        "open_world_justification": "Can retrieve documents from arbitrary user-supplied HTTP or HTTPS download URLs.",
+        "destructive_justification": "Create Attachment does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "link_attachment_transaction": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Associates an existing document with a transaction in the company's books.",
+        "open_world_justification": "Link Attachment to Transaction is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Link Attachment to Transaction does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "delete_attachment": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes the selected attachment subject to linked-transaction and locked-period protections.",
+        "open_world_justification": "Delete Attachment is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Deletes the selected attachment subject to linked-transaction and locked-period protections."
+      }
+    },
+    "get_attachment_preview": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves a saved attachment and renders an inline preview without changing the source document.",
+        "open_world_justification": "Get Attachment Preview is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Attachment Preview does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_financial_overview": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Combines existing company, balance, accounting and tax aggregates without changing their source records.",
+        "open_world_justification": "Get Financial Overview is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Financial Overview does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_company_details": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves the selected company's profile without changing its settings.",
+        "open_world_justification": "Get Company Details is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Company Details does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_company_balance": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves the company's current bank balances without initiating a transfer.",
+        "open_world_justification": "Get Company Balance is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Company Balance does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "update_company_details": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Changes the supplied company-profile and accounting-settings fields.",
+        "open_world_justification": "Update Company Details is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Update Company Details does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "list_company_categories": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves the company's DATEV category records without modifying them.",
+        "open_world_justification": "List Company Categories is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Company Categories does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "list_coa_templates": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves available chart-of-accounts templates without assigning one.",
+        "open_world_justification": "List Chart of Accounts Templates is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Chart of Accounts Templates does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "trigger_datev_export": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Generates a DATEV export archive from finalized transactions and optional attached documents.",
+        "open_world_justification": "Trigger DATEV Export is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Trigger DATEV Export does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "search_skr_by_code": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Looks up account codes in Norman's stored SKR reference chart without changing company accounts.",
+        "open_world_justification": "Search SKR Categories by Code (SME only) is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Search SKR Categories by Code (SME only) does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "suggest_skr_category": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Computes suggested SKR categories without applying a category or changing a transaction.",
+        "open_world_justification": "AI Category Suggestion (SME only) is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "AI Category Suggestion (SME only) does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "create_company_category": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a custom category in the active SME company's chart.",
+        "open_world_justification": "Create Company Category (SME only) is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Create Company Category (SME only) does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "set_company_categories_visibility": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Changes selected categories' visibility unless dry-run mode is requested, without deleting existing postings.",
+        "open_world_justification": "Hide or Unhide Company Categories (SME only) is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Hide or Unhide Company Categories (SME only) does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_client_overview": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Combines existing accounting and tax data for an authorized advisor client without changing it.",
+        "open_world_justification": "Get Client Overview is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Client Overview does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_missing_documents_summary": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves an authorized client's transactions lacking receipts without sending reminders.",
+        "open_world_justification": "Get Missing Documents Summary is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Missing Documents Summary does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_tax_compliance_status": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves an authorized client's filing status and outstanding tax items without submitting anything.",
+        "open_world_justification": "Get Tax Compliance Status is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Tax Compliance Status does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "ping_client_for_documents": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Sends receipt-request reminders to the selected advisor client for specified transactions.",
+        "open_world_justification": "Sends document-request reminders to external client recipients.",
+        "destructive_justification": "Sends receipt-request reminders to the selected advisor client for specified transactions."
+      }
+    },
+    "list_tax_advisor_clients": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves the companies available to the authenticated tax advisor without changing access.",
+        "open_world_justification": "List Tax Advisor Clients is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "List Tax Advisor Clients does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "switch_company": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Changes the authenticated caller's active company selection for later tool calls.",
+        "open_world_justification": "Switch Active Company is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Switch Active Company does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_incorporation": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves only formation existence and status with a Norman workspace link, excluding founder identity records.",
+        "open_world_justification": "get incorporation is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "get incorporation does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_gewerbe_registration": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves only trade-registration existence and status with a Norman form link, excluding owner identity records.",
+        "open_world_justification": "get gewerbe registration is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "get gewerbe registration does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_corporate_tax_registration": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves only corporate-registration existence and status with a Norman form link, excluding personal tax IDs.",
+        "open_world_justification": "get corporate tax registration is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "get corporate tax registration does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_norman_workspace": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Returns a static authenticated-workspace link without calling a bank or creating any record or payment order.",
+        "open_world_justification": "get norman workspace is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "get norman workspace does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_tax_filing_data": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Generates and stores a temporary test-preview PDF and returns readiness data without filing the report.",
+        "open_world_justification": "Get Tax Filing Data is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Tax Filing Data does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_tax_submission_status_data": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves filing status and any existing submitted-report link without generating a new preview.",
+        "open_world_justification": "Get Tax Submission Status Data is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Tax Submission Status Data does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "render_tax_preview": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Generates and stores a temporary test-preview PDF before rendering it, without filing the report.",
+        "open_world_justification": "Render Tax Preview is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Render Tax Preview does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "render_tax_submission": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Generates and stores a temporary preview for a confirmation screen without itself submitting the report.",
+        "open_world_justification": "Render Tax Submission is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Render Tax Submission does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_document_review_data": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves and normalizes a bounded document page with summaries of the returned rows.",
+        "open_world_justification": "Get Document Review Data is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Document Review Data does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "render_document_review": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Renders the supplied document-review result without modifying the source documents.",
+        "open_world_justification": "Render Document Review is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Render Document Review does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_reconciliation_cockpit_data": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves and summarizes a bounded transaction page without changing categories or document links.",
+        "open_world_justification": "Get Reconciliation Cockpit Data is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Reconciliation Cockpit Data does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "render_reconciliation_cockpit": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Renders the supplied reconciliation result without changing transactions.",
+        "open_world_justification": "Render Reconciliation Cockpit is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Render Reconciliation Cockpit does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "get_ledger_explorer_data": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves account totals or postings for the requested period without modifying the Ledger.",
+        "open_world_justification": "Get Ledger Explorer Data is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Get Ledger Explorer Data does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    },
+    "render_ledger_explorer": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Renders the supplied Ledger result, including an honest empty state, without modifying postings.",
+        "open_world_justification": "Render Ledger Explorer is confined to authorized Norman workspace data or local presentation, not open-ended external entities.",
+        "destructive_justification": "Render Ledger Explorer does not delete records or perform irreversible external sends, transfers or tax filing."
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "description": "Review existing documents and their matching state",
+      "user_prompt": "Show up to 30 of my existing Norman documents in Document Review, without a date filter. Show which returned documents need matching; do not change anything.",
+      "file_attachment_urls": null,
+      "tools_triggered": "get_document_review_data, render_document_review",
+      "expected_output": "Fetch the document page and pass its complete result to the renderer; show real rows and counts for that returned page only, with working linked/unmatched filters and no mutations.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Review a bounded transaction sample",
+      "user_prompt": "Open the Reconciliation Cockpit for up to 50 existing transactions with no date filter. Summarize missing documents, uncategorized items and review status only for the returned rows; change nothing.",
+      "file_attachment_urls": null,
+      "tools_triggered": "get_reconciliation_cockpit_data, render_reconciliation_cockpit",
+      "expected_output": "Render the exact returned transaction data and matching subset counts; do not describe this sample as the company's complete history or change transactions.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Handle an empty Ledger honestly",
+      "user_prompt": "Show my Norman Ledger Explorer for all available periods. If there are no postings, say so; do not invent balances or create any entries.",
+      "file_attachment_urls": null,
+      "tools_triggered": "get_ledger_explorer_data, render_ledger_explorer",
+      "expected_output": "Render the returned accounts; the provided review account currently has no Ledger postings, so display the explicit empty state without invented account rows or balances.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Discover a report ID and generate only a test preview",
+      "user_prompt": "List my Norman tax reports, choose an existing unsubmitted VAT report and open its non-binding test preview. Tell me which report you chose; do not submit or pay anything.",
+      "file_attachment_urls": null,
+      "tools_triggered": "list_tax_reports, render_tax_preview",
+      "expected_output": "Obtain an actual report ID from the list, generate and render that report's test preview, show its returned status and any validation issues, and never call submit_tax_report; no filing or payment occurs.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Registration status without identity collection",
+      "user_prompt": "Check whether I have a GmbH/UG incorporation in Norman. If none exists, say so and give me the Norman workspace link. Do not start one or ask me for personal identifiers or founder birth details here.",
+      "file_attachment_urls": null,
+      "tools_triggered": "get_incorporation",
+      "expected_output": "For the provided account, return no active incorporation and a link to the authenticated Norman workspace; do not invent progress, create a record or collect founder identity data.",
+      "expected_output_url": null
+    }
+  ],
+  "negative_test_cases": [
+    {
+      "description": "Unrelated calendar request",
+      "user_prompt": "What meetings are on my calendar tomorrow?",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "Do not invoke Norman because it does not provide calendar access.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Medical records are out of scope",
+      "user_prompt": "Store my medical history and diagnose these symptoms.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "Do not invoke Norman or collect medical records; this accounting app is not a medical service.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Investment trading is unavailable",
+      "user_prompt": "Use Norman to buy shares and transfer funds into my brokerage account.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "Do not invoke Norman to execute investments or transfers and do not imply that a trade or payment occurred.",
+      "expected_output_url": null
+    }
+  ]
+}

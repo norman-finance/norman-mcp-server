@@ -23,6 +23,7 @@ EXTERNAL_IRREVERSIBLE_WRITE = (False, True, True)
 
 def _annotation_tuple(tool):  # noqa: ANN001, ANN202
     annotations = tool.annotations
+    assert annotations is not None, f"{tool.name}: all required annotations are missing"
     return (
         annotations.readOnlyHint,
         annotations.openWorldHint,
@@ -54,7 +55,7 @@ def test_registration_tools_advertise_truthful_submission_annotations() -> None:
         "match_incorporation_notaries": EXTERNAL_IRREVERSIBLE_WRITE,
         "request_incorporation_notary": EXTERNAL_IRREVERSIBLE_WRITE,
         "suggest_incorporation_purpose": READ_ONLY,
-        "check_incorporation_name": READ_ONLY,
+        "check_incorporation_name": (True, True, False),
         "complete_incorporation_step": WRITE,
         "get_gewerbe_registration": READ_ONLY,
         "get_gewerbe_registration_choices": READ_ONLY,
@@ -92,8 +93,14 @@ def test_external_actions_and_internal_ai_use_truthful_annotations() -> None:
     tools = server._tool_manager._tools  # noqa: SLF001
 
     assert _annotation_tuple(tools["send_invoice"]) == EXTERNAL_IRREVERSIBLE_WRITE
+    assert _annotation_tuple(tools["create_invoice"]) == EXTERNAL_IRREVERSIBLE_WRITE
+    assert _annotation_tuple(tools["create_recurring_invoice"]) == EXTERNAL_IRREVERSIBLE_WRITE
+    assert _annotation_tuple(tools["cancel_recurring_invoice"]) == DESTRUCTIVE_WRITE
+    assert _annotation_tuple(tools["prepare_invoice_from_contract"]) == WRITE
+    assert _annotation_tuple(tools["generate_finanzamt_preview"]) == WRITE
     assert _annotation_tuple(tools["send_invoice_overdue_reminder"]) == EXTERNAL_IRREVERSIBLE_WRITE
     assert _annotation_tuple(tools["send_offer"]) == EXTERNAL_IRREVERSIBLE_WRITE
+    assert _annotation_tuple(tools["create_offer"]) == EXTERNAL_IRREVERSIBLE_WRITE
     assert _annotation_tuple(tools["ping_client_for_documents"]) == EXTERNAL_IRREVERSIBLE_WRITE
     assert _annotation_tuple(tools["submit_tax_report"]) == EXTERNAL_IRREVERSIBLE_WRITE
     assert _annotation_tuple(tools["approve_rule_execution"]) == EXTERNAL_IRREVERSIBLE_WRITE

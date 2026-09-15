@@ -164,6 +164,9 @@
         return `${metrics(data.summary)}${toolbar([["all","All"],["Missing document","Missing document"],["Uncategorized","Uncategorized"],["Previous SKR","Previous SKR"]])}${rows.length?table:'<div class="empty">No transactions match this filter.</div>'}`;
       }
       function ledgerView(data) {
+        if (!(data.items||[]).length) {
+          return `${metrics(data.summary)}<div class="empty">No Ledger postings were found for this period.</div>`;
+        }
         if (data.mode==="account") {
           const account=data.account||{};
           const rows=data.items||[];

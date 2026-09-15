@@ -52,9 +52,9 @@ def register_invoice_tools(mcp):
         title="Create Invoice",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=False,
-            openWorldHint=False,
+            openWorldHint=True,
         ),
     )
     async def create_invoice(
@@ -207,9 +207,9 @@ def register_invoice_tools(mcp):
         title="Create Recurring Invoice",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=False,
-            openWorldHint=False,
+            openWorldHint=True,
         ),
     )
     async def create_recurring_invoice(
