@@ -31,6 +31,13 @@ READ_ONLY = ToolAnnotations(
     openWorldHint=False,
 )
 
+PREVIEW_WRITE = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=False,
+    openWorldHint=False,
+)
+
 
 def _api_and_company(ctx: Context) -> tuple[Any, Optional[str], Optional[Dict[str, Any]]]:
     api = ctx.request_context.lifespan_context["api"]
@@ -324,7 +331,7 @@ def _render_meta(
     }
 
 
-def register_public_apps(mcp: Any) -> None:
+def register_public_apps(mcp: Any, *, widget_domain: Optional[str] = None) -> None:
     """Register the public connector's portable accounting and tax views."""
 
     @mcp.resource(
@@ -337,7 +344,9 @@ def register_public_apps(mcp: Any) -> None:
             "ui": {
                 "prefersBorder": False,
                 "csp": {"connectDomains": [], "resourceDomains": []},
+                **({"domain": widget_domain} if widget_domain else {}),
             },
+            **({"openai/widgetDomain": widget_domain} if widget_domain else {}),
             "openai/widgetDescription": (
                 "A read-only Norman accounting workbench for reviewing documents, "
                 "reconciliation issues and Ledger account postings."
@@ -362,7 +371,9 @@ def register_public_apps(mcp: Any) -> None:
             "ui": {
                 "prefersBorder": False,
                 "csp": {"connectDomains": [], "resourceDomains": []},
+                **({"domain": widget_domain} if widget_domain else {}),
             },
+            **({"openai/widgetDomain": widget_domain} if widget_domain else {}),
             "openai/widgetDescription": (
                 "A Norman tax filing view for reviewing a test Finanzamt preview and, "
                 "only after explicit user confirmation, submitting the selected report."
@@ -453,12 +464,15 @@ def register_public_apps(mcp: Any) -> None:
         }
         return data, preview_image
 
-    @mcp.tool(title="Get Tax Filing Data", annotations=READ_ONLY)
+    @mcp.tool(title="Get Tax Filing Data", annotations=PREVIEW_WRITE)
     async def get_tax_filing_data(
         ctx: Context,
         report_id: str = Field(description="Public ID of the tax report to review"),
     ) -> Dict[str, Any]:
-        """Get a compact test-preview and submission-readiness view for one tax report."""
+        """Generate and store a temporary test preview and return its readiness view.
+
+        Never submits the report; repeated calls create new preview files.
+        """
         data, _preview_image = await load_tax_filing(ctx, report_id, generate_preview=True)
         return data
 
@@ -476,9 +490,10 @@ def register_public_apps(mcp: Any) -> None:
         title="Render Tax Preview",
         description=(
             "Open a test Finanzamt preview for a tax report. This never submits the report. "
-            "Call this directly with the report ID."
+            "Generates and stores a new temporary PDF on each call. "
+            "Use list_tax_reports to find the report ID, then call this directly."
         ),
-        annotations=READ_ONLY,
+        annotations=PREVIEW_WRITE,
         meta=_render_meta(
             "Generating Finanzamt preview…",
             "Tax preview ready",
@@ -502,10 +517,11 @@ def register_public_apps(mcp: Any) -> None:
         title="Render Tax Submission",
         description=(
             "Open the confirmation step for a tax report. Rendering never submits anything. "
+            "Each call generates and stores a new temporary test-preview PDF. "
             "The user must review the generated test preview, check the explicit confirmation "
             "box and invoke the destructive submission tool from the UI."
         ),
-        annotations=READ_ONLY,
+        annotations=PREVIEW_WRITE,
         meta=_render_meta(
             "Preparing tax submission review…",
             "Submission review ready",
@@ -553,7 +569,7 @@ def register_public_apps(mcp: Any) -> None:
                     "date_from": date_from,
                     "date_to": date_to,
                     "ordering": "-created",
-                    "pageSize": limit,
+                    "page_size": limit,
                 }.items()
                 if value is not None
             },
@@ -616,9 +632,9 @@ def register_public_apps(mcp: Any) -> None:
             params={
                 key: value
                 for key, value in {
-                    "dateFrom": date_from,
-                    "dateTo": date_to,
-                    "limit": limit,
+                    "date_from": date_from,
+                    "date_to": date_to,
+                    "page_size": limit,
                 }.items()
                 if value is not None
             },

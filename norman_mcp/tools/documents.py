@@ -221,7 +221,7 @@ def register_document_tools(mcp):
             readOnlyHint=False,
             destructiveHint=False,
             idempotentHint=False,
-            openWorldHint=False,
+            openWorldHint=True,
         ),
     )
     async def upload_bulk_attachments(
@@ -350,7 +350,7 @@ def register_document_tools(mcp):
             readOnlyHint=False,
             destructiveHint=False,
             idempotentHint=False,
-            openWorldHint=False,
+            openWorldHint=True,
         ),
     )
     async def upload_structured_attachments(
@@ -514,7 +514,7 @@ def register_document_tools(mcp):
             readOnlyHint=False,
             destructiveHint=False,
             idempotentHint=False,
-            openWorldHint=False,
+            openWorldHint=True,
         ),
     )
     async def create_attachment(

@@ -4,6 +4,8 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 from urllib.parse import urljoin
 
+from mcp.types import ToolAnnotations
+
 from norman_mcp import config
 from norman_mcp.context import Context
 
@@ -61,8 +63,10 @@ def invoice_arguments_from_contract(proposal: dict) -> dict:
 
 def register_contract_tools(mcp: Any) -> None:
 
-    @mcp.tool()
-    async def cancel_recurring_invoice(ctx: Context, recurring_invoice_id: str) -> dict:
+    @mcp.tool(annotations=ToolAnnotations(
+        readOnlyHint=False, openWorldHint=False, destructiveHint=True, idempotentHint=True,
+    ))
+    async def cancel_recurring_invoice(ctx: Context, recurring_invoice_id: str) -> dict[str, Any]:
         """Stop a recurring invoice series, including ongoing contract billing.
 
         Use the series ID returned by create_recurring_invoice. This cancels future
@@ -78,14 +82,16 @@ def register_contract_tools(mcp: Any) -> None:
         )
         return await api.arequest("POST", url)
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(
+        readOnlyHint=False, openWorldHint=False, destructiveHint=False, idempotentHint=False,
+    ))
     async def prepare_invoice_from_contract(
         ctx: Context,
         attachment_id: str | None = None,
         context_attachment_id: str | None = None,
         file_content_base64: str | None = None,
         filename: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Contract to invoice: save a source contract and extract an editable invoice proposal.
 
         Provide exactly one source: attachment_id of a saved contract in the active company,

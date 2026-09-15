@@ -120,9 +120,9 @@ def register_tax_tools(mcp):
     @mcp.tool(
         title="Generate Finanzamt Preview",
         annotations=ToolAnnotations(
-            readOnlyHint=True,
+            readOnlyHint=False,
             destructiveHint=False,
-            idempotentHint=True,
+            idempotentHint=False,
             openWorldHint=False,
         ),
     )
@@ -133,9 +133,9 @@ def register_tax_tools(mcp):
         """
         Generate a test Finanzamt preview for a tax report.
 
-        Returns the preview as an inline PNG image (first page) plus a
-        downloadUrl for the full PDF. The image is rendered directly in
-        clients that support MCP ImageContent.
+        Generates and stores a temporary preview PDF without submitting the report.
+        Returns its first page as an inline image in the API's format (normally JPEG)
+        plus a downloadUrl for the full PDF. Repeated calls create new preview files.
         """
         api = ctx.request_context.lifespan_context["api"]
 
@@ -158,7 +158,7 @@ def register_tax_tools(mcp):
                 content.append(ImageContent(
                     type="image",
                     data=preview_b64,
-                    mimeType="image/png",
+                    mimeType=result.get("mimeType") or "image/jpeg",
                 ))
 
             meta = {k: v for k, v in result.items() if k != "previewImage"}

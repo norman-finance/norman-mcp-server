@@ -83,7 +83,7 @@ def register_company_tools(mcp):
         city: Optional[str] = None,
         country: Optional[str] = None,
         vat_id: Optional[str] = None,
-        tax_id: Optional[str] = None,
+        tax_id: Optional[str] = Field(default=None, description="Business Steuernummer for the company, not a personal 11-digit Steuer-ID/IdNr; enter personal identifiers only in Norman's authenticated forms."),
         phone: Optional[str] = None,
         tax_state: Optional[str] = None,
         activity_start: Optional[datetime] = None,

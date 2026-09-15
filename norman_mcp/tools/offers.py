@@ -60,9 +60,9 @@ def register_offer_tools(mcp):
         title="Create Offer",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=False,
-            openWorldHint=False,
+            openWorldHint=True,
         ),
     )
     async def create_offer(

@@ -212,6 +212,27 @@ def test_widget_is_self_contained_and_uses_standard_bridge() -> None:
     assert "https://" not in html
 
 
+def test_preview_tools_disclose_saved_pdf_side_effects() -> None:
+    mcp, _api = _registered()
+    for name in ("get_tax_filing_data", "render_tax_preview", "render_tax_submission"):
+        annotations = mcp.tool_options[name]["annotations"]
+        assert annotations.readOnlyHint is False
+        assert annotations.idempotentHint is False
+        assert annotations.destructiveHint is False
+        assert annotations.openWorldHint is False
+    assert mcp.tool_options["get_tax_submission_status_data"]["annotations"].readOnlyHint is True
+
+
+def test_reconciliation_sends_supported_date_and_page_filters() -> None:
+    mcp, api = _registered()
+    asyncio.run(mcp.tools["get_reconciliation_cockpit_data"](
+        _context(api), date_from="2026-01-01", date_to="2026-01-31", limit=15,
+    ))
+    assert api.requests[0][2]["params"] == {
+        "date_from": "2026-01-01", "date_to": "2026-01-31", "page_size": 15,
+    }
+
+
 def test_widget_uses_flat_norman_layout_without_wasting_table_width() -> None:
     mcp, _api = _registered()
     html = asyncio.run(mcp.resources[APP_RESOURCE_URI]())
@@ -270,6 +291,8 @@ def test_document_and_reconciliation_data_are_compact_and_actionable() -> None:
         "status": "Needs match",
     }
     assert reconciliation["summary"]["needsAttention"] == 1
+    assert api.requests[0][2]["params"]["page_size"] == 30
+    assert api.requests[1][2]["params"]["page_size"] == 50
     assert reconciliation["items"][0]["issues"] == [
         "Missing document",
         "Uncategorized",
