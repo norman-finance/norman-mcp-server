@@ -450,7 +450,7 @@ def register_accounting_tools(mcp: Any) -> None:
         }
         return await _request(api, "POST", url, json_data=payload)
 
-    @mcp.tool(title="Update Chart of Accounts Account", annotations=WRITE)
+    @mcp.tool(title="Update Chart of Accounts Account", annotations=DESTRUCTIVE)
     async def update_chart_of_accounts_account(
         ctx: Context,
         account_id: str = Field(

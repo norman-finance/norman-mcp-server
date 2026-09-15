@@ -337,7 +337,7 @@ def register_transaction_tools(mcp):
         title="Update Transaction",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=True,
             openWorldHint=False,
         ),

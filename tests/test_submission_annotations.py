@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from mcp.server.fastmcp import FastMCP
 
+from norman_mcp.tools.accounting import register_accounting_tools
 from norman_mcp.tools.company import register_company_tools
 from norman_mcp.tools.categories import register_category_tools
 from norman_mcp.tools.corporate_tax_registration import register_corporate_tax_registration_tools
@@ -10,9 +11,11 @@ from norman_mcp.tools.gewerbe_registration import register_gewerbe_registration_
 from norman_mcp.tools.incorporation import register_incorporation_tools
 from norman_mcp.tools.invoices import register_invoice_tools
 from norman_mcp.tools.offers import register_offer_tools
+from norman_mcp.tools.products import register_product_tools
 from norman_mcp.tools.rules import register_rule_tools
 from norman_mcp.tools.tax_advisor import register_tax_advisor_tools
 from norman_mcp.tools.taxes import register_tax_tools
+from norman_mcp.tools.transactions import register_transaction_tools
 
 
 READ_ONLY = (True, False, False)
@@ -112,6 +115,30 @@ def test_every_exposed_tool_sets_all_required_submission_hints() -> None:
 
     for tool in mcp._tool_manager._tools.values():  # noqa: SLF001
         assert None not in _annotation_tuple(tool), tool.name
+
+
+def test_transaction_item_replacement_is_marked_destructive() -> None:
+    server = FastMCP()
+    register_transaction_tools(server)
+    tool = server._tool_manager._tools["update_transaction"]
+    assert _annotation_tuple(tool) == DESTRUCTIVE_WRITE
+    assert "items" in tool.parameters["properties"]
+
+
+def test_product_archive_mode_is_marked_destructive() -> None:
+    server = FastMCP()
+    register_product_tools(server)
+    tool = server._tool_manager._tools["update_product"]
+    assert _annotation_tuple(tool) == DESTRUCTIVE_WRITE
+    assert "status" in tool.parameters["properties"]
+
+
+def test_account_deactivation_mode_is_marked_destructive() -> None:
+    server = FastMCP()
+    register_accounting_tools(server)
+    tool = server._tool_manager._tools["update_chart_of_accounts_account"]
+    assert _annotation_tuple(tool) == DESTRUCTIVE_WRITE
+    assert "active" in tool.parameters["properties"]
 
 
 class _DatevApi:

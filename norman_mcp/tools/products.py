@@ -199,7 +199,7 @@ def register_product_tools(mcp):
         title="Update Product",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=True,
             openWorldHint=False,
         ),
