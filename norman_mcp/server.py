@@ -387,24 +387,6 @@ def create_cors_app(server: FastMCP):
     # Get the underlying ASGI app
     app = server.streamable_http_app()
 
-    # Isolate the directory-reviewed product surface without changing the general
-    # connector, OAuth issuer, client registrations, callbacks or token handling.
-    from norman_mcp.chatgpt import CHATGPT_MCP_PATH, create_chatgpt_server
-    chatgpt = create_chatgpt_server(server)
-    chatgpt_app = chatgpt.streamable_http_app()
-    app.router.routes.extend(
-        route for route in chatgpt_app.routes if getattr(route, "path", None) == CHATGPT_MCP_PATH
-    )
-    primary_lifespan = app.router.lifespan_context
-
-    @asynccontextmanager
-    async def combined_lifespan(asgi_app):
-        async with primary_lifespan(asgi_app):
-            async with chatgpt.session_manager.run():
-                yield
-
-    app.router.lifespan_context = combined_lifespan
-    
     # Wrap with CORS
     cors_app = CORSMiddleware(
         app,
