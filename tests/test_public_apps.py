@@ -5,6 +5,7 @@ from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import create_connected_server_and_client_session
 from mcp.types import CallToolResult
@@ -389,6 +390,57 @@ def test_tax_rendering_never_calls_the_submission_endpoint() -> None:
         "norman/view": "tax-filing",
         "norman/previewImage": "dGVzdC1wcmV2aWV3",
     }
+    assert all("/submit-report/" not in url for _method, url, _kwargs in api.requests)
+
+
+@pytest.mark.parametrize("thumbnail", [{}, {"previewImage": None}, {"previewImage": ""}])
+def test_tax_preview_remains_available_with_pdf_but_no_thumbnail(thumbnail) -> None:
+    mcp, api = _registered()
+    original_request = api.arequest
+
+    async def request(method, url, **kwargs):
+        response = await original_request(method, url, **kwargs)
+        if url.endswith("/generate-preview-url/"):
+            return {"downloadUrl": response["downloadUrl"], **thumbnail}
+        return response
+
+    api.arequest = request
+    result = asyncio.run(mcp.tools["render_tax_preview"](_context(api), "report-1"))
+    data = result.structuredContent
+
+    assert data["preview"]["available"] is True
+    assert data["preview"]["downloadUrl"].endswith("/report-1.pdf")
+    assert data["preview"]["error"] == ""
+    assert data["canSubmit"] is True
+    assert data["checks"][1]["complete"] is True
+    assert "norman/previewImage" not in result.meta
+    assert all("/submit-report/" not in url for _method, url, _kwargs in api.requests)
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {},
+        {"previewImage": "dGVzdC1wcmV2aWV3"},
+        {"error": "ELSTER validation failed", "status_code": 400},
+    ],
+)
+def test_tax_preview_requires_a_successful_pdf_response(response) -> None:
+    mcp, api = _registered()
+    original_request = api.arequest
+
+    async def request(method, url, **kwargs):
+        original = await original_request(method, url, **kwargs)
+        return response if url.endswith("/generate-preview-url/") else original
+
+    api.arequest = request
+    result = asyncio.run(mcp.tools["render_tax_preview"](_context(api), "report-1"))
+    data = result.structuredContent
+
+    assert data["preview"]["available"] is False
+    assert data["preview"]["error"]
+    assert data["canSubmit"] is False
+    assert data["checks"][1]["complete"] is False
     assert all("/submit-report/" not in url for _method, url, _kwargs in api.requests)
 
 

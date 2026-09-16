@@ -21,7 +21,7 @@ from norman_mcp import config
 from norman_mcp.context import Context
 
 APP_RESOURCE_URI = "ui://norman/accounting-workbench-v3.html"
-TAX_APP_RESOURCE_URI = "ui://norman/tax-filing-v1.html"
+TAX_APP_RESOURCE_URI = "ui://norman/tax-filing-v2.html"
 APP_MIME_TYPE = "text/html;profile=mcp-app"
 
 READ_ONLY = ToolAnnotations(
@@ -422,7 +422,9 @@ def register_public_apps(mcp: Any, *, widget_domain: Optional[str] = None) -> No
                 preview_image = str(preview_response.get("previewImage") or "") or None
                 preview.update(
                     {
-                        "available": bool(preview_response.get("downloadUrl") and preview_image),
+                        # The PDF is the complete preview; its thumbnail is
+                        # optional in the API response.
+                        "available": bool(preview_response.get("downloadUrl")),
                         "mimeType": str(preview_response.get("mimeType") or "image/jpeg"),
                         "downloadUrl": str(preview_response.get("downloadUrl") or ""),
                     }
