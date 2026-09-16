@@ -6,6 +6,7 @@ from pydantic import Field
 from mcp.types import ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
+from norman_mcp.tools.missing_documents import category_name, missing_document_transactions, needs_document
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +142,8 @@ def register_tax_advisor_tools(mcp):
         date_to: Optional[str] = Field(default=None, description="End date YYYY-MM-DD"),
     ) -> Dict[str, Any]:
         """
+        Check the selected company; select company_id first when switching clients.
+
         List all transactions without receipts for a client company,
         grouped by month and category with amounts.
         Useful for tax advisors to know what documents to request from the client.
@@ -151,23 +154,10 @@ def register_tax_advisor_tools(mcp):
         """
         api = ctx.request_context.lifespan_context["api"]
 
-        txns_url = urljoin(
-            config.api_base_url,
-            f"api/v1/tax-advisor/clients/{company_id}/transactions/",
-        )
-        params: Dict[str, Any] = {"page_size": 200}
-        if date_from:
-            params["date_from"] = date_from
-        if date_to:
-            params["date_to"] = date_to
-
-        try:
-            resp = api._make_request("GET", txns_url, params=params)
-        except Exception as e:
-            return {"error": str(e)}
-
-        results = resp.get("results", []) if isinstance(resp, dict) else resp
-        missing = [tx for tx in results if not tx.get("hasAttachment", tx.get("has_attachment", False))]
+        results = await missing_document_transactions(api, company_id, date_from, date_to)
+        if isinstance(results, dict):
+            return results
+        missing = [tx for tx in results if needs_document(tx)]
 
         by_month: Dict[str, list] = {}
         for tx in missing:
@@ -188,7 +178,7 @@ def register_tax_advisor_tools(mcp):
                         "description": tx.get("description", ""),
                         "amount": tx.get("amount"),
                         "date": tx.get("valueDate", tx.get("value_date")),
-                        "category": tx.get("categoryName", tx.get("category_name")),
+                        "category": category_name(tx),
                     }
                     for tx in sorted(txns, key=lambda t: abs(float(t.get("amount", 0))), reverse=True)
                 ],
@@ -207,7 +197,7 @@ def register_tax_advisor_tools(mcp):
                     "description": tx.get("description", ""),
                     "amount": tx.get("amount"),
                     "date": tx.get("valueDate", tx.get("value_date")),
-                    "category": tx.get("categoryName", tx.get("category_name")),
+                    "category": category_name(tx),
                 }
                 for tx in top_missing
             ],
