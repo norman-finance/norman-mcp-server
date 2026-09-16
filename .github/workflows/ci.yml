@@ -7,7 +7,22 @@ on:
   pull_request:
 
 jobs:
+  tax-preview-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: pip install '.[dev,sse]'
+      - run: python -m pytest -q tests/test_public_apps.py tests/test_tax_preview.py
+      - run: node --test tests/tax_filing_ui.test.cjs
+
   build-docker-image:
+      needs: tax-preview-tests
       runs-on: ubuntu-latest
       permissions:
         contents: read
