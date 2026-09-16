@@ -29,11 +29,25 @@ To return to automatic calculation explicitly send `vatAmountMode: AUTO`, `docum
 
 In the web split editor, select each item's tax treatment, then "Input VAT stated on document" and its EUR amount. The document must already be attached. On mobile, these entries route to the web editor. When a native currency differs from EUR, the UI keeps the payment total and documented EUR VAT separate; it does not subtract EUR tax from a USD total.
 
+## Worked example: USD invoice paid from an EUR bank account
+
+Use the existing bank movement in its actual account currency. In this example the supplier invoice requests USD 150 and documents EUR 119 gross, comprising EUR 100 net plus EUR 19 German VAT. The bank converts USD 150 at EUR 0.80/USD, charging EUR 120, plus a separate EUR 2 fee. The single bank debit is EUR 122; the separately established currency loss is EUR 1.
+
+1. Attach the supplier invoice to the existing EUR 122 expense. Keep the invoice document's USD amount and EUR VAT unchanged.
+2. Split the existing debit into three EUR positions: invoice EUR 119, currency loss EUR 1, and bank fee EUR 2. In the REST expense payload these are `-119.00`, `-1.00`, and `-2.00`; preserve existing item IDs and send the complete list.
+3. On the invoice position select `DOMESTIC_INPUT_VAT`, 19%, and **Input VAT stated on document**. Enter EUR 19 and select the attached invoice. Use the appropriate expense account and the actual deductible business share.
+4. On the currency-loss position use the company's currency-conversion expense account (SKR04 6880 in this fixture), `DOMESTIC_NO_VAT`, and 0%. If the account is absent, add it through Chart of accounts with account type Expense, available in transactions, VAT not applicable, and suggested rate 0; do not substitute the bank-fee account. On the fee position use bank charges (SKR04 6855 in this fixture), `DOMESTIC_NO_VAT`, and 0%.
+5. Save and reopen before finalizing. The invoice's full documented VAT must still be EUR 19. The ledger for full deduction is expense EUR 100, input VAT EUR 19, FX loss EUR 1, bank fee EUR 2 against bank EUR 122. The invoice contributes EUR 19 input VAT to UStVA and annual VAT; the other two positions contribute no VAT.
+
+The currency loss must come from the reconciled invoice and bank amounts; do not invent a difference merely to force the split to balance. This example uses an EUR bank debit, not a USD bank account. A USD-account transaction retains its native currency and is converted by the existing currency service; the documented EUR VAT remains separate. This workflow classifies one existing payment and does not create another payment or an open-item settlement. If the invoice has already been booked as a payable, use its existing settlement flow rather than booking the expense twice; a full payable-to-payment FX settlement is not established by this example.
+
 ## Manual correction of the tax itself
 
 Create a manual ledger entry using `taxRole: VAT`, `taxTreatment: DOMESTIC_INPUT_VAT`, `taxCountryScope: DOMESTIC`, `taxCorrectionReason: BOOKKEEPING_ERROR`, a descriptive memo and `inputTaxDeductionPercent: 100`. The amount is the actual tax correction, for example EUR 0.59, without multiplying by 19%. Credit to the input VAT account reduces the deduction; debit increases it. Use exactly one appropriate input VAT account (SKR04 1400/1401/1406 or SKR03 1570/1571/1576). Other correction reasons are not supported by this mode.
 
 Use the entry's existing reverse endpoint/tool to cancel it; do not create an unrelated compensating bank payment. The original and its reversal must net to zero in the ledger, UStVA and annual USt. Historic BASE entries retain their role; only the reversal sign calculation changes.
+
+Draft UStVA and annual-VAT detail/list responses calculate current totals and lines together without writing on GET. `get_tax_filing_data` rereads the report after successful preview generation; an inaccessible refreshed report returns an error instead of presenting the old amount. Existing submitted snapshots remain unchanged.
 
 ## MCP field mapping
 
@@ -41,7 +55,7 @@ Use the entry's existing reverse endpoint/tool to cancel it; do not create an un
 
 ## Rollout and compatibility
 
-Deploy additive migrations 0195/0196, compatible API and every currency/OCR/repair worker first, then the web/mobile/MCP clients. The manual-correction patch can ship independently. The documented-VAT API patch is stacked on item treatment. Once documented values exist, do not roll back to old workers that do not understand them. Disabling controls does not protect stored source values; use a compatible rollback or forward fix.
+Deploy additive migrations 0196/0197 after the existing 0195 explicit-rate migration, compatible API and every currency/OCR/repair worker first, then the web/mobile/MCP clients. The manual-correction patch can ship independently. The documented-VAT API patch is stacked on item treatment. Once documented values exist, do not roll back to old workers that do not understand them. Disabling controls does not protect stored source values; use a compatible rollback or forward fix.
 
 Recalculate only the relevant company's draft reports after reviewing a scoped preview. Do not rewrite original/manual records, filed snapshots or locked periods. Existing ambiguous historical 0% split rows need review; the migration does not guess their treatment. Local regression and ERiC validation are distinct from deployment, customer-data verification and an actual DATEV import.
 

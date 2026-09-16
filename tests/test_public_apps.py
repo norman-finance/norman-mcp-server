@@ -298,6 +298,46 @@ def test_ledger_data_drills_down_without_mutation() -> None:
     assert all(method == "GET" for method, _url, _kwargs in api.requests)
 
 
+def test_tax_data_returns_post_preview_total_and_lines() -> None:
+    class RefreshedApi(FakeApi):
+        refreshed = False
+
+        async def arequest(self, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
+            response = await super().arequest(method, url, **kwargs)
+            if method == "POST":
+                self.refreshed = True
+            elif url.endswith("/taxes/reports/report-1/") and self.refreshed:
+                response["total"] = "0.59"
+                response["tax_lines"] = {"83": {"taxAmount": "0.59"}}
+            return response
+
+    mcp, _ = _registered()
+    api = RefreshedApi()
+    data = asyncio.run(mcp.tools["get_tax_filing_data"](_context(api), "report-1"))
+    assert data["report"]["total"] == "0.59"
+    assert data["items"][0]["tax"] == "0.59"
+    assert data["canSubmit"] is True
+
+
+def test_failed_post_preview_read_does_not_present_stale_amounts() -> None:
+    class FailedRefreshApi(FakeApi):
+        refreshed = False
+
+        async def arequest(self, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
+            response = await super().arequest(method, url, **kwargs)
+            if method == "POST":
+                self.refreshed = True
+            elif self.refreshed and url.endswith("/taxes/reports/report-1/"):
+                return {"error": "Report no longer accessible"}
+            return response
+
+    mcp, _ = _registered()
+    data = asyncio.run(mcp.tools["get_tax_filing_data"](_context(FailedRefreshApi()), "report-1"))
+    assert data["error"] == "Report no longer accessible"
+    assert "report" not in data
+    assert not data.get("canSubmit")
+
+
 def test_tax_data_generates_preview_without_exposing_image_to_the_model() -> None:
     mcp, api = _registered()
 
@@ -345,6 +385,10 @@ def test_tax_data_generates_preview_without_exposing_image_to_the_model() -> Non
             "POST",
             "https://api.norman.finance/api/v1/companies/company-1/taxes/reports/report-1/"
             "generate-preview-url/",
+        ),
+        (
+            "GET",
+            "https://api.norman.finance/api/v1/companies/company-1/taxes/reports/report-1/",
         ),
     ]
 
