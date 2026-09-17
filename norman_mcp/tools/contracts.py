@@ -31,6 +31,8 @@ def invoice_arguments_from_contract(proposal: dict) -> dict:
         "deliveryDate": "delivery_date",
     }
     if draft.get("isRecurring"):
+        for field in ("issued", "dueTo", "serviceStartDate", "serviceEndDate", "deliveryDate"):
+            mapping.pop(field, None)
         mapping.update(
             {
                 "frequencyType": "frequency_type",
