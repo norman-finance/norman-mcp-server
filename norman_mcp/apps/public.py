@@ -419,6 +419,18 @@ def register_public_apps(mcp: Any, *, widget_domain: Optional[str] = None) -> No
                 _company_url(company_id, f"taxes/reports/{report_id}/generate-preview-url/"),
             )
             if isinstance(preview_response, dict) and not preview_response.get("error"):
+                # Preview may refresh the persisted draft. Return that report,
+                # not the total/lines read before the refresh completed.
+                refreshed = await api.arequest("GET", _company_url(company_id, endpoint))
+                if not isinstance(refreshed, dict) or refreshed.get("error"):
+                    message = (
+                        refreshed.get("error")
+                        if isinstance(refreshed, dict)
+                        else "Invalid report response"
+                    )
+                    return _error_view("tax-filing", "Tax filing", message), None
+                report = _tax_report_data(refreshed)
+                rows = _tax_line_rows(refreshed)
                 preview_image = str(preview_response.get("previewImage") or "") or None
                 preview.update(
                     {

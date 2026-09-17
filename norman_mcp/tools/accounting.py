@@ -857,12 +857,21 @@ def register_accounting_tools(mcp: Any) -> None:
         memo: str = "",
         tax_treatment: str = "NONE",
         tax_country_scope: str = "UNKNOWN",
+        tax_role: Optional[str] = None,
+        tax_correction_reason: Optional[str] = None,
         tax_rate: Optional[float] = Field(default=None, ge=0, le=100),
         input_tax_deduction_percent: Optional[float] = Field(
             default=None, ge=0, le=100
         ),
     ) -> Dict[str, Any]:
-        """Create a balanced manual posting with explicit tax semantics."""
+        """Create a balanced manual posting with explicit tax semantics.
+
+        tax_role=VAT means amount is the actual tax correction, not a taxable
+        base. Supported only with DOMESTIC_INPUT_VAT, DOMESTIC country scope,
+        BOOKKEEPING_ERROR reason, a memo and one input VAT account. A credit
+        to the input VAT account reduces the deduction; a debit increases it.
+        Other reasons, output VAT and reverse-charge overrides are rejected.
+        """
         api, company_id, error = _api_and_company(ctx)
         if error:
             return error
@@ -875,6 +884,8 @@ def register_accounting_tools(mcp: Any) -> None:
                 "memo": memo,
                 "taxTreatment": tax_treatment,
                 "taxCountryScope": tax_country_scope,
+                "taxRole": tax_role,
+                "taxCorrectionReason": tax_correction_reason,
                 "taxRate": tax_rate,
                 "inputTaxDeductionPercent": input_tax_deduction_percent,
             }
