@@ -78,13 +78,13 @@ Use `list_invoice_templates` to discover the templates, appearance controls and 
 {"template": "sovereign", "logoSize": 75, "textSize": "medium", "spacing": "compact", "tableBorders": "grid"}
 ```
 
-Omit `document_design`, `font`, and `color_schema` to inherit saved branding. A partial design uses that template's defaults. Paid templates require an active subscription.
+Omit `document_design`, `font`, and `color_schema` to inherit saved branding. On create, a partial design uses that template's defaults. Paid templates require an active subscription.
 
-Use `update_invoice` for an invoice or quote, `update_recurring_invoice` for a schedule, and `update_invoice_settings` for future document defaults. Their typed `changes` object accepts camelCase or snake_case field names. Unset fields stay unchanged; explicit `false`, `0`, empty strings and valid nulls keep their meaning. A document design replaces the saved design, so include its other controls when changing only one control. Keep existing line IDs when editing lines. Rates use minor currency units; the API calculates totals. Only set `isToSend` when sending is intended.
+Use `update_invoice` for an invoice or quote, `update_recurring_invoice` for a schedule, and `update_invoice_settings` for future document defaults. Their typed `changes` object accepts camelCase or snake_case field names. Unset fields stay unchanged; explicit `false`, `0`, empty strings and valid nulls keep their meaning. A partial document design keeps the document's other saved controls; changing its template starts from that template's defaults. Keep existing line IDs when editing lines. Rates use minor currency units; the API calculates totals. Only set `isToSend` when sending is intended.
 
 API keys need `read_invoices` for template/settings reads and `write_invoices` for edits. Settings updates use the invoice-specific endpoint and cannot edit other company fields. Deploy the matching invoice API endpoints before deploying this MCP version.
 
-## 💬 Try asking
+### 💬 Try asking
 
 Once connected, talk to your books in plain language:
 

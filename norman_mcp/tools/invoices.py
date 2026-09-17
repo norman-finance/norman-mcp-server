@@ -57,10 +57,15 @@ def _enrich_invoice_response(data: dict, api=None, company_id: str | None = None
     return data
 
 
+async def _aenrich_invoice_response(data: dict, api=None, company_id: str | None = None) -> dict:
+    """Async entry point for the shared management tools; the work itself is sync here."""
+    return _enrich_invoice_response(data, api=api, company_id=company_id)
+
+
 def register_invoice_tools(mcp):
     """Register all invoice-related tools with the MCP server."""
     register_contract_tools(mcp)
-    register_invoice_management_tools(mcp)
+    register_invoice_management_tools(mcp, enrich=_aenrich_invoice_response)
     
     @mcp.tool(
         title="Create Invoice",
@@ -296,8 +301,6 @@ def register_invoice_tools(mcp):
         ends_on_date: Optional[str] = None,
         ends_on_invoice_count: Optional[int] = None,
         invoice_number: Optional[str] = None,
-        issued: Optional[str] = None,
-        due_to: Optional[str] = None,
         currency: str = "EUR",
         payment_terms: Optional[str] = None,
         notes: Optional[str] = None,
@@ -312,9 +315,6 @@ def register_invoice_tools(mcp):
         font: str | None = None,
         is_to_send: bool = False,
         settings_on_overdue: OverdueSettings | None = None,
-        service_start_date: Optional[str] = None,
-        service_end_date: Optional[str] = None,
-        delivery_date: Optional[str] = None,
         source_contract_id: str | None = None,
         payment_due_days: int | None = None,
         billing_in_advance: bool = False,
@@ -382,8 +382,6 @@ def register_invoice_tools(mcp):
             ends_on_date: Optional end date for recurring invoices (YYYY-MM-DD). Either ends_on_date or ends_on_invoice_count should be provided.
             ends_on_invoice_count: Optional number of invoices to generate before stopping. Either ends_on_date or ends_on_invoice_count should be provided.
             invoice_number: Base invoice number (will be auto-generated if not provided)
-            issued: Legacy input, ignored; use starts_from_date for the schedule.
-            due_to: Legacy input, ignored; use payment_due_days for each generated invoice.
             currency: Invoice currency (EUR, USD), by default it's EUR
             payment_terms: Payment terms text
             notes: Additional notes
@@ -398,9 +396,6 @@ def register_invoice_tools(mcp):
             font: Invoice font. Omit to inherit the company font.
             is_to_send: Whether to send invoices automatically to client
             settings_on_overdue: Configuration for overdue notifications
-            service_start_date: Legacy input, ignored; the API calculates dates from the schedule and billing_in_advance.
-            service_end_date: Legacy input, ignored; the API calculates dates from the schedule and billing_in_advance.
-            delivery_date: Legacy input, ignored; the API calculates dates from the schedule and billing_in_advance.
 
         Returns:
             Information about the created recurring invoice. Use downloadUrl for a direct temporary PDF download link (valid for 1 hour).
