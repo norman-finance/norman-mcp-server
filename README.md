@@ -29,7 +29,7 @@
 
 ### What you can do
 
-**Invoicing** — Create, send, and track invoices including recurring and ZUGFeRD e-invoices
+**Invoicing** — Create and edit invoices, quotes, and recurring schedules, including document templates, line discounts, units, service dates, payment links, and ZUGFeRD e-invoices
 
 **Bookkeeping** — Categorize transactions, match receipts, and verify entries
 
@@ -68,7 +68,23 @@ Norman is built as a multi-market European accounting platform. Market-specific 
 
 <br/>
 
-### 💬 Try asking
+#### Invoice appearance and updates
+
+Use `list_invoice_templates` to discover the templates, appearance controls and the active company's plan access. Use `get_invoice_settings` to read its logo and saved defaults.
+
+`create_invoice`, `create_recurring_invoice` and `create_offer` accept `document_design`, for example:
+
+```json
+{"template": "sovereign", "logoSize": 75, "textSize": "medium", "spacing": "compact", "tableBorders": "grid"}
+```
+
+Omit `document_design`, `font`, and `color_schema` to inherit saved branding. A partial design uses that template's defaults. Paid templates require an active subscription.
+
+Use `update_invoice` for an invoice or quote, `update_recurring_invoice` for a schedule, and `update_invoice_settings` for future document defaults. Their typed `changes` object accepts camelCase or snake_case field names. Unset fields stay unchanged; explicit `false`, `0`, empty strings and valid nulls keep their meaning. A document design replaces the saved design, so include its other controls when changing only one control. Keep existing line IDs when editing lines. Rates use minor currency units; the API calculates totals. Only set `isToSend` when sending is intended.
+
+API keys need `read_invoices` for template/settings reads and `write_invoices` for edits. Settings updates use the invoice-specific endpoint and cannot edit other company fields. Deploy the matching invoice API endpoints before deploying this MCP version.
+
+## 💬 Try asking
 
 Once connected, talk to your books in plain language:
 

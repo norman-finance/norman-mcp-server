@@ -7,7 +7,16 @@ from mcp.types import ToolAnnotations
 
 from norman_mcp import config
 from norman_mcp.context import Context
-
+from norman_mcp.tools.invoice_schemas import (
+    ClientData,
+    CompanyData,
+    DocumentDesign,
+    InvoiceItem,
+    MailingData,
+    OverdueSettings,
+    apply_invoice_options,
+    item_payloads,
+)
 
 OFFER_TYPE = "quote"
 logger = logging.getLogger(__name__)
@@ -67,8 +76,8 @@ def register_offer_tools(mcp):
     )
     async def create_offer(
         ctx: Context,
-        client_id: str,
-        items: list[dict],
+        client_id: str | None,
+        items: list[InvoiceItem],
         offer_number: Optional[str] = None,
         issued: Optional[str] = None,
         valid_until: Optional[str] = None,
@@ -82,16 +91,39 @@ def register_offer_tools(mcp):
         iban: Optional[str] = None,
         bic: Optional[str] = None,
         create_qr: bool = False,
-        color_schema: str = "#FFFFFF",
-        font: str = "Plus Jakarta Sans",
+        color_schema: str | None = None,
+        font: str | None = None,
         is_to_send: bool = False,
-        mailing_data: Optional[Dict[str, str]] = None,
+        mailing_data: MailingData | None = None,
         service_start_date: Optional[str] = None,
         service_end_date: Optional[str] = None,
         delivery_date: Optional[str] = None,
+        document_design: DocumentDesign | None = None,
+        discount_percents: int | None = None,
+        currency_exchanged: str | None = None,
+        full_cost_origin_exchanged: float | None = None,
+        tax_exempt_reason: str | None = None,
+        instructions: str | None = None,
+        message: str | None = None,
+        company_email: str | None = None,
+        skip_bank_details: bool | None = None,
+        save_client_details: bool | None = None,
+        client_data: ClientData | None = None,
+        company_data: CompanyData | None = None,
+        status: str | None = None,
+        payment_status: str | None = None,
+        payment_date: str | None = None,
+        bank_account_pk: str | None = None,
+        is_to_create_transaction: bool | None = None,
+        paid_amount: int | None = None,
+        online_payment_enabled: bool | None = None,
+        source_contract_id: str | None = None,
+        settings_on_overdue: OverdueSettings | None = None,
     ) -> Dict[str, Any]:
         """
-        Create a new offer/quote.
+        Create a new offer/quote, with the same line, design, payment and sender options as create_invoice.
+        Omit document_design, colour and font to inherit company branding. The API enforces paid template access.
+        Use update_invoice to edit an existing quote.
 
         Args:
             client_id: ID of the client for the offer
@@ -111,8 +143,8 @@ def register_offer_tools(mcp):
             iban: IBAN for payments
             bic: BIC/SWIFT code
             create_qr: Whether to create payment QR code (only if BIC and IBAN provided)
-            color_schema: Offer style color (hex code)
-            font: Offer font (e.g. "Plus Jakarta Sans", "Inter")
+            color_schema: Offer colour (hex code); omit to inherit saved branding.
+            font: Offer font; omit to inherit the saved font.
             is_to_send: Whether to send the offer automatically to client
             mailing_data: Email data if is_to_send is True
             service_start_date: Service period start date (YYYY-MM-DD)
@@ -159,7 +191,7 @@ def register_offer_tools(mcp):
             "client": client_id,
             "invoiceNumber": offer_number,
             "issued": issued,
-            "invoicedItems": items,
+            "invoicedItems": item_payloads(items),
             "currency": currency,
             "language": language,
             "invoiceType": invoice_type,
@@ -167,8 +199,6 @@ def register_offer_tools(mcp):
             "createQr": create_qr,
             "isToSend": is_to_send,
             "type": OFFER_TYPE,
-            "companyId": company_id,
-            "companyEmail": config.NORMAN_EMAIL,
             "dueTo": valid_until
             if valid_until
             else (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d"),
@@ -177,12 +207,8 @@ def register_offer_tools(mcp):
             "bankName": bank_name if bank_name else "",
             "iban": iban if iban else "",
             "bic": bic if bic else "",
-            "colorSchema": color_schema,
-            "font": font,
         }
 
-        if mailing_data and is_to_send:
-            offer_data["mailingData"] = mailing_data
         if invoice_type == "SERVICES":
             offer_data["serviceStartDate"] = (
                 service_start_date
@@ -198,6 +224,37 @@ def register_offer_tools(mcp):
             offer_data["deliveryDate"] = (
                 delivery_date if delivery_date else datetime.now().strftime("%Y-%m-%d")
             )
+
+        apply_invoice_options(
+            offer_data,
+            source_contract=source_contract_id,
+            service_start_date=service_start_date,
+            service_end_date=service_end_date,
+            delivery_date=delivery_date,
+            document_design=document_design,
+            discount_percents=discount_percents,
+            currency_exchanged=currency_exchanged,
+            full_cost_origin_exchanged=full_cost_origin_exchanged,
+            tax_exempt_reason=tax_exempt_reason,
+            instructions=instructions,
+            message=message,
+            company_email=company_email,
+            skip_bank_details=skip_bank_details,
+            save_client_details=save_client_details,
+            client_data=client_data,
+            company_data=company_data,
+            online_payment_enabled=online_payment_enabled,
+            mailing_data=mailing_data,
+            color_schema=color_schema,
+            font=font,
+            settings_on_overdue=settings_on_overdue,
+            status=status,
+            payment_status=payment_status,
+            payment_date=payment_date,
+            bank_account_pk=bank_account_pk,
+            is_to_create_transaction=is_to_create_transaction,
+            paid_amount=paid_amount,
+        )
 
         result = api._make_request("POST", offers_url, json_data=offer_data)
         return _enrich_offer_response(result, api=api, company_id=company_id)
