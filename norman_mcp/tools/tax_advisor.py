@@ -50,8 +50,9 @@ def register_tax_advisor_tools(mcp):
                 "isSme": company.get("isSme"),
                 "chartOfAccounts": company.get("chartOfAccounts"),
                 "taxState": company.get("taxState"),
-                "vatId": company.get("vatId"),
-                "taxId": company.get("taxId"),
+                # the company endpoint serializes these as taxNumber/vatNumber
+                "vatId": company.get("vatNumber"),
+                "taxId": company.get("taxNumber"),
             }
         except Exception as e:
             logger.warning("Could not fetch company details: %s", e)
@@ -271,12 +272,17 @@ def register_tax_advisor_tools(mcp):
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
         try:
             company = api._make_request("GET", company_url)
+            # The company endpoint serializes Company.tax_number/vat_number as
+            # taxNumber/vatNumber. Reading taxId/vatId always yielded None, so
+            # every company was reported as missing both registrations.
+            tax_number = company.get("taxNumber")
+            vat_number = company.get("vatNumber")
             result["registration"] = {
-                "taxId": company.get("taxId"),
-                "vatId": company.get("vatId"),
+                "taxId": tax_number,
+                "vatId": vat_number,
                 "taxState": company.get("taxState"),
-                "hasTaxId": bool(company.get("taxId")),
-                "hasVatId": bool(company.get("vatId")),
+                "hasTaxId": bool(tax_number),
+                "hasVatId": bool(vat_number),
             }
         except Exception as e:
             result["registration"] = {"error": str(e)}
