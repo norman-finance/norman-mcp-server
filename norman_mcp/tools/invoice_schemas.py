@@ -171,7 +171,7 @@ class InvoiceChanges(DocumentFields):
     service_end_date: str | None = None
     payment_date: str | None = None
     bank_account_pk: str | None = None
-    type: Literal["invoice", "quote", "delivery_note", "cancel"] | None = None
+    type: Literal["invoice", "quote", "delivery_note", "cancel", "credit_note"] | None = None
 
 
 class RecurringChanges(DocumentFields):

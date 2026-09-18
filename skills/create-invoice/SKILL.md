@@ -45,3 +45,10 @@ Invoice appearance and edits:
 - For services, provide the requested service start/end dates. For goods, provide the delivery date. Recurring schedules use `starts_from_date`, `payment_due_days` and `billing_in_advance`; their legacy issue/service/due-date arguments do not control generated dates.
 - Creation and edits accept payment links, QR codes, bank details, discounts, VAT notes, recipient/sender snapshots, and email/reminder settings. Use an empty VAT note only when the user requests no note; omission lets the API choose it.
 - Set `is_to_send` / `isToSend` only when sending is requested or already authorized. Otherwise save the document without sending it.
+
+Corrections and delivery notes (documents made from an existing document):
+- To reverse an issued invoice in full, call `cancel_invoice` with the invoice id. Norman writes the Stornorechnung with the same lines, the next invoice number and a reference to the invoice, and marks the invoice cancelled. Confirm with the user first: a cancellation is a numbered document the client receives, not an edit. A draft is edited with `update_invoice`, never cancelled.
+- To correct part of an invoice (a wrong quantity, a price reduction, returned goods), call `create_credit_note` with the invoice id and the lines to credit. Without lines the whole invoice is credited. Norman prints "Rechnungskorrektur", never "Gutschrift", because since 2013 that word means self-billing under § 14 UStG. Use `status: "draft"` when the user wants to review it first.
+- To make a Lieferschein, call `create_delivery_note` with the invoice or quote id. It prints quantities and units only, no prices, and lands in the company's Files space under "Delivery notes". Pass lines for a partial delivery.
+- `convert_offer_to_invoice` keeps the quote with the status "invoiced" and links the invoice to it.
+- Both the PDF and the e-invoice XML name the source document, so never repeat the reference in `message`.

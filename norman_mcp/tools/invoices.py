@@ -115,7 +115,7 @@ def register_invoice_tools(mcp):
         client_data: ClientData | None = None,
         company_data: CompanyData | None = None,
         online_payment_enabled: bool | None = None,
-        document_type: Literal["invoice", "quote", "delivery_note", "cancel"] = "invoice",
+        document_type: Literal["invoice", "quote", "delivery_note", "cancel", "credit_note"] = "invoice",
         status: str | None = None,
         payment_status: str | None = None,
         payment_date: str | None = None,
@@ -148,7 +148,7 @@ def register_invoice_tools(mcp):
             client_data: Recipient details for this document.
             company_data: Sender details for this document.
             online_payment_enabled: Enable Stripe/PayPal payment links; omit to inherit, false to disable.
-            document_type: Document type: invoice, quote, delivery_note or cancel. Use invoice unless another type is requested.
+            document_type: Document type: invoice, quote, delivery_note, cancel or credit_note. Use invoice unless another type is requested. To cancel or credit an EXISTING invoice, or to make a delivery note from one, use cancel_invoice, create_credit_note or create_delivery_note instead.
             status: Invoice lifecycle status accepted by the API, such as draft or saved.
             payment_status: Payment status: unpaid or paid.
             payment_date: Payment date in YYYY-MM-DD format.
@@ -742,13 +742,15 @@ def register_invoice_tools(mcp):
         name: Optional[str] = None,
         from_date: Optional[str] = None,
         to_date: Optional[str] = None,
-        limit: Optional[int] = 100
+        limit: Optional[int] = 100,
+        document_type: Optional[Literal["invoice", "quote", "delivery_note", "cancel", "credit_note"]] = None,
     ) -> Dict[str, Any]:
         """
         List invoices with optional filtering.
         
         Args:
-            status: Filter by invoice status (draft, pending, sent, paid, overdue, uncollectible)
+            document_type: Only documents of this kind: invoice, quote, delivery_note, cancel or credit_note. Omit for all.
+            status: Filter by invoice status (draft, pending, sent, paid, overdue, uncollectible, cancelled)
             name: Filter by invoice (client) name
             from_date: Filter invoices created after this date (YYYY-MM-DD)
             to_date: Filter invoices created before this date (YYYY-MM-DD)
@@ -780,6 +782,8 @@ def register_invoice_tools(mcp):
             params["limit"] = limit
         if name:
             params["name"] = name
+        if document_type:
+            params["type"] = document_type
         
         result = await api.arequest("GET", invoices_url, params=params)
         return _enrich_invoice_response(result)
