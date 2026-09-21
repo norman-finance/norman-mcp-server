@@ -39,6 +39,7 @@ _DEFAULT_ALLOWED_HTTPS_HOSTS = {
     "claude.ai",
     "claude.com",
     "connect.smithery.ai",
+    "manufact.com",
 }
 
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
