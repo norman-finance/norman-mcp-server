@@ -84,6 +84,12 @@ def test_credit_note_is_issued_at_once_with_every_line_unless_told_otherwise(ser
     ]
 
 
+def test_duplicate_posts_an_empty_body_to_the_duplicate_action(server):
+    api = Api()
+    assert call(server, api, "duplicate_invoice", document_id="inv-1") == api.result
+    assert api.requests == [("POST", COMPANY + "invoices/inv-1/duplicate/", {"json_data": {}})]
+
+
 def test_delivery_note_from_an_invoice_or_quote(server):
     api = Api()
     call(server, api, "create_delivery_note", document_id="quote-1")
@@ -113,11 +119,11 @@ def test_unknown_line_fields_never_reach_the_api(server):
     assert not api.requests
 
 
-@pytest.mark.parametrize("tool", ["cancel_invoice", "create_credit_note", "create_delivery_note"])
+@pytest.mark.parametrize("tool", ["cancel_invoice", "create_credit_note", "create_delivery_note", "duplicate_invoice"])
 def test_correction_tools_require_an_active_company(server, tool):
     api = Api()
     api.company_id = None
-    ids = {"create_delivery_note": {"document_id": "d"}}
+    ids = {"create_delivery_note": {"document_id": "d"}, "duplicate_invoice": {"document_id": "d"}}
     with pytest.raises(Exception, match="No company"):
         call(server, api, tool, **ids.get(tool, {"invoice_id": "i"}))
     assert not api.requests
