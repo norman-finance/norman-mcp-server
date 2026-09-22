@@ -208,7 +208,7 @@ def register_invoice_management_tools(mcp, enrich=None):
         status: Literal["draft", "saved"] = "saved",
         delivery_date: str | None = None,
     ) -> dict:
-        """Make a delivery note (Lieferschein) from an invoice or a quote.
+        """Make a delivery note (Lieferschein) from an issued invoice or an approved quote.
 
         The delivery note lists the document's lines with quantities and units
         and prints no prices. It takes the next number of its own sequence, refers
