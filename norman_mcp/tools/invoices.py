@@ -83,7 +83,7 @@ def register_invoice_tools(mcp):
         invoice_number: Optional[str] = None,
         issued: Optional[str] = None,
         due_to: Optional[str] = None,
-        currency: str = "EUR",
+        currency: str | None = None,
         payment_terms: Optional[str] = None,
         notes: Optional[str] = None,
         language: str = "en",
@@ -167,7 +167,7 @@ def register_invoice_tools(mcp):
             invoice_number: Optional invoice number (will be auto-generated if not provided)
             issued: Issue date in YYYY-MM-DD format
             due_to: Due date in YYYY-MM-DD format
-            currency: Invoice currency (EUR, USD), by default it's EUR
+            currency: Invoice currency (EUR, USD); omit for the company's own currency.
             payment_terms: Payment terms text
             notes: Additional notes
             language: Invoice language (en, de)
@@ -226,7 +226,6 @@ def register_invoice_tools(mcp):
             "invoiceNumber": invoice_number,
             "issued": issued,
             "invoicedItems": item_payloads(items),
-            "currency": currency,
             "language": language,
             "invoiceType": invoice_type,
             "isVatIncluded": is_vat_included,
@@ -235,6 +234,8 @@ def register_invoice_tools(mcp):
             "type": document_type,
         }
         
+        if currency is not None:
+            invoice_data["currency"] = currency
         if source_contract_id is not None:
             invoice_data["sourceContract"] = source_contract_id
         invoice_data["dueTo"] = due_to if due_to else (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")

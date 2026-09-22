@@ -138,3 +138,13 @@ def test_list_invoices_filters_by_document_type():
     assert request[0] == "GET"
     assert request[1] == COMPANY + "invoices/"
     assert request[2]["params"] == {"limit": 100, "type": "credit_note"}
+
+
+def test_create_invoice_leaves_the_currency_to_the_company_unless_told() -> None:
+    mcp = FastMCP()
+    register_invoice_tools(mcp)
+    api = Api()
+    call(mcp, api, "create_invoice", client_id="client-1", items=[LINE], invoice_number="RE-1")
+    assert "currency" not in api.requests[-1][2]["json_data"]
+    call(mcp, api, "create_invoice", client_id="client-1", items=[LINE], invoice_number="RE-2", currency="USD")
+    assert api.requests[-1][2]["json_data"]["currency"] == "USD"
