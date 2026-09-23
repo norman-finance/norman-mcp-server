@@ -170,7 +170,7 @@ def register_invoice_management_tools(mcp, enrich=None):
         Creates the cancellation with the invoice's lines, the next invoice number
         and a reference to the invoice, then marks the invoice "cancelled": it is
         no longer edited, reminded about or matched to payments. Only an issued
-        invoice (saved, sent, overdue or paid) can be cancelled, and only once.
+        invoice (saved, sent, overdue, paid or uncollectible) can be cancelled, and only once.
         To correct part of an invoice use create_credit_note instead. Edit a
         draft directly. issued (YYYY-MM-DD) defaults to today.
         """
@@ -213,8 +213,8 @@ def register_invoice_management_tools(mcp, enrich=None):
         The delivery note lists the document's lines with quantities and units
         and prints no prices. It takes the next number of its own sequence, refers
         to the source document and is filed in the company's Files space. Pass
-        items to note a partial delivery, delivery_date (YYYY-MM-DD) when the goods
-        moved on another day than today. Several delivery notes per document are fine.
+        items to note a partial delivery. delivery_date (YYYY-MM-DD) defaults to the source's
+        delivery date, or today when it has none. Several delivery notes per document are fine.
         """
         return await _derive(
             ctx,

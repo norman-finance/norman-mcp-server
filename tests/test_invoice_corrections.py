@@ -1,8 +1,4 @@
-"""Shared MCP tests: keep this file identical in the API and standalone MCP repos.
-
-The correction tools post to the API's derive actions and forward only what the
-caller decided; the API copies everything else from the source document.
-"""
+"""Shared MCP tests: keep this file identical in the API and standalone MCP repos."""
 
 import asyncio
 from types import SimpleNamespace
