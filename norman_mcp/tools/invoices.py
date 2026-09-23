@@ -116,7 +116,7 @@ def register_invoice_tools(mcp):
         company_data: CompanyData | None = None,
         online_payment_enabled: bool | None = None,
         document_type: Literal["invoice", "quote", "delivery_note", "cancel", "credit_note"] = "invoice",
-        status: str | None = None,
+        status: Literal["draft", "saved"] | None = None,
         payment_status: str | None = None,
         payment_date: str | None = None,
         bank_account_pk: str | None = None,
@@ -149,7 +149,8 @@ def register_invoice_tools(mcp):
             company_data: Sender details for this document.
             online_payment_enabled: Enable Stripe/PayPal payment links; omit to inherit, false to disable.
             document_type: Document type: invoice, quote, delivery_note, cancel or credit_note. Use invoice unless another type is requested. To cancel or credit an EXISTING invoice, or to make a delivery note from one, use cancel_invoice, create_credit_note or create_delivery_note instead.
-            status: Invoice lifecycle status accepted by the API, such as draft or saved.
+            status: "draft" keeps an editable draft that is never emailed, marked paid or
+                matched to payments. Omit or use "saved" to issue it.
             payment_status: Payment status: unpaid or paid.
             payment_date: Payment date in YYYY-MM-DD format.
             bank_account_pk: Bank account ID for payment details.
@@ -383,7 +384,7 @@ def register_invoice_tools(mcp):
             ends_on_date: Optional end date for recurring invoices (YYYY-MM-DD). Either ends_on_date or ends_on_invoice_count should be provided.
             ends_on_invoice_count: Optional number of invoices to generate before stopping. Either ends_on_date or ends_on_invoice_count should be provided.
             invoice_number: Base invoice number (will be auto-generated if not provided)
-            currency: Invoice currency (EUR, USD), by default it's EUR
+            currency: Invoice currency, e.g. USD. EUR, the default, bills in the company's own currency.
             payment_terms: Payment terms text
             notes: Additional notes
             language: Invoice language (en, de)
@@ -739,7 +740,9 @@ def register_invoice_tools(mcp):
     )
     async def list_invoices(
         ctx: Context,
-        status: Optional[str] = None,
+        status: Optional[
+            Literal["draft", "saved", "sent", "overdue", "paid", "uncollectible", "approved", "invoiced", "cancelled"]
+        ] = None,
         name: Optional[str] = None,
         from_date: Optional[str] = None,
         to_date: Optional[str] = None,
@@ -751,10 +754,11 @@ def register_invoice_tools(mcp):
         
         Args:
             document_type: Only documents of this kind: invoice, quote, delivery_note, cancel or credit_note. Omit for all.
-            status: Filter by invoice status (draft, pending, sent, paid, overdue, uncollectible, cancelled)
+            status: Filter by status. "approved" and "invoiced" are quote states;
+                "invoiced" means converted to an invoice.
             name: Filter by invoice (client) name
-            from_date: Filter invoices created after this date (YYYY-MM-DD)
-            to_date: Filter invoices created before this date (YYYY-MM-DD)
+            from_date: Only documents issued on or after this date (YYYY-MM-DD)
+            to_date: Only documents issued on or before this date (YYYY-MM-DD)
             limit: Maximum number of invoices to return (default 100)
             
         Returns:

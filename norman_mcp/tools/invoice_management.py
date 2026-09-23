@@ -95,7 +95,10 @@ def register_invoice_management_tools(mcp, enrich=None):
 
         Only supplied fields change. False disables an option, an empty string
         clears text, and null clears nullable fields such as client or paymentDate.
-        Keep existing line IDs when editing lines. Setting isToSend can send email.
+        Keep existing line IDs when editing lines. Setting isToSend can send email,
+        but a draft is never emailed. Status "saved" issues a draft; it takes the next
+        free number if its own is taken. An issued document never returns to draft or
+        changes type. A draft cannot be marked paid. A cancelled invoice cannot change.
         A partial documentDesign keeps the document's saved controls; changing its
         template starts from that template's defaults.
         Changing document content can regenerate its PDF. API plan and status rules apply.
