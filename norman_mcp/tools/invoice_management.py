@@ -1,4 +1,6 @@
-"""Company-scoped invoice editing and design discovery for both MCP servers."""
+"""Company-scoped invoice editing, corrections and design discovery for both MCP servers."""
+
+from typing import Literal
 
 from urllib.parse import quote, urljoin
 
@@ -8,9 +10,11 @@ from norman_mcp import config
 from norman_mcp.context import Context
 from norman_mcp.tools.invoice_schemas import (
     InvoiceChanges,
+    InvoiceItem,
     InvoiceSettings,
     RecurringChanges,
     input_payload,
+    item_payloads,
 )
 
 READ = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
@@ -23,6 +27,29 @@ def _company_api(ctx: Context):
     if not api.company_id:
         raise ValueError("No company available. Please authenticate first.")
     return api, urljoin(config.api_base_url, f"api/v1/companies/{quote(str(api.company_id), safe='')}/")
+
+
+def _derivation_payload(
+    *,
+    status: str | None = None,
+    items: list[InvoiceItem] | None = None,
+    issued: str | None = None,
+    message: str | None = None,
+    delivery_date: str | None = None,
+) -> dict:
+    """Only what the caller decided; the API copies everything else from the source document."""
+    payload: dict = {}
+    if status is not None:
+        payload["status"] = status
+    if items is not None:
+        payload["invoicedItems"] = item_payloads(items)
+    if issued is not None:
+        payload["issued"] = issued
+    if message is not None:
+        payload["message"] = message
+    if delivery_date is not None:
+        payload["deliveryDate"] = delivery_date
+    return payload
 
 
 def register_invoice_management_tools(mcp, enrich=None):
@@ -68,7 +95,10 @@ def register_invoice_management_tools(mcp, enrich=None):
 
         Only supplied fields change. False disables an option, an empty string
         clears text, and null clears nullable fields such as client or paymentDate.
-        Keep existing line IDs when editing lines. Setting isToSend can send email.
+        Keep existing line IDs when editing lines. Setting isToSend can send email,
+        but a draft is never emailed. Status "saved" issues a draft; it takes the next
+        free number if its own is taken. An issued document never returns to draft or
+        changes type. A draft cannot be marked paid. A cancelled invoice cannot change.
         A partial documentDesign keeps the document's saved controls; changing its
         template starts from that template's defaults.
         Changing document content can regenerate its PDF. API plan and status rules apply.
@@ -107,4 +137,91 @@ def register_invoice_management_tools(mcp, enrich=None):
                 json_data=patch,
             ),
             api,
+        )
+
+    async def _derive(ctx: Context, document_id: str, action: str, payload: dict) -> dict:
+        api, company_url = _company_api(ctx)
+        return await _result(
+            await api.arequest(
+                "POST",
+                company_url + f"invoices/{quote(document_id, safe='')}/{action}/",
+                json_data=payload,
+            ),
+            api,
+        )
+
+    @mcp.tool(title="Duplicate Invoice or Quote", annotations=EDIT)
+    async def duplicate_invoice(ctx: Context, document_id: str) -> dict:
+        """Copy an invoice or a quote into a new draft of the same kind.
+
+        The copy keeps client, lines, terms and appearance, is dated today with
+        the payment term carried over, takes the next number of its sequence and
+        does not refer to the original. Finish it with update_invoice: adjust the
+        service or delivery dates and set status "saved" to issue it.
+        """
+        return await _derive(ctx, document_id, "duplicate", {})
+
+    @mcp.tool(title="Cancel Invoice", annotations=EDIT)
+    async def cancel_invoice(
+        ctx: Context,
+        invoice_id: str,
+        issued: str | None = None,
+        message: str | None = None,
+    ) -> dict:
+        """Reverse an issued invoice with a cancellation invoice (Stornorechnung).
+
+        Creates the cancellation with the invoice's lines, the next invoice number
+        and a reference to the invoice, then marks the invoice "cancelled": it is
+        no longer edited, reminded about or matched to payments. Only an issued
+        invoice (saved, sent, overdue, paid or uncollectible) can be cancelled, and only once.
+        To correct part of an invoice use create_credit_note instead. Edit a
+        draft directly. issued (YYYY-MM-DD) defaults to today.
+        """
+        return await _derive(ctx, invoice_id, "cancel", _derivation_payload(issued=issued, message=message))
+
+    @mcp.tool(title="Create Credit Note", annotations=EDIT)
+    async def create_credit_note(
+        ctx: Context,
+        invoice_id: str,
+        items: list[InvoiceItem] | None = None,
+        status: Literal["draft", "saved"] = "saved",
+        issued: str | None = None,
+        message: str | None = None,
+    ) -> dict:
+        """Credit part or all of an issued invoice with a credit note (Rechnungskorrektur).
+
+        Without items every line of the invoice is credited. Pass items (with the
+        quantities and rates to credit, in minor currency units) to correct part
+        of it. The invoice itself stays in force. The credit note refers to the
+        invoice on the PDF and in the e-invoice XML. status "draft" leaves it
+        editable; "saved" issues it at once. issued (YYYY-MM-DD) defaults to today.
+        """
+        return await _derive(
+            ctx,
+            invoice_id,
+            "credit-note",
+            _derivation_payload(status=status, items=items, issued=issued, message=message),
+        )
+
+    @mcp.tool(title="Create Delivery Note", annotations=EDIT)
+    async def create_delivery_note(
+        ctx: Context,
+        document_id: str,
+        items: list[InvoiceItem] | None = None,
+        status: Literal["draft", "saved"] = "saved",
+        delivery_date: str | None = None,
+    ) -> dict:
+        """Make a delivery note (Lieferschein) from an issued invoice or an approved quote.
+
+        The delivery note lists the document's lines with quantities and units
+        and prints no prices. It takes the next number of its own sequence, refers
+        to the source document and is filed in the company's Files space. Pass
+        items to note a partial delivery. delivery_date (YYYY-MM-DD) defaults to the source's
+        delivery date, or today when it has none. Several delivery notes per document are fine.
+        """
+        return await _derive(
+            ctx,
+            document_id,
+            "delivery-note",
+            _derivation_payload(status=status, items=items, delivery_date=delivery_date),
         )

@@ -29,7 +29,7 @@
 
 ### What you can do
 
-**Invoicing** — Create and edit invoices, quotes, and recurring schedules, including document templates, line discounts, units, service dates, payment links, and ZUGFeRD e-invoices
+**Invoicing** — Create and edit invoices, quotes, and recurring schedules, including document templates, line discounts, units, service dates, payment links, and ZUGFeRD e-invoices; cancel an issued invoice with a Stornorechnung, credit part of it with a Rechnungskorrektur, or make a delivery note (Lieferschein) from an invoice or an approved quote
 
 **Bookkeeping** — Categorize transactions, match receipts, and verify entries
 
@@ -82,7 +82,7 @@ Omit `document_design`, `font`, and `color_schema` to inherit saved branding. On
 
 Use `update_invoice` for an invoice or quote, `update_recurring_invoice` for a schedule, and `update_invoice_settings` for future document defaults. Their typed `changes` object accepts camelCase or snake_case field names. Unset fields stay unchanged; explicit `false`, `0`, empty strings and valid nulls keep their meaning. A partial document design keeps the document's other saved controls; changing its template starts from that template's defaults. Keep existing line IDs when editing lines. Rates use minor currency units; the API calculates totals. Only set `isToSend` when sending is intended.
 
-API keys need `read_invoices` for template/settings reads and `write_invoices` for edits. Settings updates use the invoice-specific endpoint and cannot edit other company fields. Deploy the matching invoice API endpoints before deploying this MCP version.
+Use `cancel_invoice`, `create_credit_note` and `create_delivery_note` for documents derived from an existing invoice or an approved quote; each links back to its source, and a cancelled invoice is read-only afterwards. `duplicate_invoice` copies an invoice or quote into a fresh draft without a link. API keys need `read_invoices` for template/settings reads and `write_invoices` for edits. Settings updates use the invoice-specific endpoint and cannot edit other company fields. Deploy the matching invoice API endpoints before deploying this MCP version.
 
 ### 💬 Try asking
 

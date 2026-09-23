@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import urljoin
 
 from mcp.types import ToolAnnotations
@@ -81,7 +81,7 @@ def register_offer_tools(mcp):
         offer_number: Optional[str] = None,
         issued: Optional[str] = None,
         valid_until: Optional[str] = None,
-        currency: str = "EUR",
+        currency: str | None = None,
         payment_terms: Optional[str] = None,
         notes: Optional[str] = None,
         language: str = "en",
@@ -110,7 +110,7 @@ def register_offer_tools(mcp):
         save_client_details: bool | None = None,
         client_data: ClientData | None = None,
         company_data: CompanyData | None = None,
-        status: str | None = None,
+        status: Literal["draft", "saved"] | None = None,
         payment_status: str | None = None,
         payment_date: str | None = None,
         bank_account_pk: str | None = None,
@@ -133,7 +133,7 @@ def register_offer_tools(mcp):
             offer_number: Optional offer number (will be auto-generated if not provided)
             issued: Issue date in YYYY-MM-DD format
             valid_until: Offer validity date in YYYY-MM-DD format (defaults to 30 days from today)
-            currency: Offer currency (EUR, USD), by default it's EUR
+            currency: Offer currency (EUR, USD); omit for the company's own currency.
             payment_terms: Payment terms text
             notes: Additional notes
             language: Offer language (en, de)
@@ -150,6 +150,8 @@ def register_offer_tools(mcp):
             service_start_date: Service period start date (YYYY-MM-DD)
             service_end_date: Service period end date (YYYY-MM-DD)
             delivery_date: Delivery date for goods (YYYY-MM-DD)
+            status: "draft" keeps an editable draft that is never emailed. Omit or use
+                "saved" to issue it.
 
         Returns:
             Information about the created offer. Use downloadUrl for a direct temporary PDF
@@ -192,7 +194,6 @@ def register_offer_tools(mcp):
             "invoiceNumber": offer_number,
             "issued": issued,
             "invoicedItems": item_payloads(items),
-            "currency": currency,
             "language": language,
             "invoiceType": invoice_type,
             "isVatIncluded": is_vat_included,
@@ -209,6 +210,8 @@ def register_offer_tools(mcp):
             "bic": bic if bic else "",
         }
 
+        if currency is not None:
+            offer_data["currency"] = currency
         if invoice_type == "SERVICES":
             offer_data["serviceStartDate"] = (
                 service_start_date
@@ -270,7 +273,7 @@ def register_offer_tools(mcp):
     )
     async def list_offers(
         ctx: Context,
-        status: Optional[str] = None,
+        status: Optional[Literal["draft", "saved", "sent", "approved", "invoiced"]] = None,
         name: Optional[str] = None,
         from_date: Optional[str] = None,
         to_date: Optional[str] = None,
@@ -280,10 +283,10 @@ def register_offer_tools(mcp):
         List offers/quotes with optional filtering.
 
         Args:
-            status: Filter by offer status (draft, pending, saved, sent, approved)
+            status: Filter by offer status. "invoiced" means converted to an invoice.
             name: Filter by client name
-            from_date: Filter offers created after this date (YYYY-MM-DD)
-            to_date: Filter offers created before this date (YYYY-MM-DD)
+            from_date: Only offers issued on or after this date (YYYY-MM-DD)
+            to_date: Only offers issued on or before this date (YYYY-MM-DD)
             limit: Maximum number of offers to return (default 100)
 
         Returns:
@@ -415,15 +418,17 @@ def register_offer_tools(mcp):
         offer_id: str,
     ) -> Dict[str, Any]:
         """
-        Convert an offer/quote into an invoice.
+        Convert a quote into a draft invoice.
 
-        The backend creates a new invoice from the quote data and removes the original quote.
+        The quote stays, with the status "invoiced", and the invoice refers to it
+        (sourceDocument). Issue the invoice with update_invoice status "saved"
+        before sending it.
 
         Args:
-            offer_id: ID of the offer to convert
+            offer_id: ID of the quote to convert
 
         Returns:
-            Newly created invoice information
+            The new draft invoice
         """
         api, company_id, error = _get_api_and_company(ctx)
         if error:

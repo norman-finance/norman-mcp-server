@@ -102,8 +102,13 @@ def test_external_actions_and_internal_ai_use_truthful_annotations() -> None:
     assert _annotation_tuple(tools["prepare_invoice_from_contract"]) == WRITE
     assert _annotation_tuple(tools["generate_finanzamt_preview"]) == WRITE
     assert _annotation_tuple(tools["send_invoice_overdue_reminder"]) == EXTERNAL_IRREVERSIBLE_WRITE
+    assert tools["duplicate_invoice"].annotations == tools["create_invoice"].annotations
+    assert _annotation_tuple(tools["cancel_invoice"]) == EXTERNAL_IRREVERSIBLE_WRITE
+    assert _annotation_tuple(tools["create_credit_note"]) == EXTERNAL_IRREVERSIBLE_WRITE
+    assert _annotation_tuple(tools["create_delivery_note"]) == EXTERNAL_IRREVERSIBLE_WRITE
     assert _annotation_tuple(tools["send_offer"]) == EXTERNAL_IRREVERSIBLE_WRITE
     assert _annotation_tuple(tools["create_offer"]) == EXTERNAL_IRREVERSIBLE_WRITE
+    assert _annotation_tuple(tools["convert_offer_to_invoice"]) == DESTRUCTIVE_WRITE
     assert _annotation_tuple(tools["ping_client_for_documents"]) == EXTERNAL_IRREVERSIBLE_WRITE
     assert _annotation_tuple(tools["submit_tax_report"]) == EXTERNAL_IRREVERSIBLE_WRITE
     assert _annotation_tuple(tools["approve_rule_execution"]) == EXTERNAL_IRREVERSIBLE_WRITE

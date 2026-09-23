@@ -162,8 +162,12 @@ class InvoiceChanges(DocumentFields):
     """Only fields supplied by the caller are updated. Null is distinct from omission."""
 
     invoice_number: str | None = None
-    payment_status: str | None = None
-    status: str | None = None
+    payment_status: Literal["paid", "unpaid"] | None = None
+    status: Literal["draft", "saved", "sent", "overdue", "uncollectible", "approved"] | None = Field(
+        default=None,
+        description='"saved" issues a draft and "approved" accepts a quote. Cancel with '
+        "cancel_invoice; set payment with paymentStatus.",
+    )
     issued: str | None = None
     delivery_date: str | None = None
     due_to: str | None = None
@@ -171,7 +175,7 @@ class InvoiceChanges(DocumentFields):
     service_end_date: str | None = None
     payment_date: str | None = None
     bank_account_pk: str | None = None
-    type: Literal["invoice", "quote", "delivery_note", "cancel"] | None = None
+    type: Literal["invoice", "quote", "delivery_note", "cancel", "credit_note"] | None = None
 
 
 class RecurringChanges(DocumentFields):
