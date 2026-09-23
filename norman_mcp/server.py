@@ -94,7 +94,7 @@ def _flexible_validate_redirect_uri(self, redirect_uri):
     Security model (see norman_mcp.security.redirects):
     - HTTP loopback (localhost/127.0.0.1/[::1], any port): accepted per RFC 8252
     - Custom schemes (cursor://, etc.): accepted (native-app deep links)
-    - HTTPS: accepted ONLY for allow-listed connector hosts
+    - HTTPS: accepted ONLY for allow-listed callback URLs or connector hosts
     - Everything else (incl. https to arbitrary hosts): rejected
 
     Note: we deliberately do NOT trust the client's own registered redirect_uris

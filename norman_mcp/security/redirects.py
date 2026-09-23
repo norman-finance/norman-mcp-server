@@ -17,6 +17,7 @@ legitimate MCP clients:
 * HTTP loopback (localhost / 127.0.0.1 / [::1]) on any port — RFC 8252 §7.3,
   needed by native clients and the MCP Inspector that bind random local ports.
 * Custom (non-http) schemes — native-app deep links (e.g. ``cursor://``).
+* Exact HTTPS callback URLs for connectors with a fixed redirect endpoint.
 * HTTPS only for an explicit host allow-list (known connector origins),
   extensible via the ``NORMAN_MCP_ALLOWED_REDIRECT_HOSTS`` env var.
 
@@ -39,6 +40,12 @@ _DEFAULT_ALLOWED_HTTPS_HOSTS = {
     "claude.ai",
     "claude.com",
     "connect.smithery.ai",
+}
+
+# Grok's callback observed in its custom-connector OAuth flow. Match the entire
+# URI so this exception does not trust other paths or subdomains of grok.com.
+_EXACT_ALLOWED_HTTPS_REDIRECT_URIS = {
+    "https://grok.com/connectors-oauth-exchange-code/",
 }
 
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
@@ -87,7 +94,7 @@ def is_allowed_redirect_uri(uri: str) -> bool:
         # remote HTTP host is a valid code-exfiltration target.
         return host in _LOOPBACK_HOSTS
     if scheme == "https":
-        return _host_is_allowed(host)
+        return str(uri) in _EXACT_ALLOWED_HTTPS_REDIRECT_URIS or _host_is_allowed(host)
     if scheme and scheme not in ("http", "https"):
         # Custom scheme: native-app deep link (cursor://, vscode://, ...).
         # These can only be intercepted by a handler installed on the user's own
