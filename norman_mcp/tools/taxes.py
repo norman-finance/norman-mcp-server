@@ -8,6 +8,7 @@ from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 
 from norman_mcp.context import Context
 from norman_mcp import config
+from norman_mcp.tools.results import as_object, first_text
 
 logger = logging.getLogger(__name__)
 
@@ -93,18 +94,19 @@ def register_tax_tools(mcp):
     )
     async def validate_tax_number(
         ctx: Context,
-        tax_number: str = Field(description="Tax number to validate"),
-        region_code: str = Field(description="Region code (e.g., DE for Germany)")
+        tax_number: str = Field(description="German business tax number (Steuernummer) to validate"),
+        region_code: str = Field(
+            description=(
+                "Two-letter code of the federal state (Bundesland) whose Finanzamt issued "
+                "the number, e.g. BE, BY or NW; see list_tax_states. Not a country code."
+            )
+        ),
     ) -> Dict[str, Any]:
         """
-        Validate a tax number for a specific region.
-        
-        Args:
-            tax_number: Tax number to validate
-            region_code: Region code (e.g., DE for Germany)
-            
-        Returns:
-            Validation result
+        Check a German tax number (Steuernummer) with the ELSTER validator.
+
+        Returns {"valid": true|false, "message": ...}. An invalid number is a
+        normal result, not an error.
         """
         api = ctx.request_context.lifespan_context["api"]
         
@@ -115,7 +117,14 @@ def register_tax_tools(mcp):
             "region_code": region_code
         }
         
-        return api._make_request("POST", validate_url, json_data=validation_data)
+        response = api._make_request("POST", validate_url, json_data=validation_data)
+        # The API answers with the bare JSON string "Tax number is valid", and
+        # with the reason as a 400 body when the number is invalid.
+        if isinstance(response, str):
+            return {"valid": True, "message": response}
+        if isinstance(response, dict) and response.get("status_code") == 400:
+            return {"valid": False, "message": first_text(response.get("detail")) or response.get("error")}
+        return as_object(response)
 
     @mcp.tool(
         title="Generate Finanzamt Preview",

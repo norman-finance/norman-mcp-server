@@ -21,6 +21,7 @@ from norman_mcp import config
 from norman_mcp.context import Context
 
 from norman_mcp.files.upload import resolve_ref
+from norman_mcp.tools.results import as_object
 
 READ_ONLY = ToolAnnotations(
     readOnlyHint=True,
@@ -528,7 +529,8 @@ def register_accounting_tools(mcp: Any) -> None:
         url = urljoin(
             config.api_base_url, "api/v1/accounting/company-categories/templates/"
         )
-        return await _request(api, "GET", url)
+        # The API answers with a bare list of templates.
+        return as_object(await _request(api, "GET", url))
 
     @mcp.tool(title="List Chart of Accounts", annotations=READ_ONLY)
     async def list_chart_of_accounts(

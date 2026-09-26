@@ -7,6 +7,7 @@ from pydantic import Field
 from mcp.types import ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
+from norman_mcp.tools.results import as_object
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +209,8 @@ def register_company_tools(mcp):
             "api/v1/accounting/company-categories/templates/"
         )
         
-        return await api.arequest("GET", templates_url)
+        # The API answers with a bare list of templates.
+        return as_object(await api.arequest("GET", templates_url))
 
     @mcp.tool(
         title="Trigger DATEV Export",
