@@ -12,16 +12,31 @@ from norman_mcp import config
 logger = logging.getLogger(__name__)
 
 
-def _enrich_report_download_url(data: dict, api=None, report_id: str | None = None) -> dict:
+NO_COMPANY_ERROR = {"error": "No company available. Please authenticate first."}
+
+
+def reports_url(company_id: str, suffix: str = "") -> str:
+    """The company-scoped tax reports route.
+
+    The unscoped api/v1/taxes/reports/ ignores X-Company-Id and serves the
+    user's first company (ReportsViewSet._get_company falls back to
+    Company.objects.for_user(user).first()). After switch_company -- or for
+    anyone whose selected company is not their first -- the tools listed,
+    previewed and submitted another company's reports. The MCP apps already
+    use this route; it is the same viewset.
+    """
+    return urljoin(config.api_base_url, f"api/v1/companies/{company_id}/taxes/reports/{suffix}")
+
+
+def _enrich_report_download_url(
+    data: dict, api=None, report_id: str | None = None, company_id: str | None = None
+) -> dict:
     """Add a presigned downloadUrl for the submitted tax report PDF."""
     if not isinstance(data, dict):
         return data
-    if api and report_id and data.get("reportFile"):
+    if api and report_id and company_id and data.get("reportFile"):
         try:
-            dl_endpoint = urljoin(
-                config.api_base_url,
-                f"api/v1/taxes/reports/{report_id}/download/",
-            )
+            dl_endpoint = reports_url(company_id, f"{report_id}/download/")
             dl_resp = api._make_request("GET", dl_endpoint)
             if dl_resp.get("url"):
                 data["downloadUrl"] = dl_resp["url"]
@@ -46,9 +61,11 @@ def register_tax_tools(mcp):
         """List all available tax reports."""
         api = ctx.request_context.lifespan_context["api"]
         
-        taxes_url = urljoin(config.api_base_url, "api/v1/taxes/reports/")
-        
-        return await api.arequest("GET", taxes_url)
+        company_id = api.company_id
+        if not company_id:
+            return NO_COMPANY_ERROR
+
+        return await api.arequest("GET", reports_url(company_id))
 
     @mcp.tool(
         title="Get Tax Report",
@@ -74,13 +91,12 @@ def register_tax_tools(mcp):
         """
         api = ctx.request_context.lifespan_context["api"]
         
-        report_url = urljoin(
-            config.api_base_url,
-            f"api/v1/taxes/reports/{report_id}/"
-        )
-        
-        result = await api.arequest("GET", report_url)
-        return _enrich_report_download_url(result, api=api, report_id=report_id)
+        company_id = api.company_id
+        if not company_id:
+            return NO_COMPANY_ERROR
+
+        result = await api.arequest("GET", reports_url(company_id, f"{report_id}/"))
+        return _enrich_report_download_url(result, api=api, report_id=report_id, company_id=company_id)
 
     @mcp.tool(
         title="Validate Tax Number",
@@ -142,10 +158,10 @@ def register_tax_tools(mcp):
         if not report_id or not isinstance(report_id, str) or not report_id.strip():
             raise ValueError("Invalid report ID")
 
-        preview_url = urljoin(
-            config.api_base_url,
-            f"api/v1/taxes/reports/{report_id}/generate-preview-url/",
-        )
+        company_id = api.company_id
+        if not company_id:
+            raise ValueError(NO_COMPANY_ERROR["error"])
+        preview_url = reports_url(company_id, f"{report_id}/generate-preview-url/")
 
         try:
             result = api._make_request("POST", preview_url)
@@ -202,14 +218,14 @@ def register_tax_tools(mcp):
         """
         api = ctx.request_context.lifespan_context["api"]
         
-        submit_url = urljoin(
-            config.api_base_url,
-            f"api/v1/taxes/reports/{report_id}/submit-report/"
-        )
-        
+        company_id = api.company_id
+        if not company_id:
+            return NO_COMPANY_ERROR
+        submit_url = reports_url(company_id, f"{report_id}/submit-report/")
+
         try:
             result = api._make_request("POST", submit_url)
-            return _enrich_report_download_url(result, api=api, report_id=report_id)
+            return _enrich_report_download_url(result, api=api, report_id=report_id, company_id=company_id)
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 403:
                 return {

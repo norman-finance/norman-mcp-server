@@ -1,6 +1,7 @@
 from typing import Dict, Any, List
 from urllib.parse import urljoin
 from norman_mcp import config
+from norman_mcp.tools.taxes import reports_url
 
 def register_resources(mcp):
     """Register all resource endpoints with the MCP server."""
@@ -154,7 +155,8 @@ def register_resources(mcp):
         if not company_id:
             return "No company available. Please authenticate first."
         
-        taxes_url = urljoin(config.api_base_url, "api/v1/taxes/reports/")
+        # Company-scoped: the unscoped route ignores X-Company-Id (see tools.taxes.reports_url).
+        taxes_url = reports_url(company_id)
         
         params = {
             "page": page,
