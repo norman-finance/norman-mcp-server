@@ -11,11 +11,11 @@ import json
 import mimetypes
 from contextlib import ExitStack
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 from urllib.parse import urljoin
 
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from norman_mcp import config
 from norman_mcp.context import Context
@@ -40,6 +40,98 @@ DESTRUCTIVE = ToolAnnotations(
     idempotentHint=False,
     openWorldHint=False,
 )
+
+
+EBILANZ_RULES = (
+    "E-Bilanz positions can be assigned only for GmbH/UG companies on SKR03 or SKR04, "
+    "per fiscal year 2024, 2025 or 2026 (the year in which the financial year begins), "
+    "for account codes below 9000. MANUAL needs a position from get_ebilanz_positions "
+    "that matches the account type; AUTOMATIC and DEFERRED take no position. A standard "
+    "SKR code with a fixed position accepts only AUTOMATIC. Locked or filed years cannot "
+    "change."
+)
+
+
+class EbilanzAssignment(BaseModel):
+    """How one account is reported in the E-Bilanz for one fiscal year."""
+
+    fiscal_year: int = Field(
+        ge=2024,
+        le=2026,
+        description="Year in which the financial year begins: 2024, 2025 or 2026",
+    )
+    mode: Literal["AUTOMATIC", "MANUAL", "DEFERRED"] = Field(
+        description=(
+            "AUTOMATIC uses the SKR standard position; MANUAL uses `position`; "
+            "DEFERRED means set up later (the account then stays unmapped)"
+        ),
+    )
+    position: str = Field(
+        default="",
+        max_length=255,
+        description="MANUAL only: a `position` value returned by get_ebilanz_positions",
+    )
+    chart_code: Optional[Literal["skr03", "skr04"]] = Field(
+        default=None,
+        description=(
+            "The chart the assignment was chosen for; defaults to the company's current "
+            "chart. The API rejects it if the company's chart has changed since."
+        ),
+    )
+
+
+async def _ebilanz_payload(
+    api: Any, company_id: str, assignment: EbilanzAssignment
+) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """The API's ebilanzAssignment object, or an error result.
+
+    chartCode is required by the API and must equal the company's current
+    chart; without an explicit value it is read from the company.
+    """
+    chart_code = assignment.chart_code
+    if chart_code is None:
+        company = await _request(api, "GET", _company_url(company_id, ""))
+        if not isinstance(company, dict) or company.get("error"):
+            return None, company if isinstance(company, dict) else {"error": "Company unavailable."}
+        chart = company.get("chartOfAccounts")
+        chart_code = str((chart.get("code") if isinstance(chart, dict) else chart) or "").lower()
+        if chart_code not in {"skr03", "skr04"}:
+            return None, {"error": "E-Bilanz assignments need the company to use SKR03 or SKR04."}
+    if assignment.mode != "MANUAL" and assignment.position:
+        return None, {"error": "Only a MANUAL assignment may specify a position."}
+    if assignment.mode == "MANUAL" and not assignment.position:
+        return None, {"error": "A MANUAL assignment needs a position from get_ebilanz_positions."}
+    return (
+        {
+            "chartCode": chart_code,
+            "fiscalYear": assignment.fiscal_year,
+            "mode": assignment.mode,
+            "position": assignment.position if assignment.mode == "MANUAL" else "",
+        },
+        None,
+    )
+
+
+class CutoverAccountChoice(BaseModel):
+    """One reviewed account from preview_accounting_cutover's accountReview.accounts."""
+
+    code: str = Field(pattern=r"^\d{1,8}$", description="Account code, as listed in the review")
+    name: str = Field(
+        min_length=1,
+        max_length=255,
+        description="Account name; an existing account must keep its current name",
+    )
+    account_type: Literal["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"] = Field(
+        description="An existing account, or one with preserved assignments, must keep its type",
+    )
+    mode: Literal["AUTOMATIC", "MANUAL", "DEFERRED"] = Field(
+        description="AUTOMATIC only where the review row has automatic=true",
+    )
+    position: str = Field(
+        default="",
+        max_length=255,
+        description="MANUAL only: a position from accountReview.positions",
+    )
 
 
 def _api_and_company(
@@ -259,7 +351,16 @@ def register_accounting_tools(mcp: Any) -> None:
             ),
         ),
     ) -> Dict[str, Any]:
-        """Preview findings and reconciliation without changing the books."""
+        """Preview findings and reconciliation without changing the books.
+
+        For GmbH/UG the result includes accountReview: source accounts that must be
+        prepared before import (state NEW, MAPPING_REQUIRED, CONFLICT or HIDDEN), the
+        E-Bilanz positions allowed for the period, and a token valid for 30 minutes.
+        Clear "no E-Bilanz taxonomy mapping" and "Review and prepare accounts" errors
+        with prepare_accounting_cutover_accounts, or by setting ebilanz_assignment on
+        the account (create/update_chart_of_accounts_account), then preview again.
+        CONFLICT and HIDDEN rows need a manual fix in the chart of accounts first.
+        """
         api, company_id, error = _api_and_company(ctx)
         if error:
             return error
@@ -357,6 +458,67 @@ def register_accounting_tools(mcp: Any) -> None:
             ),
         )
 
+    @mcp.tool(title="Prepare Accounts for Accounting Migration", annotations=DESTRUCTIVE)
+    async def prepare_accounting_cutover_accounts(
+        ctx: Context,
+        review_token: str = Field(
+            max_length=200000,
+            description="accountReview.token from the latest preview_accounting_cutover (valid 30 minutes)",
+        ),
+        accounts: list[CutoverAccountChoice] = Field(
+            min_length=1,
+            max_length=2000,
+            description=(
+                "The reviewed rows to prepare, from accountReview.accounts with canPrepare=true. "
+                "Keep code, name and account type of existing accounts."
+            ),
+        ),
+        confirmed: bool = Field(
+            default=False,
+            description="Must be true only after the user reviewed the proposed accounts and positions",
+        ),
+    ) -> Dict[str, Any]:
+        """Create or map the source accounts a cutover preview listed for review.
+
+        GmbH/UG with SKR03/04 and fiscal years 2024-2026 only. New accounts are created
+        Ledger-only (no VAT, not used on Transactions) and each account gets the chosen
+        E-Bilanz assignment for the review's fiscal years; balances are never imported.
+        The API refuses the call if accounts changed since the preview: preview again.
+        Afterwards run preview_accounting_cutover again with the same inputs.
+        """
+        if not confirmed:
+            return {
+                "confirmationRequired": True,
+                "warning": (
+                    "Preparing accounts creates the listed accounts in the chart of accounts and "
+                    "saves their E-Bilanz assignments for the reviewed fiscal years. Show the user "
+                    "the accounts, types and positions first."
+                ),
+            }
+        api, company_id, error = _api_and_company(ctx)
+        if error:
+            return error
+        payload = {
+            "reviewToken": review_token,
+            "confirmed": True,
+            "accounts": [
+                {
+                    "code": account.code,
+                    "name": account.name,
+                    "accountType": account.account_type,
+                    "mode": account.mode,
+                    "position": account.position if account.mode == "MANUAL" else "",
+                }
+                for account in accounts
+            ],
+        }
+        return await _request(
+            api,
+            "POST",
+            _company_url(company_id, "accounting/cutover/prepare-accounts/"),
+            json_data=payload,
+        )
+
     @mcp.tool(title="List Chart of Accounts Templates", annotations=READ_ONLY)
     async def list_chart_of_accounts_templates(ctx: Context) -> Dict[str, Any]:
         """List account frameworks available for the selected company and country."""
@@ -393,8 +555,24 @@ def register_accounting_tools(mcp: Any) -> None:
         ),
         page: int = Field(default=1, ge=1),
         page_size: int = Field(default=50, ge=1, le=200),
+        fiscal_year: Optional[int] = Field(
+            default=None,
+            ge=2000,
+            le=2100,
+            description=(
+                "Adds each account's ebilanzAssignment for this fiscal year (the year the "
+                "financial year begins): mode, position and status. Status UNMAPPED, "
+                "INVALID or REVIEW_REQUIRED blocks the cutover preview and E-Bilanz."
+            ),
+        ),
     ) -> Dict[str, Any]:
-        """Search and page through the selected company's complete account master."""
+        """Search and page through the selected company's complete account master.
+
+        status=INACTIVE also lists accounts hidden by a chart switch: after moving from
+        SKR03 to SKR04 (or back) the previous chart's accounts stay in the account master
+        as hidden rows, with sourceTemplate naming the old chart. They are history, not
+        accounts to unhide; compare sourceTemplate with the company's current chart.
+        """
         api, _company_id, error = _api_and_company(ctx)
         if error:
             return error
@@ -412,6 +590,7 @@ def register_accounting_tools(mcp: Any) -> None:
                 "pageSize": page_size,
                 "includeInactive": status == "INACTIVE",
                 "includeStatementOnly": True,
+                "fiscalYear": fiscal_year,
             }
         )
         return await _request(api, "GET", url, params=params)
@@ -433,9 +612,18 @@ def register_accounting_tools(mcp: Any) -> None:
         ),
         vat_applicable: bool = Field(default=False),
         suggested_vat_rate: int = Field(default=0, ge=0, le=100),
+        ebilanz_assignment: Optional[EbilanzAssignment] = Field(
+            default=None,
+            description="Optional E-Bilanz position for one fiscal year. " + EBILANZ_RULES,
+        ),
     ) -> Dict[str, Any]:
-        """Create a custom Ledger account; balance-sheet accounts stay Ledger-only."""
-        api, _company_id, error = _api_and_company(ctx)
+        """Create a custom Ledger account; balance-sheet accounts stay Ledger-only.
+
+        Pass ebilanz_assignment to report the new account in the E-Bilanz; without
+        one, a code outside the SKR standard stays unmapped and blocks the cutover
+        preview and the annual E-Bilanz. Account and assignment are saved together.
+        """
+        api, company_id, error = _api_and_company(ctx)
         if error:
             return error
         url = urljoin(config.api_base_url, "api/v1/accounting/company-categories/")
@@ -448,6 +636,11 @@ def register_accounting_tools(mcp: Any) -> None:
             "vatApplicability": vat_applicable,
             "suggestedVatRate": suggested_vat_rate,
         }
+        if ebilanz_assignment is not None:
+            assignment, error = await _ebilanz_payload(api, company_id, ebilanz_assignment)
+            if error:
+                return error
+            payload["ebilanzAssignment"] = assignment
         return await _request(api, "POST", url, json_data=payload)
 
     @mcp.tool(title="Update Chart of Accounts Account", annotations=DESTRUCTIVE)
@@ -465,9 +658,21 @@ def register_accounting_tools(mcp: Any) -> None:
         description: Optional[str] = None,
         vat_applicable: Optional[bool] = None,
         suggested_vat_rate: Optional[int] = Field(default=None, ge=0, le=100),
+        ebilanz_assignment: Optional[EbilanzAssignment] = Field(
+            default=None,
+            description=(
+                "Set this custom account's E-Bilanz position for one fiscal year. Built-in "
+                "SKR accounts accept only active (hide/unhide); their standard position is "
+                "automatic. " + EBILANZ_RULES
+            ),
+        ),
     ) -> Dict[str, Any]:
-        """Edit a custom account, or hide/unhide a built-in account."""
-        api, _company_id, error = _api_and_company(ctx)
+        """Edit a custom account, or hide/unhide a built-in account.
+
+        ebilanz_assignment clears "no E-Bilanz taxonomy mapping" blockers for a custom
+        account; call once per fiscal year that needs it.
+        """
+        api, company_id, error = _api_and_company(ctx)
         if error:
             return error
         url = urljoin(
@@ -484,7 +689,42 @@ def register_accounting_tools(mcp: Any) -> None:
                 "suggestedVatRate": suggested_vat_rate,
             }
         )
+        if ebilanz_assignment is not None:
+            assignment, error = await _ebilanz_payload(api, company_id, ebilanz_assignment)
+            if error:
+                return error
+            payload["ebilanzAssignment"] = assignment
         return await _request(api, "PATCH", url, json_data=payload)
+
+    @mcp.tool(title="Get E-Bilanz Positions", annotations=READ_ONLY)
+    async def get_ebilanz_positions(
+        ctx: Context,
+        fiscal_year: int = Field(
+            ge=2024, le=2026, description="Year in which the financial year begins: 2024, 2025 or 2026"
+        ),
+        account_type: Literal["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"] = Field(
+            description="Type of the account the position is for"
+        ),
+        code: Optional[str] = Field(
+            default=None,
+            max_length=20,
+            description="Account code, to also get its automatic position and current assignment",
+        ),
+    ) -> Dict[str, Any]:
+        """List the E-Bilanz positions an account of this type may be assigned (GmbH/UG, SKR03/04).
+
+        Returns positions (position + label), the account's automaticAssignment (the SKR
+        standard position, if any), its current assignment and status, and whether the
+        year is locked. Use a `position` value for ebilanz_assignment.mode=MANUAL.
+        """
+        api, _company_id, error = _api_and_company(ctx)
+        if error:
+            return error
+        url = urljoin(
+            config.api_base_url, "api/v1/accounting/company-categories/ebilanz-options/"
+        )
+        params = _compact({"fiscalYear": fiscal_year, "accountType": account_type, "code": code})
+        return await _request(api, "GET", url, params=params)
 
     @mcp.tool(title="Deactivate Chart of Accounts Account", annotations=DESTRUCTIVE)
     async def deactivate_chart_of_accounts_account(
