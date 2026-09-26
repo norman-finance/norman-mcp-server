@@ -45,6 +45,7 @@ from norman_mcp.resources.endpoints import register_resources
 from norman_mcp.apps import register_public_apps
 from norman_mcp.auth.provider import NormanOAuthProvider
 from norman_mcp.auth.routes import create_norman_auth_routes
+from norman_mcp.tools.results import guard_tool_result
 
 # Configure logging
 logging.basicConfig(
@@ -180,6 +181,18 @@ async def _patched_authenticate_request(self, request):
 ClientAuthenticator.authenticate_request = _patched_authenticate_request
 
 
+class NormanFastMCP(FastMCP):
+    """FastMCP whose tools all return an object and flag failed calls.
+
+    Every registration (the @tool decorator included) goes through add_tool,
+    so this is the one place the rules in norman_mcp.tools.results apply to
+    all tools, present and future.
+    """
+
+    def add_tool(self, fn, *args, **kwargs):
+        return super().add_tool(guard_tool_result(fn), *args, **kwargs)
+
+
 async def authenticate_with_credentials(api_client):
     """Authenticate using environment variables (for stdio transport)."""
     from norman_mcp.config.settings import config
@@ -295,8 +308,8 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
             scopes_supported=SUPPORTED_SCOPES,
         )
     
-    server = FastMCP(
-        "Norman Finance API", 
+    server = NormanFastMCP(
+        "Norman Finance API",
         instructions="Norman Finance MCP Server - Access your financial data",
         lifespan=lifespan,
         auth_server_provider=oauth_provider,
