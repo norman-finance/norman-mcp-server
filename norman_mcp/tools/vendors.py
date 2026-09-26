@@ -227,6 +227,6 @@ def register_vendor_tools(mcp):
 
         vendor_url = urljoin(config.api_base_url, f"api/v1/accounting/vendors/{vendor_id}/")
         result = api._make_request("DELETE", vendor_url)
-        if result is None or result == "":
+        if result is None or result == "" or result == {}:
             return {"message": f"Vendor {vendor_id} deleted successfully."}
         return result

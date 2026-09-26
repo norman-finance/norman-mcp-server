@@ -269,5 +269,7 @@ def register_client_tools(mcp):
             f"api/v1/companies/{company_id}/clients/{client_id}/"
         )
         
-        api._make_request("DELETE", client_url)
-        return {"message": "Client deleted successfully"} 
+        result = api._make_request("DELETE", client_url)
+        if isinstance(result, dict) and result.get("error"):
+            return result
+        return {"message": "Client deleted successfully"}

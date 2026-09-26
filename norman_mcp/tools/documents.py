@@ -1,5 +1,7 @@
+import asyncio
 import base64
 import json
+import random
 import logging
 import os
 import re
@@ -113,6 +115,50 @@ def validate_input(input_str: str) -> str:
     return re.sub(r'[;<>&|]', '', input_str)
 
 
+# external_source used when a structured import names an external_id without one.
+DEFAULT_SOURCE_SYSTEM = "mcp"
+STRUCTURED_IMPORT_ATTEMPTS = 3
+STRUCTURED_IMPORT_BACKOFF_SECONDS = 0.5
+
+
+def _is_retryable(response: Any) -> bool:
+    """A server error or a connection problem, not a validation answer."""
+    if not isinstance(response, dict) or not response.get("error"):
+        return False
+    status = response.get("status_code")
+    if isinstance(status, int):
+        return status >= 500
+    message = str(response.get("error"))
+    return message.startswith(("Connection error", "Request timed out"))
+
+
+async def _post_structured_document(
+    api: Any, import_url: str, metadata: Dict[str, Any], path: str, *, retry: bool
+) -> Dict[str, Any]:
+    """POST one document; retry 5xx/connection failures when the call is idempotent.
+
+    Only documents with an external_id are retried: the API's
+    external_source/external_id uniqueness then returns the existing document
+    instead of creating a duplicate. Under load the endpoint sporadically
+    answered 500/502 (10 of 249 documents in one customer run).
+    """
+    attempts = STRUCTURED_IMPORT_ATTEMPTS if retry else 1
+    response: Dict[str, Any] = {}
+    for attempt in range(attempts):
+        with open(path, "rb") as file_handle:
+            response = await api.arequest(
+                "POST",
+                import_url,
+                json_data=metadata,
+                files={"file": file_handle},
+            )
+        if attempt == attempts - 1 or not _is_retryable(response):
+            break
+        delay = STRUCTURED_IMPORT_BACKOFF_SECONDS * (2 ** attempt)
+        await asyncio.sleep(delay + random.uniform(0, delay / 2))
+    return response
+
+
 def _validate_structured_document(document: Dict[str, Any]) -> Optional[str]:
     unknown = sorted(set(document) - _STRUCTURED_DOCUMENT_KEYS)
     if unknown:
@@ -126,8 +172,6 @@ def _validate_structured_document(document: Dict[str, Any]) -> Optional[str]:
         return "Provide exactly one of file_url, file_ref, or file_content_base64."
     if document.get("file_content_base64") and not document.get("file_name"):
         return "file_name is required with file_content_base64."
-    if document.get("external_id") and not document.get("source_system"):
-        return "source_system is required when external_id is provided."
 
     metadata = document.get("metadata") or {}
     if not isinstance(metadata, dict):
@@ -358,8 +402,9 @@ def register_document_tools(mcp):
         documents: List[Dict[str, Any]] = Field(
             description=(
                 "Documents to store without OCR. Each item contains exactly one of "
-                "file_url, file_ref, or file_content_base64; optional source_system "
-                "and external_id; and optional metadata with supplier, customer, "
+                "file_url, file_ref, or file_content_base64; optional external_id "
+                "(idempotency key) with optional source_system, which defaults to "
+                "'mcp' when external_id is given; and optional metadata with supplier, customer, "
                 "invoice_number, invoice_date, service_date, net_amount, vat_amount, "
                 "gross_amount, currency, document_type, direction, and tags."
             ),
@@ -367,8 +412,10 @@ def register_document_tools(mcp):
     ) -> Dict[str, Any]:
         """Store pre-processed documents without transaction side effects.
 
-        Missing metadata remains missing. With source_system + external_id,
-        retries return the existing document instead of creating a duplicate.
+        Missing metadata remains missing. With external_id (source_system
+        defaults to "mcp"), retries return the existing document instead of
+        creating a duplicate, so such documents are retried automatically after
+        a server or connection error.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -412,18 +459,17 @@ def register_document_tools(mcp):
 
             try:
                 metadata = dict(document.get("metadata") or {})
-                if document.get("source_system"):
-                    metadata["external_source"] = document["source_system"]
-                if document.get("external_id"):
-                    metadata["external_id"] = document["external_id"]
+                external_id = document.get("external_id")
+                # The API requires external_source whenever external_id is set.
+                source_system = document.get("source_system") or (DEFAULT_SOURCE_SYSTEM if external_id else None)
+                if source_system:
+                    metadata["external_source"] = source_system
+                if external_id:
+                    metadata["external_id"] = external_id
 
-                with open(path, "rb") as file_handle:
-                    response = await api.arequest(
-                        "POST",
-                        import_url,
-                        json_data=metadata,
-                        files={"file": file_handle},
-                    )
+                response = await _post_structured_document(
+                    api, import_url, metadata, path, retry=bool(external_id)
+                )
 
                 result = {"index": index, **response}
                 if response.get("error"):

@@ -248,7 +248,9 @@ def register_rule_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        api._make_request("DELETE", _rules_url(f"{rule_id}/"))
+        result = api._make_request("DELETE", _rules_url(f"{rule_id}/"))
+        if isinstance(result, dict) and result.get("error"):
+            return result
         return {"status": "deleted", "ruleId": rule_id}
 
     @mcp.tool(
