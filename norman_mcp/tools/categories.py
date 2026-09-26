@@ -6,6 +6,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from norman_mcp import config
+from norman_mcp.tools.results import as_object
 from norman_mcp.context import Context
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,8 @@ def register_category_tools(mcp):
             config.api_base_url,
             "api/v1/accounting/company-categories/skr-lookup/",
         )
-        return api._make_request("GET", lookup_url, params={"q": code})
+        # The API answers with a bare list of matching accounts.
+        return as_object(api._make_request("GET", lookup_url, params={"q": code}))
 
     @mcp.tool(
         title="AI Category Suggestion (SME only)",
@@ -125,7 +127,8 @@ def register_category_tools(mcp):
                 ),
                 "results": [],
             }
-        return result
+        # A bare list of up to five matches.
+        return as_object(result)
 
     @mcp.tool(
         title="Create Company Category (SME only)",
