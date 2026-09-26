@@ -2,11 +2,14 @@
 
 import asyncio
 import json
+import logging
 
 import pytest
 
 from mcp.server.auth.handlers.register import RegistrationHandler
+from mcp.server.auth.provider import AccessToken
 from mcp.server.auth.settings import ClientRegistrationOptions
+from mcp.shared.auth import OAuthClientInformationFull
 from starlette.requests import Request
 
 from norman_mcp.auth.provider import NormanOAuthProvider
@@ -18,11 +21,14 @@ def test_rejects_external_https():
     assert is_allowed_redirect_uri("https://attacker.com/steal") is False
     assert is_allowed_redirect_uri("https://norman.finance.attacker.com/cb") is False
     assert is_allowed_redirect_uri("https://connect.smithery.ai.attacker.com/auth") is False
+    assert is_allowed_redirect_uri("https://manufact.com.attacker.com/cb") is False
 
 
 def test_allows_known_connector_https_hosts():
     assert is_allowed_redirect_uri("https://chatgpt.com/connector_platform_oauth_redirect")
     assert is_allowed_redirect_uri("https://claude.ai/api/mcp/auth_callback")
+    assert is_allowed_redirect_uri("https://manufact.com/oauth/callback")
+    assert is_allowed_redirect_uri("https://app.manufact.com/oauth/callback")
     assert is_allowed_redirect_uri(
         "https://connect.smithery.ai/smithery-deployments/deployment-id/auth"
     )
@@ -80,6 +86,9 @@ def test_sdk_validate_patch_enforces_allowlist():
 def _provider_without_external_state() -> NormanOAuthProvider:
     provider = object.__new__(NormanOAuthProvider)
     provider.clients = {}
+    provider.tokens = {}
+    provider.refresh_tokens = {}
+    provider.auth_codes = {}
     provider._save_state = lambda: None
     return provider
 
@@ -149,3 +158,102 @@ def test_dcr_handler_accepts_dynamic_external_client_metadata():
     response_body = json.loads(response.body)
     assert response_body["redirect_uris"] == ["https://attacker.com/steal"]
     assert response_body["client_id"] in handler.provider.clients
+
+
+def test_dcr_logs_a_warning_for_a_redirect_authorize_will_reject(caplog):
+    """Registration stays open, but an unusable callback must be visible in logs.
+
+    Rejecting the registration outright was tried and reverted -- it breaks
+    gateways whose callback host is not allow-listed yet -- so the log line is
+    the only signal that someone registered a target /authorize will refuse.
+    """
+    handler = _registration_handler()
+
+    with caplog.at_level(logging.WARNING, logger="norman_mcp.auth.provider"):
+        response = asyncio.run(_register_request(handler, "https://attacker.com/steal"))
+
+    assert response.status_code == 201
+    assert any(
+        "https://attacker.com/steal" in record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+    )
+
+
+def test_dcr_does_not_warn_for_an_allowed_redirect(caplog):
+    handler = _registration_handler()
+
+    with caplog.at_level(logging.WARNING, logger="norman_mcp.auth.provider"):
+        response = asyncio.run(_register_request(handler, "https://claude.ai/api/mcp/auth_callback"))
+
+    assert response.status_code == 201
+    assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+
+
+def _register_n(provider: NormanOAuthProvider, count: int, prefix: str = "c") -> list[str]:
+    client_ids = []
+    for i in range(count):
+        client_id = f"{prefix}{i}"
+        asyncio.run(
+            provider.register_client(
+                OAuthClientInformationFull(
+                    client_id=client_id,
+                    client_secret=None,
+                    redirect_uris=["http://localhost:6274/oauth/callback"],
+                    token_endpoint_auth_method="none",
+                    grant_types=["authorization_code", "refresh_token"],
+                    response_types=["code"],
+                    scope="read",
+                )
+            )
+        )
+        client_ids.append(client_id)
+    return client_ids
+
+
+def test_open_registration_registry_is_capped(monkeypatch):
+    """Unauthenticated DCR must not grow the persisted state file without bound."""
+    monkeypatch.setenv("NORMAN_MCP_MAX_REGISTERED_CLIENTS", "10")
+    provider = _provider_without_external_state()
+
+    client_ids = _register_n(provider, 25)
+
+    assert len(provider.clients) == 10
+    # Oldest-first eviction: the survivors are the most recent registrations.
+    assert list(provider.clients) == client_ids[-10:]
+
+
+def test_cap_never_evicts_a_client_that_is_in_use(monkeypatch):
+    monkeypatch.setenv("NORMAN_MCP_MAX_REGISTERED_CLIENTS", "5")
+    provider = _provider_without_external_state()
+
+    oldest = _register_n(provider, 1, prefix="keep")[0]
+    provider.tokens["tok"] = AccessToken(
+        token="tok", client_id=oldest, scopes=["read"], expires_at=None
+    )
+
+    _register_n(provider, 20)
+
+    assert oldest in provider.clients
+    assert len(provider.clients) == 5
+
+
+def test_cap_of_zero_disables_pruning(monkeypatch):
+    monkeypatch.setenv("NORMAN_MCP_MAX_REGISTERED_CLIENTS", "0")
+    provider = _provider_without_external_state()
+
+    _register_n(provider, 30)
+
+    assert len(provider.clients) == 30
+
+
+def test_auto_registration_via_get_client_is_capped(monkeypatch):
+    """/authorize with an unknown client_id auto-registers; that path is capped too."""
+    monkeypatch.setenv("NORMAN_MCP_MAX_REGISTERED_CLIENTS", "8")
+    provider = _provider_without_external_state()
+
+    for i in range(30):
+        asyncio.run(provider.get_client(f"unknown-{i}"))
+
+    assert len(provider.clients) == 8
+    assert list(provider.clients) == [f"unknown-{i}" for i in range(22, 30)]
