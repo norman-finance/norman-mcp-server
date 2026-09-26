@@ -15,21 +15,11 @@ def register_resources(mcp):
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
         
         try:
-            import requests
-            headers = {
-                "Authorization": f"Bearer {api.access_token}",
-                "User-Agent": "NormanMCPServer/0.1.0",
-                "X-Requested-With": "XMLHttpRequest",
-            }
-            
-            response = requests.get(
-                company_url,
-                headers=headers,
-                timeout=config.NORMAN_API_TIMEOUT
-            )
-            
-            response.raise_for_status()
-            company_data = response.json()
+            # The API client resolves the caller's token per request; the
+            # static token is empty in hosted OAuth mode ("Bearer None", 401).
+            company_data = api._make_request("GET", company_url)
+            if not isinstance(company_data, dict) or company_data.get("error"):
+                return f"Error getting company details: {company_data}"
 
             is_sme = company_data.get('isSme', False)
             account_type = company_data.get('accountType', 'N/A')
@@ -196,18 +186,10 @@ def register_resources(mcp):
 
         clients_url = urljoin(config.api_base_url, "api/v1/tax-advisor/clients/")
 
-        try:
-            import requests as req
-            headers = {
-                "Authorization": f"Bearer {api.access_token}",
-                "User-Agent": "NormanMCPServer/0.1.0",
-                "X-Requested-With": "XMLHttpRequest",
-            }
-            response = req.get(clients_url, headers=headers, timeout=config.NORMAN_API_TIMEOUT)
-            response.raise_for_status()
-            clients = response.json()
-        except Exception as e:
-            return f"Error fetching tax advisor clients: {e}"
+        # Per-request client, as for company:// above.
+        clients = api._make_request("GET", clients_url)
+        if isinstance(clients, dict) and clients.get("error"):
+            return f"Error fetching tax advisor clients: {clients}"
 
         client_list = clients if isinstance(clients, list) else clients.get("results", [])
 

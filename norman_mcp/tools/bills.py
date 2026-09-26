@@ -224,6 +224,6 @@ def register_bill_tools(mcp):
 
         bill_url = urljoin(config.api_base_url, f"api/v1/accounting/bills/{bill_id}/")
         result = api._make_request("DELETE", bill_url)
-        if result is None or result == "":
+        if result is None or result == "" or result == {}:
             return {"message": f"Bill {bill_id} deleted successfully."}
         return result

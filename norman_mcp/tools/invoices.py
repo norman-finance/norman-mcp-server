@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import urljoin
 
-import requests
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from pydantic import Field
 
@@ -713,21 +712,14 @@ def register_invoice_tools(mcp):
             f"api/v1/companies/{company_id}/invoices/{invoice_id}/xml/"
         )
 
-        try:
-            response = requests.get(
-                xml_url,
-                headers={"Authorization": f"Bearer {api.access_token}"},
-                timeout=config.NORMAN_API_TIMEOUT
-            )
-            response.raise_for_status()
-            
-            # Return the XML content as a string
-            return {"xml_content": response.text}
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to get e-invoice XML: {str(e)}")
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"Response: {e.response.text}")
-            return {"error": f"Failed to get e-invoice XML: {str(e)}"}
+        # Go through the API client like every other tool: it resolves the
+        # caller's token per request. `api.access_token` is only set in
+        # single-tenant stdio mode, so hosted OAuth sent "Bearer None" (401).
+        # The API serves text/xml, which the client returns as {"content": ...}.
+        response = await api.arequest("GET", xml_url)
+        if not isinstance(response, dict) or "content" not in response:
+            return response
+        return {"xml_content": response["content"]}
 
     @mcp.tool(
         title="List Invoices",

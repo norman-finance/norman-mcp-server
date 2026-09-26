@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, Any, Optional
 from urllib.parse import urljoin
-from datetime import datetime
+from datetime import date
 from pydantic import Field
 
 from mcp.types import ToolAnnotations
@@ -86,7 +86,7 @@ def register_company_tools(mcp):
         tax_id: Optional[str] = Field(default=None, description="Business Steuernummer for the company, not a personal 11-digit Steuer-ID/IdNr; enter personal identifiers only in Norman's authenticated forms."),
         phone: Optional[str] = None,
         tax_state: Optional[str] = None,
-        activity_start: Optional[datetime] = None,
+        activity_start: Optional[date] = Field(default=None, description="Business activity start date (YYYY-MM-DD)"),
         chart_of_accounts: Optional[str] = Field(default=None, description="Chart of accounts template code: 'skr03' or 'skr04'. Only for SME companies."),
         datev_advisor_number: Optional[str] = Field(default=None, description="DATEV tax advisor number"),
         datev_client_number: Optional[str] = Field(default=None, description="DATEV client/Mandant number"),
@@ -123,7 +123,9 @@ def register_company_tools(mcp):
         if tax_state:
             update_data["taxState"] = tax_state
         if activity_start:
-            update_data["activityStart"] = activity_start
+            # A date object is not JSON serializable: the client used to fail
+            # in json.dumps before sending, and this tool still said success.
+            update_data["activityStart"] = activity_start.isoformat()
         if chart_of_accounts:
             update_data["chartOfAccounts"] = chart_of_accounts
         if datev_advisor_number is not None:
@@ -136,6 +138,8 @@ def register_company_tools(mcp):
             return {"message": "No fields provided for update.", "company": current_data}
         
         updated_company = api._make_request("PATCH", company_url, json_data=update_data)
+        if isinstance(updated_company, dict) and updated_company.get("error"):
+            return updated_company
         return {"message": "Company updated successfully", "company": updated_company}
 
     @mcp.tool(
@@ -238,9 +242,10 @@ def register_company_tools(mcp):
         ),
     ) -> Dict[str, Any]:
         """
-        Trigger a DATEV export for the company's transactions in the specified period.
-        Generates a ZIP containing a DATEV EXTF CSV, a human-readable statement CSV,
-        and optionally all attached documents. Only finalized transactions are included.
+        Generate a DATEV export of finalized transactions and return a downloadUrl valid for one hour.
+        With include_documents=true, the ZIP includes the DATEV EXTF CSV, a human-readable
+        statement CSV and all attached documents; otherwise the download is the DATEV CSV.
+        Present the returned downloadUrl to the user.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -264,7 +269,12 @@ def register_company_tools(mcp):
                 ),
             }
 
-        resolved_skr_variant = skr_variant or str(company.get("chartOfAccounts") or "SKR04").upper()
+        # The company serializes its chart as {"publicId", "name", "code"}; the
+        # object itself used to be stringified here, which rejected every SME
+        # with a chart unless skr_variant was passed explicitly.
+        chart = company.get("chartOfAccounts")
+        chart_code = chart.get("code") if isinstance(chart, dict) else chart
+        resolved_skr_variant = str(skr_variant or chart_code or "SKR04").upper()
         if resolved_skr_variant not in {"SKR03", "SKR04"}:
             return {"error": "skr_variant must be SKR03 or SKR04."}
 
@@ -277,6 +287,10 @@ def register_company_tools(mcp):
             "advisorNumber": resolved_advisor_number,
             "clientNumber": resolved_client_number,
             "skrVariant": resolved_skr_variant,
+            # A ZIP cannot travel through a JSON tool result (the client used to
+            # replace it with {"success": true}); the API stores the file and
+            # returns a one-hour download link instead.
+            "responseFormat": "download_url",
         }
         
         return api._make_request("POST", export_url, json_data=export_data)
