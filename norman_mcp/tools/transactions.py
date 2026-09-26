@@ -120,11 +120,21 @@ def register_transaction_tools(mcp):
         ),
         limit: Optional[int] = Field(
             default=None,
-            description="Maximum number of results to return (default 100)",
+            ge=1,
+            le=100,
+            description="Results per page (default 20). Use 10 for a targeted lookup.",
+        ),
+        page: int = Field(
+            default=1,
+            ge=1,
+            description="Page number. Follow next pages when the requested scope needs them.",
         ),
     ) -> Dict[str, Any]:
         """
         Search for transactions matching specified criteria.
+
+        Results are paginated: the response's count and next tell whether more
+        pages exist. Keep filters and limit unchanged while paging.
 
         Args:
             description: Text to search for in transaction descriptions
@@ -133,7 +143,8 @@ def register_transaction_tools(mcp):
             min_amount: Minimum transaction amount
             max_amount: Maximum transaction amount
             category: Transaction category
-            limit: Maximum number of results to return (default 100)
+            limit: Results per page (default 20)
+            page: Page number, starting at 1
             no_invoice: Whether to exclude invoices
             no_receipt: Whether to exclude receipts
             status: Status of the transaction (UNVERIFIED, VERIFIED)
@@ -161,9 +172,9 @@ def register_transaction_tools(mcp):
             params["dateFrom"] = from_date
         if to_date:
             params["dateTo"] = to_date
-        if min_amount:
+        if min_amount is not None:
             params["minAmount"] = min_amount
-        if max_amount:
+        if max_amount is not None:
             params["maxAmount"] = max_amount
         if category:
             params["category_name"] = category
@@ -175,8 +186,10 @@ def register_transaction_tools(mcp):
             params["status"] = status
         if cashflow_type:
             params["cashflowType"] = cashflow_type
-        if limit:
-            params["limit"] = limit
+        # The API paginates by page/page_size and ignores "limit", so every
+        # search used to stop at its first 20 matches.
+        params["page_size"] = limit or 20
+        params["page"] = page
 
         return await api.arequest("GET", transactions_url, params=params)
 

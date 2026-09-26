@@ -4,12 +4,12 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import urljoin
 
-import requests
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from pydantic import Field
 
 from norman_mcp import config
 from norman_mcp.context import Context
+from norman_mcp.tools._concurrency import gather_bounded
 from norman_mcp.tools.contracts import register_contract_tools
 from norman_mcp.tools.invoice_management import register_invoice_management_tools
 from norman_mcp.tools.invoice_schemas import (
@@ -27,45 +27,54 @@ from norman_mcp.tools.invoice_schemas import (
 logger = logging.getLogger(__name__)
 
 
-def _enrich_invoice_response(data: dict, api=None, company_id: str | None = None) -> dict:
+async def _enrich_invoice_response(data: dict, api=None, company_id: str | None = None) -> dict:
     """Replace private reportUrl with a presigned downloadUrl (1-hour TTL)."""
     if not isinstance(data, dict):
         return data
 
-    def _enrich_single(item: dict) -> None:
+    async def _enrich_single(item: dict) -> None:
         pid = item.get("publicId")
         if pid and item.get("reportUrl") and api and company_id:
-            try:
-                pdf_endpoint = urljoin(
-                    config.api_base_url,
-                    f"api/v1/companies/{company_id}/invoices/{pid}/pdf/",
-                )
-                resp = api._make_request("GET", pdf_endpoint)
-                if resp.get("url"):
-                    item["downloadUrl"] = resp["url"]
-            except Exception:
+            pdf_endpoint = urljoin(
+                config.api_base_url,
+                f"api/v1/companies/{company_id}/invoices/{pid}/pdf/",
+            )
+            resp = await api.arequest("GET", pdf_endpoint)
+            if isinstance(resp, dict) and resp.get("url"):
+                item["downloadUrl"] = resp["url"]
+            else:
                 logger.debug("Could not fetch presigned PDF URL for invoice %s", pid)
 
-    if data.get("publicId"):
-        _enrich_single(data)
-
-    if "results" in data and isinstance(data["results"], list):
-        for item in data["results"]:
-            if isinstance(item, dict):
-                _enrich_single(item)
-
+    items = [data] if data.get("publicId") else []
+    if isinstance(data.get("results"), list):
+        items.extend(item for item in data["results"] if isinstance(item, dict))
+    await gather_bounded(_enrich_single(item) for item in items)
     return data
 
 
-async def _aenrich_invoice_response(data: dict, api=None, company_id: str | None = None) -> dict:
-    """Async entry point for the shared management tools; the work itself is sync here."""
-    return _enrich_invoice_response(data, api=api, company_id=company_id)
+def sent_or_nothing_sent(result: Any) -> Any:
+    """The send result, or an error when the API sent nothing.
+
+    The send endpoints answer 201 with an empty body when the sender skips the
+    email because there is no recipient address (plan and email-verification
+    blocks are 403s). The tools returned that {} as-is, and the agent told the
+    user the email was on its way.
+    """
+    if result == {}:
+        return {
+            "error": (
+                "Nothing was sent: there is no recipient email address. Add an email to "
+                "the client, or pass custom_client_email, and send again."
+            ),
+            "code": "no_recipient",
+        }
+    return result
 
 
 def register_invoice_tools(mcp):
     """Register all invoice-related tools with the MCP server."""
     register_contract_tools(mcp)
-    register_invoice_management_tools(mcp, enrich=_aenrich_invoice_response)
+    register_invoice_management_tools(mcp, enrich=_enrich_invoice_response)
     
     @mcp.tool(
         title="Create Invoice",
@@ -282,7 +291,7 @@ def register_invoice_tools(mcp):
         )
 
         result = await api.arequest("POST", invoices_url, json_data=invoice_data)
-        return _enrich_invoice_response(result, api=api, company_id=company_id)
+        return await _enrich_invoice_response(result, api=api, company_id=company_id)
 
     @mcp.tool(
         title="Create Recurring Invoice",
@@ -482,7 +491,7 @@ def register_invoice_tools(mcp):
         )
 
         result = await api.arequest("POST", recurring_invoices_url, json_data=invoice_data)
-        return _enrich_invoice_response(result, api=api, company_id=company_id)
+        return await _enrich_invoice_response(result, api=api, company_id=company_id)
 
     @mcp.tool(
         title="Get Invoice Details",
@@ -518,7 +527,7 @@ def register_invoice_tools(mcp):
         )
         
         result = await api.arequest("GET", invoice_url)
-        return _enrich_invoice_response(result, api=api, company_id=company_id)
+        return await _enrich_invoice_response(result, api=api, company_id=company_id)
 
     @mcp.tool(
         title="Send Invoice via Email",
@@ -574,7 +583,7 @@ def register_invoice_tools(mcp):
         if custom_client_email:
             send_data["customClientEmail"] = custom_client_email
             
-        return api._make_request("POST", send_url, json_data=send_data)
+        return sent_or_nothing_sent(await api.arequest("POST", send_url, json_data=send_data))
 
     @mcp.tool(
         title="Send Overdue Payment Reminder",
@@ -632,7 +641,7 @@ def register_invoice_tools(mcp):
         if custom_client_email:
             send_data["customClientEmail"] = custom_client_email
             
-        return api._make_request("POST", send_url, json_data=send_data)
+        return sent_or_nothing_sent(await api.arequest("POST", send_url, json_data=send_data))
 
     @mcp.tool(
         title="Link Transaction to Invoice",
@@ -678,7 +687,7 @@ def register_invoice_tools(mcp):
         if items is not None:
             link_data["items"] = [TransactionInvoiceItem.model_validate(item).payload() for item in items]
 
-        return api._make_request("POST", link_url, json_data=link_data)
+        return await api.arequest("POST", link_url, json_data=link_data)
 
     @mcp.tool(
         title="Get E-Invoice XML",
@@ -700,7 +709,7 @@ def register_invoice_tools(mcp):
             invoice_id: ID of the invoice to get XML for
             
         Returns:
-            E-invoice XML data
+            E-invoice XML data as xml_content
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -713,21 +722,13 @@ def register_invoice_tools(mcp):
             f"api/v1/companies/{company_id}/invoices/{invoice_id}/xml/"
         )
 
-        try:
-            response = requests.get(
-                xml_url,
-                headers={"Authorization": f"Bearer {api.access_token}"},
-                timeout=config.NORMAN_API_TIMEOUT
-            )
-            response.raise_for_status()
-            
-            # Return the XML content as a string
-            return {"xml_content": response.text}
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to get e-invoice XML: {str(e)}")
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"Response: {e.response.text}")
-            return {"error": f"Failed to get e-invoice XML: {str(e)}"}
+        # Go through the API client like every other tool: it resolves the
+        # caller's token per request. `api.access_token` is only set in
+        # single-tenant stdio mode, so hosted OAuth sent "Bearer None" (401).
+        response = await api.arequest("GET", xml_url)
+        if "content" not in response:
+            return response
+        return {"xml_content": response["content"]}
 
     @mcp.tool(
         title="List Invoices",
@@ -746,8 +747,9 @@ def register_invoice_tools(mcp):
         name: Optional[str] = None,
         from_date: Optional[str] = None,
         to_date: Optional[str] = None,
-        limit: Optional[int] = 100,
+        limit: Optional[int] = Field(default=100, ge=1, le=200),
         document_type: Optional[Literal["invoice", "quote", "delivery_note", "cancel", "credit_note"]] = None,
+        page: int = Field(default=1, ge=1),
     ) -> Dict[str, Any]:
         """
         List invoices with optional filtering.
@@ -759,7 +761,8 @@ def register_invoice_tools(mcp):
             name: Filter by invoice (client) name
             from_date: Only documents issued on or after this date (YYYY-MM-DD)
             to_date: Only documents issued on or before this date (YYYY-MM-DD)
-            limit: Maximum number of invoices to return (default 100)
+            limit: Invoices per page (default 100)
+            page: Page number, starting at 1; the response's next tells whether more exist
             
         Returns:
             List of invoices matching the criteria
@@ -783,15 +786,17 @@ def register_invoice_tools(mcp):
             params["dateFrom"] = from_date
         if to_date:
             params["dateTo"] = to_date
-        if limit:
-            params["limit"] = limit
+        # The API paginates by page/page_size; "limit" was ignored, so at most
+        # 20 invoices ever came back.
+        params["page_size"] = limit or 100
+        params["page"] = page
         if name:
             params["name"] = name
         if document_type:
             params["type"] = document_type
         
         result = await api.arequest("GET", invoices_url, params=params)
-        return _enrich_invoice_response(result)
+        return await _enrich_invoice_response(result)
 
     @mcp.tool(
         title="Get Invoice Preview",

@@ -78,7 +78,7 @@ def register_gewerbe_registration_tools(mcp):
         A non-empty `documents` list means the form was already generated.
         """
         api = ctx.request_context.lifespan_context.get("api")
-        return api._make_request("GET", _gewerbe_url("my/"))
+        return await api.arequest("GET", _gewerbe_url("my/"))
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_gewerbe_registration_choices(ctx: Context) -> dict[str, Any]:  # noqa: ARG001
@@ -101,7 +101,7 @@ def register_gewerbe_registration_tools(mcp):
         """
         api = ctx.request_context.lifespan_context.get("api")
         payload = _clean({"source": NORMAN_AGENT_SOURCE, "incorporation": incorporation_public_id})
-        return api._make_request("POST", _gewerbe_url(), json_data=payload)
+        return await api.arequest("POST", _gewerbe_url(), json_data=payload)
 
     @mcp.tool(annotations=WRITE)
     async def update_gewerbe_basic(
@@ -113,7 +113,7 @@ def register_gewerbe_registration_tools(mcp):
         """Section 1 (basics): when the trade starts and whether it's a head or branch office."""
         api = ctx.request_context.lifespan_context.get("api")
         payload = _clean({"activityStartDate": activity_start_date, "establishmentType": establishment_type})
-        return api._make_request("PATCH", _gewerbe_url(f"{public_id}/"), json_data=payload)
+        return await api.arequest("PATCH", _gewerbe_url(f"{public_id}/"), json_data=payload)
 
     @mcp.tool(annotations=WRITE)
     async def update_gewerbe_business(  # noqa: PLR0913
@@ -164,7 +164,7 @@ def register_gewerbe_registration_tools(mcp):
                 "employeesPartTime": employees_part_time,
             },
         )
-        return api._make_request("PATCH", _gewerbe_url(f"{public_id}/"), json_data=payload)
+        return await api.arequest("PATCH", _gewerbe_url(f"{public_id}/"), json_data=payload)
 
     @mcp.tool(annotations=WRITE)
     async def update_gewerbe_owner(  # noqa: PLR0913
@@ -213,7 +213,7 @@ def register_gewerbe_registration_tools(mcp):
                 "ownerResidenceCity": owner_residence_city,
             },
         )
-        return api._make_request("PATCH", _gewerbe_url(f"{public_id}/"), json_data=payload)
+        return await api.arequest("PATCH", _gewerbe_url(f"{public_id}/"), json_data=payload)
 
     @mcp.tool(annotations=READ_ONLY)
     async def suggest_gewerbe_activity(
@@ -228,7 +228,7 @@ def register_gewerbe_registration_tools(mcp):
         update_gewerbe_business(activity_description=...) only if they accept.
         """
         api = ctx.request_context.lifespan_context.get("api")
-        return api._make_request("POST", _gewerbe_url(f"{public_id}/suggest-activity/"), json_data={"draft": draft})
+        return await api.arequest("POST", _gewerbe_url(f"{public_id}/suggest-activity/"), json_data={"draft": draft})
 
     @mcp.tool(annotations=WRITE)
     async def generate_gewerbe_document(
@@ -243,7 +243,7 @@ def register_gewerbe_registration_tools(mcp):
         tell them where to submit.
         """
         api = ctx.request_context.lifespan_context.get("api")
-        return api._make_request("POST", _gewerbe_url(f"{public_id}/documents/"), json_data={})
+        return await api.arequest("POST", _gewerbe_url(f"{public_id}/documents/"), json_data={})
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_gewerbe_document_preview(
@@ -252,7 +252,7 @@ def register_gewerbe_registration_tools(mcp):
     ) -> Any:
         """Return the first page of the generated GewA 1 as an image for the user to review."""
         api = ctx.request_context.lifespan_context.get("api")
-        response = api._make_request("GET", _gewerbe_url(f"{public_id}/documents/"))
+        response = await api.arequest("GET", _gewerbe_url(f"{public_id}/documents/"))
         documents = response.get("documents", []) if isinstance(response, dict) else []
         preview = documents[0].get("previewImage") if documents else None
         if not preview:
@@ -270,4 +270,4 @@ def register_gewerbe_registration_tools(mcp):
         "<their city> Gewerbeamt" to find where to submit.
         """
         api = ctx.request_context.lifespan_context.get("api")
-        return api._make_request("GET", _gewerbe_url(f"{public_id}/trade-office/"))
+        return await api.arequest("GET", _gewerbe_url(f"{public_id}/trade-office/"))

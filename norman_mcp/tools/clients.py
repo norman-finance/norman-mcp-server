@@ -6,8 +6,14 @@ from urllib.parse import urljoin
 from mcp.types import ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
+from norman_mcp.tools.results import is_failure
 
 logger = logging.getLogger(__name__)
+
+# The API's client types are "business" and "person". "private" (the web app's
+# label for a person) used to be sent as-is and was rejected with a 400.
+_CLIENT_TYPES = {"business": "business", "person": "person", "private": "person"}
+_CLIENT_TYPE_ERROR = {"error": "client_type must be 'business' or 'person' ('private' is accepted for person)"}
 
 def register_client_tools(mcp):
     """Register all client-related tools with the MCP server."""
@@ -41,7 +47,7 @@ def register_client_tools(mcp):
             f"api/v1/companies/{company_id}/clients/"
         )
         
-        return api._make_request("GET", clients_url)
+        return await api.arequest("GET", clients_url)
 
     @mcp.tool(
         title="Get Client Details",
@@ -76,7 +82,7 @@ def register_client_tools(mcp):
             f"api/v1/companies/{company_id}/clients/{client_id}/"
         )
         
-        return api._make_request("GET", client_url)
+        return await api.arequest("GET", client_url)
 
     @mcp.tool(
         title="Create Client",
@@ -104,7 +110,7 @@ def register_client_tools(mcp):
         
         Args:
             name: Client name or business name
-            client_type: Type of client (defaults to "business"), Options: "business", "private"
+            client_type: Type of client (defaults to "business"), Options: "business", "person" (a private individual; "private" is accepted too)
             address: Client physical address
             zip_code: Client postal/zip code
             email: Client email address
@@ -122,8 +128,9 @@ def register_client_tools(mcp):
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
         
-        if client_type not in ["business", "private"]:
-            return {"error": "client_type must be either 'business' or 'private'"}
+        api_client_type = _CLIENT_TYPES.get(client_type)
+        if api_client_type is None:
+            return _CLIENT_TYPE_ERROR
         
         clients_url = urljoin(
             config.api_base_url, 
@@ -132,7 +139,7 @@ def register_client_tools(mcp):
         
         client_data = {
             "name": name,
-            "clientType": client_type
+            "clientType": api_client_type
         }
     
         if email:
@@ -150,7 +157,7 @@ def register_client_tools(mcp):
         if city:
             client_data["city"] = city
             
-        return api._make_request("POST", clients_url, json_data=client_data)
+        return await api.arequest("POST", clients_url, json_data=client_data)
 
     @mcp.tool(
         title="Update Client",
@@ -180,7 +187,7 @@ def register_client_tools(mcp):
         Args:
             client_id: ID of the client to update
             name: Updated client name
-            client_type: Updated client type ("business" or "private")
+            client_type: Updated client type ("business" or "person"; "private" is accepted for person)
             address: Updated client physical address
             zip_code: Updated client postal/zip code
             email: Updated client email address
@@ -198,8 +205,8 @@ def register_client_tools(mcp):
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
         
-        if client_type and client_type not in ["business", "private"]:
-            return {"error": "client_type must be either 'business' or 'private'"}
+        if client_type and client_type not in _CLIENT_TYPES:
+            return _CLIENT_TYPE_ERROR
         
         client_url = urljoin(
             config.api_base_url, 
@@ -207,14 +214,14 @@ def register_client_tools(mcp):
         )
         
         # Get current client data
-        current_data = api._make_request("GET", client_url)
+        current_data = await api.arequest("GET", client_url)
         
         # Update only provided fields
         update_data = {}
         if name:
             update_data["name"] = name
         if client_type:
-            update_data["clientType"] = client_type
+            update_data["clientType"] = _CLIENT_TYPES[client_type]
         if email:
             update_data["email"] = email
         if phone:
@@ -234,7 +241,7 @@ def register_client_tools(mcp):
         if not update_data:
             return {"message": "No fields provided for update.", "client": current_data}
         
-        return api._make_request("PATCH", client_url, json_data=update_data)
+        return await api.arequest("PATCH", client_url, json_data=update_data)
 
     @mcp.tool(
         title="Delete Client",
@@ -269,5 +276,7 @@ def register_client_tools(mcp):
             f"api/v1/companies/{company_id}/clients/{client_id}/"
         )
         
-        api._make_request("DELETE", client_url)
-        return {"message": "Client deleted successfully"} 
+        result = await api.arequest("DELETE", client_url)
+        if is_failure(result):
+            return result
+        return {"message": "Client deleted successfully"}

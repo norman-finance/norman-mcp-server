@@ -1,6 +1,7 @@
 from typing import Dict, Any, List
 from urllib.parse import urljoin
 from norman_mcp import config
+from norman_mcp.tools.taxes import reports_url
 
 def register_resources(mcp):
     """Register all resource endpoints with the MCP server."""
@@ -12,24 +13,16 @@ def register_resources(mcp):
         api = ctx.request_context.lifespan_context["api"]
 
         company_id = api.company_id
+        if not company_id:
+            return "No company available. Please authenticate first."
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
         
         try:
-            import requests
-            headers = {
-                "Authorization": f"Bearer {api.access_token}",
-                "User-Agent": "NormanMCPServer/0.1.0",
-                "X-Requested-With": "XMLHttpRequest",
-            }
-            
-            response = requests.get(
-                company_url,
-                headers=headers,
-                timeout=config.NORMAN_API_TIMEOUT
-            )
-            
-            response.raise_for_status()
-            company_data = response.json()
+            # The API client resolves the caller's token per request;
+            # `api.access_token` is empty in hosted OAuth mode ("Bearer None").
+            company_data = await api.arequest("GET", company_url)
+            if company_data.get("error"):
+                return f"Error getting company details: {company_data['error']}"
 
             is_sme = company_data.get('isSme', False)
             account_type = company_data.get('accountType', 'N/A')
@@ -88,7 +81,7 @@ def register_resources(mcp):
             "pageSize": page_size
         }
         
-        return api._make_request("GET", transactions_url, params=params)
+        return await api.arequest("GET", transactions_url, params=params)
 
     @mcp.resource("invoices://list/{page}/{page_size}")
     async def list_invoices(page: int = 1, page_size: int = 100) -> str:
@@ -110,7 +103,7 @@ def register_resources(mcp):
             "pageSize": page_size
         }
         
-        return api._make_request("GET", invoices_url, params=params)
+        return await api.arequest("GET", invoices_url, params=params)
 
     @mcp.resource("clients://list/{page}/{page_size}")
     async def list_clients(page: int = 1, page_size: int = 100) -> List[Dict[str, Any]]:
@@ -142,7 +135,7 @@ def register_resources(mcp):
             "pageSize": page_size
         }
         
-        return api._make_request("GET", clients_url, params=params)
+        return await api.arequest("GET", clients_url, params=params)
 
     @mcp.resource("taxes://list/{page}/{page_size}")
     async def list_taxes(page: int = 1, page_size: int = 100) -> str:
@@ -154,14 +147,15 @@ def register_resources(mcp):
         if not company_id:
             return "No company available. Please authenticate first."
         
-        taxes_url = urljoin(config.api_base_url, "api/v1/taxes/reports/")
+        # Company-scoped: the unscoped route serves the user's oldest company.
+        taxes_url = reports_url(company_id)
         
         params = {
             "page": page,
             "pageSize": page_size
         }
         
-        return api._make_request("GET", taxes_url, params=params)
+        return await api.arequest("GET", taxes_url, params=params)
 
     @mcp.resource("categories://list")
     async def list_categories() -> str:
@@ -180,7 +174,9 @@ def register_resources(mcp):
         
         params = {"page": 1, "pageSize": 200}
         
-        categories_data = api._make_request("GET", categories_url, params=params)
+        categories_data = await api.arequest("GET", categories_url, params=params)
+        if categories_data.get("error"):
+            return f"Error listing categories: {categories_data['error']}"
         return categories_data.get("results", [])
 
     @mcp.resource("tax-advisor-clients://list")
@@ -196,18 +192,10 @@ def register_resources(mcp):
 
         clients_url = urljoin(config.api_base_url, "api/v1/tax-advisor/clients/")
 
-        try:
-            import requests as req
-            headers = {
-                "Authorization": f"Bearer {api.access_token}",
-                "User-Agent": "NormanMCPServer/0.1.0",
-                "X-Requested-With": "XMLHttpRequest",
-            }
-            response = req.get(clients_url, headers=headers, timeout=config.NORMAN_API_TIMEOUT)
-            response.raise_for_status()
-            clients = response.json()
-        except Exception as e:
-            return f"Error fetching tax advisor clients: {e}"
+        # Per-request auth, as above: `api.access_token` is empty in OAuth mode.
+        clients = await api.arequest("GET", clients_url)
+        if isinstance(clients, dict) and clients.get("error"):
+            return f"Error fetching tax advisor clients: {clients['error']}"
 
         client_list = clients if isinstance(clients, list) else clients.get("results", [])
 
@@ -219,12 +207,14 @@ def register_resources(mcp):
             f"**Active company**: {api.company_id or 'None selected'}\n",
         ]
         for c in client_list:
-            active = " ← active" if c.get("public_id") == api.company_id else ""
+            # The API renders camelCase keys; snake_case read as None/0 before.
+            public_id = c.get("publicId", c.get("public_id"))
+            active = " ← active" if public_id == api.company_id else ""
             lines.append(
-                f"- **{c.get('name', 'Unknown')}** (`{c.get('public_id')}`){active}\n"
-                f"  Account type: {c.get('account_type', 'N/A')} · "
-                f"Transactions: {c.get('transaction_count', 0)} · "
-                f"Missing docs: {c.get('missing_docs_count', 0)}"
+                f"- **{c.get('name', 'Unknown')}** (`{public_id}`){active}\n"
+                f"  Account type: {c.get('accountType', c.get('account_type', 'N/A'))} · "
+                f"Transactions: {c.get('transactionCount', c.get('transaction_count', 0))} · "
+                f"Missing docs: {c.get('missingDocsCount', c.get('missing_docs_count', 0))}"
             )
 
         lines.append(f"\nUse `switch_company` tool with a company ID to change the active company.")
@@ -251,7 +241,10 @@ def register_resources(mcp):
             return "No company available. Please authenticate first."
 
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
-        company = api._make_request("GET", company_url)
+        company = await api.arequest("GET", company_url)
+        if company.get("error"):
+            # A failed lookup is not evidence of a freelance account.
+            return f"Error getting company details: {company['error']}"
         if not company.get("isSme"):
             return (
                 "SKR catalog search is only available for SME companies (GmbH/UG). "
@@ -263,7 +256,7 @@ def register_resources(mcp):
             "api/v1/accounting/company-categories/skr-lookup/",
         )
 
-        results = api._make_request("GET", lookup_url, params={"q": query})
+        results = await api.arequest("GET", lookup_url, params={"q": query})
 
         if isinstance(results, dict) and "error" in results:
             return f"Error searching SKR catalog: {results['error']}"
@@ -300,5 +293,7 @@ def register_resources(mcp):
         
         params = {"pageSize": 200}
         
-        categories_data = api._make_request("GET", categories_url, params=params)
+        categories_data = await api.arequest("GET", categories_url, params=params)
+        if categories_data.get("error"):
+            return f"Error listing categories: {categories_data['error']}"
         return categories_data.get("results", [])

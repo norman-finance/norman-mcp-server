@@ -4,9 +4,12 @@ from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import urljoin
 
 from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from norman_mcp import config
 from norman_mcp.context import Context
+from norman_mcp.tools._concurrency import gather_bounded
+from norman_mcp.tools.invoices import sent_or_nothing_sent
 from norman_mcp.tools.invoice_schemas import (
     ClientData,
     CompanyData,
@@ -22,33 +25,28 @@ OFFER_TYPE = "quote"
 logger = logging.getLogger(__name__)
 
 
-def _enrich_offer_response(data: dict, api=None, company_id: Optional[str] = None) -> dict:
+async def _enrich_offer_response(data: dict, api=None, company_id: Optional[str] = None) -> dict:
     """Replace private reportUrl with a presigned downloadUrl (1-hour TTL)."""
     if not isinstance(data, dict):
         return data
 
-    def _enrich_single(item: dict) -> None:
+    async def _enrich_single(item: dict) -> None:
         pid = item.get("publicId")
         if pid and item.get("reportUrl") and api and company_id:
-            try:
-                pdf_endpoint = urljoin(
-                    config.api_base_url,
-                    f"api/v1/companies/{company_id}/invoices/{pid}/pdf/",
-                )
-                resp = api._make_request("GET", pdf_endpoint)
-                if resp.get("url"):
-                    item["downloadUrl"] = resp["url"]
-            except Exception:
+            pdf_endpoint = urljoin(
+                config.api_base_url,
+                f"api/v1/companies/{company_id}/invoices/{pid}/pdf/",
+            )
+            resp = await api.arequest("GET", pdf_endpoint)
+            if isinstance(resp, dict) and resp.get("url"):
+                item["downloadUrl"] = resp["url"]
+            else:
                 logger.debug("Could not fetch presigned PDF URL for offer %s", pid)
 
-    if data.get("publicId"):
-        _enrich_single(data)
-
-    if "results" in data and isinstance(data["results"], list):
-        for item in data["results"]:
-            if isinstance(item, dict):
-                _enrich_single(item)
-
+    items = [data] if data.get("publicId") else []
+    if isinstance(data.get("results"), list):
+        items.extend(item for item in data["results"] if isinstance(item, dict))
+    await gather_bounded(_enrich_single(item) for item in items)
     return data
 
 
@@ -174,7 +172,7 @@ def register_offer_tools(mcp):
                 config.api_base_url,
                 f"api/v1/companies/{company_id}/invoices/next-invoice-number/",
             )
-            next_offer_data = api._make_request(
+            next_offer_data = await api.arequest(
                 "GET",
                 next_offer_url,
                 params={"type": OFFER_TYPE},
@@ -259,8 +257,8 @@ def register_offer_tools(mcp):
             paid_amount=paid_amount,
         )
 
-        result = api._make_request("POST", offers_url, json_data=offer_data)
-        return _enrich_offer_response(result, api=api, company_id=company_id)
+        result = await api.arequest("POST", offers_url, json_data=offer_data)
+        return await _enrich_offer_response(result, api=api, company_id=company_id)
 
     @mcp.tool(
         title="List Offers",
@@ -277,7 +275,8 @@ def register_offer_tools(mcp):
         name: Optional[str] = None,
         from_date: Optional[str] = None,
         to_date: Optional[str] = None,
-        limit: Optional[int] = 100,
+        limit: Optional[int] = Field(default=100, ge=1, le=200),
+        page: int = Field(default=1, ge=1),
     ) -> Dict[str, Any]:
         """
         List offers/quotes with optional filtering.
@@ -287,7 +286,8 @@ def register_offer_tools(mcp):
             name: Filter by client name
             from_date: Only offers issued on or after this date (YYYY-MM-DD)
             to_date: Only offers issued on or before this date (YYYY-MM-DD)
-            limit: Maximum number of offers to return (default 100)
+            limit: Offers per page (default 100)
+            page: Page number, starting at 1; the response's next tells whether more exist
 
         Returns:
             List of offers matching the criteria
@@ -308,13 +308,14 @@ def register_offer_tools(mcp):
             params["dateFrom"] = from_date
         if to_date:
             params["dateTo"] = to_date
-        if limit:
-            params["limit"] = limit
+        # The API paginates by page/page_size; "limit" was ignored.
+        params["page_size"] = limit or 100
+        params["page"] = page
         if name:
             params["name"] = name
 
-        result = api._make_request("GET", offers_url, params=params)
-        return _enrich_offer_response(result, api=api, company_id=company_id)
+        result = await api.arequest("GET", offers_url, params=params)
+        return await _enrich_offer_response(result, api=api, company_id=company_id)
 
     @mcp.tool(
         title="Get Offer Details",
@@ -347,8 +348,8 @@ def register_offer_tools(mcp):
             f"api/v1/companies/{company_id}/invoices/{offer_id}/",
         )
 
-        result = api._make_request("GET", offer_url)
-        return _enrich_offer_response(result, api=api, company_id=company_id)
+        result = await api.arequest("GET", offer_url)
+        return await _enrich_offer_response(result, api=api, company_id=company_id)
 
     @mcp.tool(
         title="Send Offer via Email",
@@ -402,7 +403,7 @@ def register_offer_tools(mcp):
         if custom_client_email:
             send_data["customClientEmail"] = custom_client_email
 
-        return api._make_request("POST", send_url, json_data=send_data)
+        return sent_or_nothing_sent(await api.arequest("POST", send_url, json_data=send_data))
 
     @mcp.tool(
         title="Convert Offer to Invoice",
@@ -439,5 +440,5 @@ def register_offer_tools(mcp):
             f"api/v1/companies/{company_id}/invoices/{offer_id}/convert-to-invoice/",
         )
 
-        result = api._make_request("POST", convert_url)
-        return _enrich_offer_response(result, api=api, company_id=company_id)
+        result = await api.arequest("POST", convert_url)
+        return await _enrich_offer_response(result, api=api, company_id=company_id)

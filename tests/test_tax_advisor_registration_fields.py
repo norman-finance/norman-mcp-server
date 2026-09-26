@@ -8,7 +8,7 @@ reported as missing both registrations and the compliance report raised
 """
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -54,6 +54,7 @@ def _api_returning(company: dict) -> MagicMock:
         return {"results": []}
 
     api._make_request.side_effect = _request
+    api.arequest = AsyncMock(side_effect=_request)
     return api
 
 

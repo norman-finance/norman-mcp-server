@@ -1,5 +1,6 @@
 import base64
 import logging
+import re
 from typing import Any
 from urllib.parse import urljoin
 
@@ -21,6 +22,12 @@ INCORPORATION_CHOICE_TYPES = (
     "notarization-types",
     "notarization-timeframes",
 )
+
+def _choice_value(key: str) -> str:
+    """Undo the camelCase rendering of a choice value: within7Days -> within_7_days."""
+    key = re.sub(r"(?<=[a-z])(\d)", r"_\1", key)
+    return re.sub(r"(?<=[a-z0-9])([A-Z])", r"_\1", key).lower()
+
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=False, destructiveHint=False)
 WRITE = ToolAnnotations(readOnlyHint=False, openWorldHint=False, destructiveHint=False)
@@ -60,7 +67,7 @@ def register_incorporation_tools(mcp):
         for what's missing and continue there.
         """
         api = ctx.request_context.lifespan_context.get("api")
-        return api._make_request("GET", _incorporations_url("my/"))
+        return await api.arequest("GET", _incorporations_url("my/"))
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_incorporation_choices(
@@ -74,9 +81,14 @@ def register_incorporation_tools(mcp):
         if choice_type not in INCORPORATION_CHOICE_TYPES:
             return {"error": f"Unknown choice type. Use one of: {', '.join(INCORPORATION_CHOICE_TYPES)}"}
         api = ctx.request_context.lifespan_context.get("api")
-        response = api._make_request("GET", urljoin(config.api_base_url, f"api/v1/choices/{choice_type}/"))
+        response = await api.arequest("GET", urljoin(config.api_base_url, f"api/v1/choices/{choice_type}/"))
         if isinstance(response, list):
             return {"choices": response}
+        if isinstance(response, dict) and not response.get("error"):
+            # The values are the dict keys, and the API's camelCase renderer
+            # rewrites them (in_person -> inPerson, within_7_days -> within7Days),
+            # but the write endpoints only accept the stored values.
+            return {_choice_value(key): label for key, label in response.items()}
         return response
 
     @mcp.tool(annotations=WRITE)
@@ -96,7 +108,7 @@ def register_incorporation_tools(mcp):
         """
         api = ctx.request_context.lifespan_context.get("api")
         payload = _clean({"legalForm": legal_form, "locale": locale, "source": NORMAN_AGENT_SOURCE})
-        return api._make_request("POST", _incorporations_url(), json_data=payload)
+        return await api.arequest("POST", _incorporations_url(), json_data=payload)
 
     @mcp.tool(annotations=WRITE)
     async def update_incorporation_company(
@@ -148,7 +160,7 @@ def register_incorporation_tools(mcp):
                 "registeredAddressSkipped": registered_address_skipped,
             },
         )
-        return api._make_request("PATCH", _incorporations_url(f"{public_id}/"), json_data=payload)
+        return await api.arequest("PATCH", _incorporations_url(f"{public_id}/"), json_data=payload)
 
     @mcp.tool(annotations=WRITE)
     async def update_incorporation_capital(
@@ -165,7 +177,7 @@ def register_incorporation_tools(mcp):
         until it does.
         """
         api = ctx.request_context.lifespan_context.get("api")
-        return api._make_request(
+        return await api.arequest(
             "PATCH",
             _incorporations_url(f"{public_id}/"),
             json_data={"shareCapital": share_capital},
@@ -232,7 +244,7 @@ def register_incorporation_tools(mcp):
                 "isManagingDirector": is_managing_director,
             },
         )
-        return api._make_request("POST", _incorporations_url(f"{public_id}/shareholders/"), json_data=payload)
+        return await api.arequest("POST", _incorporations_url(f"{public_id}/shareholders/"), json_data=payload)
 
     @mcp.tool(annotations=WRITE)
     async def update_incorporation_shareholder(
@@ -271,7 +283,7 @@ def register_incorporation_tools(mcp):
                 "country": country,
             },
         )
-        return api._make_request(
+        return await api.arequest(
             "PATCH",
             _incorporations_url(f"{public_id}/shareholders/{shareholder_public_id}/"),
             json_data=payload,
@@ -291,7 +303,7 @@ def register_incorporation_tools(mcp):
         at hand. Natural persons only. The link is valid for 30 days.
         """
         api = ctx.request_context.lifespan_context.get("api")
-        return api._make_request(
+        return await api.arequest(
             "POST",
             _incorporations_url(f"{public_id}/shareholders/{shareholder_public_id}/invite/"),
             json_data=_clean({"email": email}),
@@ -305,7 +317,7 @@ def register_incorporation_tools(mcp):
     ) -> dict[str, Any]:
         """Remove a shareholder. Remaining shareholders are renumbered automatically."""
         api = ctx.request_context.lifespan_context.get("api")
-        return api._make_request(
+        return await api.arequest(
             "DELETE",
             _incorporations_url(f"{public_id}/shareholders/{shareholder_public_id}/"),
         )
@@ -324,7 +336,7 @@ def register_incorporation_tools(mcp):
         codes to the user and set 'individual' — the notary drafts an individual Satzung.
         """
         api = ctx.request_context.lifespan_context.get("api")
-        return api._make_request(
+        return await api.arequest(
             "PATCH",
             _incorporations_url(f"{public_id}/"),
             json_data={"agreementType": agreement_type},
@@ -350,7 +362,7 @@ def register_incorporation_tools(mcp):
                 "notarizationTimeframe": notarization_timeframe,
             },
         )
-        return api._make_request("PATCH", _incorporations_url(f"{public_id}/"), json_data=payload)
+        return await api.arequest("PATCH", _incorporations_url(f"{public_id}/"), json_data=payload)
 
     @mcp.tool(annotations=WRITE)
     async def generate_incorporation_documents(
@@ -368,7 +380,7 @@ def register_incorporation_tools(mcp):
         offer to regenerate.
         """
         api = ctx.request_context.lifespan_context.get("api")
-        response = api._make_request("POST", _incorporations_url(f"{public_id}/documents/"), json_data={})
+        response = await api.arequest("POST", _incorporations_url(f"{public_id}/documents/"), json_data={})
         if isinstance(response, dict):
             for document in response.get("documents", []):
                 document.pop("previewImage", None)
@@ -385,7 +397,7 @@ def register_incorporation_tools(mcp):
     ) -> Any:
         """Show the user a first-page image of a generated founding document for review."""
         api = ctx.request_context.lifespan_context.get("api")
-        response = api._make_request("GET", _incorporations_url(f"{public_id}/documents/"))
+        response = await api.arequest("GET", _incorporations_url(f"{public_id}/documents/"))
         for document in response.get("documents", []) if isinstance(response, dict) else []:
             if document.get("type") == document_type and document.get("previewImage"):
                 return Image(data=base64.b64decode(document["previewImage"]), format="jpeg")
@@ -403,7 +415,7 @@ def register_incorporation_tools(mcp):
         Norman's incorporation team and may enrich the private directory from public web sources.
         """
         api = ctx.request_context.lifespan_context.get("api")
-        response = api._make_request("GET", _incorporations_url(f"{public_id}/notary-matches/"))
+        response = await api.arequest("GET", _incorporations_url(f"{public_id}/notary-matches/"))
         if isinstance(response, list):
             return {"notaries": response}
         return response
@@ -430,7 +442,7 @@ def register_incorporation_tools(mcp):
         """
         api = ctx.request_context.lifespan_context.get("api")
         payload = _clean({"notaryPublicId": notary_public_id, "message": message or None})
-        return api._make_request(
+        return await api.arequest(
             "POST",
             _incorporations_url(f"{public_id}/request-notary/"),
             json_data=payload,
@@ -451,7 +463,7 @@ def register_incorporation_tools(mcp):
         business_purpose.
         """
         api = ctx.request_context.lifespan_context.get("api")
-        return api._make_request(
+        return await api.arequest(
             "POST",
             _incorporations_url(f"{public_id}/suggest-purpose/"),
             json_data={"draft": draft},
@@ -477,7 +489,7 @@ def register_incorporation_tools(mcp):
         """
         api = ctx.request_context.lifespan_context.get("api")
         payload = _clean({"name": name})
-        return api._make_request(
+        return await api.arequest(
             "POST",
             _incorporations_url(f"{public_id}/check-name/"),
             json_data=payload,
@@ -519,7 +531,7 @@ def register_incorporation_tools(mcp):
                 "registerCourt": register_court or None,
             },
         )
-        return api._make_request(
+        return await api.arequest(
             "POST",
             _incorporations_url(f"{public_id}/formation-step/"),
             json_data=payload,

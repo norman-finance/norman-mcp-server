@@ -5,6 +5,7 @@ from urllib.parse import urljoin
 from mcp.types import ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
+from norman_mcp.tools.results import is_failure
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ def register_vendor_tools(mcp):
             return {"error": "No company available. Please authenticate first."}
 
         vendors_url = urljoin(config.api_base_url, "api/v1/accounting/vendors/")
-        return api._make_request("GET", vendors_url)
+        return await api.arequest("GET", vendors_url)
 
     @mcp.tool(
         title="Get Vendor Details",
@@ -69,7 +70,7 @@ def register_vendor_tools(mcp):
             return {"error": "No company available. Please authenticate first."}
 
         vendor_url = urljoin(config.api_base_url, f"api/v1/accounting/vendors/{vendor_id}/")
-        return api._make_request("GET", vendor_url)
+        return await api.arequest("GET", vendor_url)
 
     @mcp.tool(
         title="Create Vendor",
@@ -129,7 +130,7 @@ def register_vendor_tools(mcp):
         if vat_number:
             vendor_data["vatNumber"] = vat_number
 
-        return api._make_request("POST", vendors_url, json_data=vendor_data)
+        return await api.arequest("POST", vendors_url, json_data=vendor_data)
 
     @mcp.tool(
         title="Update Vendor",
@@ -194,10 +195,10 @@ def register_vendor_tools(mcp):
             update_data["vatNumber"] = vat_number
 
         if not update_data:
-            current_data = api._make_request("GET", vendor_url)
+            current_data = await api.arequest("GET", vendor_url)
             return {"message": "No fields provided for update.", "vendor": current_data}
 
-        return api._make_request("PATCH", vendor_url, json_data=update_data)
+        return await api.arequest("PATCH", vendor_url, json_data=update_data)
 
     @mcp.tool(
         title="Delete Vendor",
@@ -226,7 +227,7 @@ def register_vendor_tools(mcp):
             return {"error": "No company available. Please authenticate first."}
 
         vendor_url = urljoin(config.api_base_url, f"api/v1/accounting/vendors/{vendor_id}/")
-        result = api._make_request("DELETE", vendor_url)
-        if result is None or result == "":
-            return {"message": f"Vendor {vendor_id} deleted successfully."}
-        return result
+        result = await api.arequest("DELETE", vendor_url)
+        if is_failure(result):
+            return result
+        return {"message": f"Vendor {vendor_id} deleted successfully."}

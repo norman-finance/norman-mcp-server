@@ -6,9 +6,35 @@ from pydantic import Field
 from mcp.types import ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
+from norman_mcp.tools.results import is_failure
 from norman_mcp.tools.missing_documents import category_name, missing_document_transactions, needs_document
+from norman_mcp.tools.taxes import reports_url as reports_url_for
 
 logger = logging.getLogger(__name__)
+
+# Report.ReportStatus values that mean "filed", as the MCP apps read them. The
+# tools used to compare against "draft"/"submitted", which the API never sends,
+# so every report counted as neither pending nor filed.
+_FILED_REPORT_STATUSES = {"SUBMIT", "SUBMIT_AND_PAID", "SUBMITTED", "FILED"}
+# Enough for years of monthly returns in one request (the API default is 20).
+_OVERVIEW_PAGE_SIZE = 200
+
+
+def _is_filed(report: Dict[str, Any]) -> bool:
+    return str(report.get("status") or "").upper() in _FILED_REPORT_STATUSES
+
+
+def _report_summary(report: Dict[str, Any]) -> Dict[str, Any]:
+    """The report fields that matter here, under the names the API really uses."""
+    return {
+        "id": report.get("pk") or report.get("publicId"),
+        "type": report.get("type"),
+        "dateFrom": report.get("dateFrom"),
+        "dateTo": report.get("dateTo"),
+        "status": report.get("status"),
+        "dueDate": report.get("dateDue"),
+        "amount": report.get("total"),
+    }
 
 
 def register_tax_advisor_tools(mcp):
@@ -43,24 +69,28 @@ def register_tax_advisor_tools(mcp):
 
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
         try:
-            company = api._make_request("GET", company_url)
-            overview["company"] = {
-                "name": company.get("name"),
-                "accountType": company.get("accountType"),
-                "isSme": company.get("isSme"),
-                "chartOfAccounts": company.get("chartOfAccounts"),
-                "taxState": company.get("taxState"),
-                # the company endpoint serializes these as taxNumber/vatNumber
-                "vatId": company.get("vatNumber"),
-                "taxId": company.get("taxNumber"),
-            }
+            company = await api.arequest("GET", company_url)
+            if is_failure(company):
+                # Read from an error result, every field below would be None.
+                overview["company"] = {"error": company["error"]}
+            else:
+                overview["company"] = {
+                    "name": company.get("name"),
+                    "accountType": company.get("accountType"),
+                    "isSme": company.get("isSme"),
+                    "chartOfAccounts": company.get("chartOfAccounts"),
+                    "taxState": company.get("taxState"),
+                    # the company endpoint serializes these as taxNumber/vatNumber
+                    "vatId": company.get("vatNumber"),
+                    "taxId": company.get("taxNumber"),
+                }
         except Exception as e:
             logger.warning("Could not fetch company details: %s", e)
             overview["company"] = {"error": str(e)}
 
         balance_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/balance/")
         try:
-            overview["balance"] = api._make_request("GET", balance_url)
+            overview["balance"] = await api.arequest("GET", balance_url)
         except Exception as e:
             logger.warning("Could not fetch balance: %s", e)
             overview["balance"] = {"error": str(e)}
@@ -70,7 +100,7 @@ def register_tax_advisor_tools(mcp):
             f"api/v1/tax-advisor/clients/{company_id}/stats/",
         )
         try:
-            overview["transactionStats"] = api._make_request("GET", stats_url)
+            overview["transactionStats"] = await api.arequest("GET", stats_url)
         except Exception as e:
             logger.warning("Could not fetch transaction stats: %s", e)
             overview["transactionStats"] = {"error": str(e)}
@@ -80,26 +110,25 @@ def register_tax_advisor_tools(mcp):
             f"api/v1/companies/{company_id}/company-tax-statistic/",
         )
         try:
-            overview["taxStatistics"] = api._make_request("GET", tax_stats_url)
+            overview["taxStatistics"] = await api.arequest("GET", tax_stats_url)
         except Exception as e:
             logger.warning("Could not fetch tax statistics: %s", e)
             overview["taxStatistics"] = {"error": str(e)}
 
-        reports_url = urljoin(config.api_base_url, "api/v1/taxes/reports/")
+        # The client company's own reports: the unscoped taxes/reports/ route
+        # answers for the user's oldest company instead.
+        reports_url = reports_url_for(company_id)
         try:
-            reports = api._make_request("GET", reports_url)
+            reports = await api.arequest("GET", reports_url, params={"page_size": _OVERVIEW_PAGE_SIZE})
             report_list = reports.get("results", reports) if isinstance(reports, dict) else reports
             if isinstance(report_list, list):
-                pending = [r for r in report_list if r.get("status") in ("draft", "DRAFT", "pending", "PENDING")]
-                submitted = [r for r in report_list if r.get("status") in ("submitted", "SUBMITTED", "filed", "FILED")]
+                pending = [r for r in report_list if not _is_filed(r)]
+                submitted = [r for r in report_list if _is_filed(r)]
                 overview["taxReports"] = {
                     "total": len(report_list),
                     "pending": len(pending),
                     "submitted": len(submitted),
-                    "pendingReports": [
-                        {"id": r.get("publicId"), "type": r.get("type"), "period": r.get("period"), "status": r.get("status")}
-                        for r in pending[:10]
-                    ],
+                    "pendingReports": [_report_summary(r) for r in pending[:10]],
                 }
             else:
                 overview["taxReports"] = reports
@@ -112,12 +141,15 @@ def register_tax_advisor_tools(mcp):
             f"api/v1/companies/{company_id}/invoices/",
         )
         try:
-            inv_resp = api._make_request("GET", invoices_url, params={"status": "sent"})
+            inv_resp = await api.arequest(
+                "GET", invoices_url, params={"status": "sent", "page_size": _OVERVIEW_PAGE_SIZE}
+            )
             inv_list = inv_resp.get("results", inv_resp) if isinstance(inv_resp, dict) else inv_resp
             if isinstance(inv_list, list):
                 overview["outstandingInvoices"] = {
                     "count": len(inv_list),
-                    "totalAmount": sum(float(i.get("totalGross", 0)) for i in inv_list),
+                    # The invoice total is fullCost; totalGross does not exist.
+                    "totalAmount": sum(float(i.get("fullCost") or 0) for i in inv_list),
                 }
             else:
                 overview["outstandingInvoices"] = inv_resp
@@ -229,28 +261,14 @@ def register_tax_advisor_tools(mcp):
 
         result: Dict[str, Any] = {"companyId": company_id}
 
-        reports_url = urljoin(config.api_base_url, "api/v1/taxes/reports/")
+        reports_url = reports_url_for(company_id)
         try:
-            reports_resp = api._make_request("GET", reports_url)
+            reports_resp = await api.arequest("GET", reports_url, params={"page_size": _OVERVIEW_PAGE_SIZE})
             report_list = reports_resp.get("results", reports_resp) if isinstance(reports_resp, dict) else reports_resp
 
             if isinstance(report_list, list):
-                draft = []
-                submitted = []
-                for r in report_list:
-                    st = (r.get("status") or "").lower()
-                    entry = {
-                        "id": r.get("publicId"),
-                        "type": r.get("type"),
-                        "period": r.get("period"),
-                        "status": r.get("status"),
-                        "dueDate": r.get("dueDate"),
-                        "amount": r.get("amount"),
-                    }
-                    if st in ("draft", "pending"):
-                        draft.append(entry)
-                    elif st in ("submitted", "filed"):
-                        submitted.append(entry)
+                draft = [_report_summary(r) for r in report_list if not _is_filed(r)]
+                submitted = [_report_summary(r) for r in report_list if _is_filed(r)]
 
                 result["reports"] = {
                     "total": len(report_list),
@@ -265,25 +283,30 @@ def register_tax_advisor_tools(mcp):
 
         tax_settings_url = urljoin(config.api_base_url, "api/v1/taxes/tax-settings/")
         try:
-            result["taxSettings"] = api._make_request("GET", tax_settings_url)
+            result["taxSettings"] = await api.arequest("GET", tax_settings_url)
         except Exception as e:
             result["taxSettings"] = {"error": str(e)}
 
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
         try:
-            company = api._make_request("GET", company_url)
-            # The company endpoint serializes Company.tax_number/vat_number as
-            # taxNumber/vatNumber. Reading taxId/vatId always yielded None, so
-            # every company was reported as missing both registrations.
-            tax_number = company.get("taxNumber")
-            vat_number = company.get("vatNumber")
-            result["registration"] = {
-                "taxId": tax_number,
-                "vatId": vat_number,
-                "taxState": company.get("taxState"),
-                "hasTaxId": bool(tax_number),
-                "hasVatId": bool(vat_number),
-            }
+            company = await api.arequest("GET", company_url)
+            if is_failure(company):
+                # A failed lookup must not read as "no tax number on file":
+                # that raised false "missing registration" action items.
+                result["registration"] = {"error": company["error"]}
+            else:
+                # The company endpoint serializes Company.tax_number/vat_number as
+                # taxNumber/vatNumber. Reading taxId/vatId always yielded None, so
+                # every company was reported as missing both registrations.
+                tax_number = company.get("taxNumber")
+                vat_number = company.get("vatNumber")
+                result["registration"] = {
+                    "taxId": tax_number,
+                    "vatId": vat_number,
+                    "taxState": company.get("taxState"),
+                    "hasTaxId": bool(tax_number),
+                    "hasVatId": bool(vat_number),
+                }
         except Exception as e:
             result["registration"] = {"error": str(e)}
 
@@ -336,10 +359,17 @@ def register_tax_advisor_tools(mcp):
                 f"api/v1/tax-advisor/clients/{company_id}/ping/{tx_id}/",
             )
             try:
-                resp = api._make_request("POST", ping_url)
-                succeeded.append({"transactionId": tx_id, "detail": resp.get("detail", "Sent")})
+                resp = await api.arequest("POST", ping_url)
             except Exception as e:
                 failed.append({"transactionId": tx_id, "error": str(e)})
+                continue
+            # The client reports HTTP failures as an error result rather than
+            # raising, so check it: a failed ping used to be counted as sent.
+            if is_failure(resp):
+                failed.append({"transactionId": tx_id, **resp})
+            else:
+                detail = resp.get("detail", "Sent") if isinstance(resp, dict) else "Sent"
+                succeeded.append({"transactionId": tx_id, "detail": detail})
 
         return {
             "companyId": company_id,
@@ -377,7 +407,7 @@ def register_tax_advisor_tools(mcp):
         clients_url = urljoin(config.api_base_url, "api/v1/tax-advisor/clients/")
 
         try:
-            clients = api._make_request("GET", clients_url)
+            clients = await api.arequest("GET", clients_url)
         except Exception as e:
             return {"error": str(e)}
 
@@ -418,7 +448,7 @@ def register_tax_advisor_tools(mcp):
         # field when creating transactions.
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
         try:
-            company = api._make_request("GET", company_url)
+            company = await api.arequest("GET", company_url)
         except Exception as e:
             return {
                 "previousCompanyId": previous_id,
@@ -439,7 +469,7 @@ def register_tax_advisor_tools(mcp):
         # and it is what a request without an X-Company-Id header resolves to.
         activate_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/activate/")
         try:
-            api._make_request("POST", activate_url)
+            await api.arequest("POST", activate_url)
         except Exception as e:  # noqa: BLE001 - best effort, the switch itself already happened
             logger.warning(f"Could not mark {company_id} as the last active company: {e}")
 

@@ -7,6 +7,7 @@ from pydantic import Field
 
 from norman_mcp import config
 from norman_mcp.context import Context
+from norman_mcp.tools.results import as_object, is_failure
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +20,19 @@ _SME_ONLY_ERROR = {
 }
 
 
-async def _check_sme(api) -> bool:
-    """Return True if the active company is an SME account with a chart of accounts."""
+async def _sme_error(api) -> Optional[Dict[str, Any]]:
+    """None for an SME company, else the error the tool should return.
+
+    A failed company lookup is reported as itself: it used to read as
+    "isSme missing", telling the user their company was a freelance account.
+    """
     company_url = urljoin(config.api_base_url, f"api/v1/companies/{api.company_id}/")
-    company = api._make_request("GET", company_url)
-    return bool(company.get("isSme"))
+    company = await api.arequest("GET", company_url)
+    if is_failure(company):
+        return company
+    if not company.get("isSme"):
+        return _SME_ONLY_ERROR
+    return None
 
 
 def register_category_tools(mcp):
@@ -63,14 +72,15 @@ def register_category_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        if not await _check_sme(api):
-            return _SME_ONLY_ERROR
+        if error := await _sme_error(api):
+            return error
 
         lookup_url = urljoin(
             config.api_base_url,
             "api/v1/accounting/company-categories/skr-lookup/",
         )
-        return api._make_request("GET", lookup_url, params={"q": code})
+        # The lookup answers with a bare list of entries.
+        return as_object(await api.arequest("GET", lookup_url, params={"q": code}))
 
     @mcp.tool(
         title="AI Category Suggestion (SME only)",
@@ -108,16 +118,15 @@ def register_category_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        if not await _check_sme(api):
-            return _SME_ONLY_ERROR
+        if error := await _sme_error(api):
+            return error
 
         suggest_url = urljoin(
             config.api_base_url,
             "api/v1/accounting/company-categories/skr-ai-suggest/",
         )
-        result = api._make_request("GET", suggest_url, params={"q": query})
-
-        if isinstance(result, list) and len(result) == 0:
+        result = as_object(await api.arequest("GET", suggest_url, params={"q": query}))
+        if result.get("results") == []:
             return {
                 "message": (
                     "No matching categories found. Try a different description "
@@ -157,8 +166,8 @@ def register_category_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        if not await _check_sme(api):
-            return _SME_ONLY_ERROR
+        if error := await _sme_error(api):
+            return error
 
         categories_url = urljoin(
             config.api_base_url,
@@ -175,7 +184,7 @@ def register_category_tools(mcp):
         if description:
             body["description"] = description
 
-        return api._make_request("POST", categories_url, json_data=body)
+        return await api.arequest("POST", categories_url, json_data=body)
 
     @mcp.tool(
         title="Hide or Unhide Company Categories (SME only)",
@@ -239,8 +248,8 @@ def register_category_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        if not await _check_sme(api):
-            return _SME_ONLY_ERROR
+        if error := await _sme_error(api):
+            return error
 
         normalized = (action or "").strip().lower()
         if normalized not in ("hide", "unhide"):
@@ -264,4 +273,4 @@ def register_category_tools(mcp):
             config.api_base_url,
             "api/v1/accounting/company-categories/set-visibility/",
         )
-        return api._make_request("POST", visibility_url, json_data=body)
+        return await api.arequest("POST", visibility_url, json_data=body)

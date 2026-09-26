@@ -7,6 +7,7 @@ from pydantic import Field
 from mcp.types import ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
+from norman_mcp.tools.results import is_failure
 
 logger = logging.getLogger(__name__)
 
@@ -87,8 +88,8 @@ def register_rule_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        rules = api._make_request("GET", _rules_url())
-        summary = api._make_request("GET", _rules_url("summary/"))
+        rules = await api.arequest("GET", _rules_url())
+        summary = await api.arequest("GET", _rules_url("summary/"))
         return {"rules": rules, "summary": summary}
 
     @mcp.tool(
@@ -120,7 +121,7 @@ def register_rule_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        matched = api._make_request(
+        matched = await api.arequest(
             "POST",
             _rules_url("preview/"),
             json_data={"conditions": {"logic": logic, "items": conditions}},
@@ -177,7 +178,7 @@ def register_rule_tools(mcp):
                 "isActive": is_active,
             }
         )
-        return api._make_request("POST", _rules_url(), json_data=payload)
+        return await api.arequest("POST", _rules_url(), json_data=payload)
 
     @mcp.tool(
         title="Update Automation Rule",
@@ -222,7 +223,7 @@ def register_rule_tools(mcp):
                 "isActive": is_active,
             }
         )
-        return api._make_request("PATCH", _rules_url(f"{rule_id}/"), json_data=payload)
+        return await api.arequest("PATCH", _rules_url(f"{rule_id}/"), json_data=payload)
 
     @mcp.tool(
         title="Delete Automation Rule",
@@ -248,7 +249,9 @@ def register_rule_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        api._make_request("DELETE", _rules_url(f"{rule_id}/"))
+        result = await api.arequest("DELETE", _rules_url(f"{rule_id}/"))
+        if is_failure(result):
+            return result
         return {"status": "deleted", "ruleId": rule_id}
 
     @mcp.tool(
@@ -276,7 +279,7 @@ def register_rule_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        return api._make_request("POST", _rules_url(f"{rule_id}/apply-to-existing/"))
+        return await api.arequest("POST", _rules_url(f"{rule_id}/apply-to-existing/"))
 
     @mcp.tool(
         title="List Rule Executions",
@@ -316,7 +319,7 @@ def register_rule_tools(mcp):
             params["status"] = status
         if rule_id:
             params["rule"] = rule_id
-        executions = api._make_request("GET", _executions_url(), params=params)
+        executions = await api.arequest("GET", _executions_url(), params=params)
         if isinstance(executions, list):
             return {"executions": executions[:EXECUTIONS_SAMPLE_SIZE], "sampledFrom": len(executions)}
         return executions
@@ -348,7 +351,7 @@ def register_rule_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        return api._make_request("GET", _approvals_url())
+        return await api.arequest("GET", _approvals_url())
 
     @mcp.tool(
         title="Undo Rule Execution",
@@ -380,7 +383,7 @@ def register_rule_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        return api._make_request("POST", _executions_url(f"{execution_id}/undo/"))
+        return await api.arequest("POST", _executions_url(f"{execution_id}/undo/"))
 
     @mcp.tool(
         title="List Agents",
@@ -406,7 +409,7 @@ def register_rule_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        return api._make_request("GET", _agents_url())
+        return await api.arequest("GET", _agents_url())
 
     @mcp.tool(
         title="Toggle Agent",
@@ -438,7 +441,7 @@ def register_rule_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        return api._make_request("POST", _agents_url(f"{key}/toggle/"), json_data={"enabled": enabled})
+        return await api.arequest("POST", _agents_url(f"{key}/toggle/"), json_data={"enabled": enabled})
 
     @mcp.tool(
         title="Approve Rule Execution",
@@ -465,7 +468,7 @@ def register_rule_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        return api._make_request("POST", _executions_url(f"{execution_id}/approve/"))
+        return await api.arequest("POST", _executions_url(f"{execution_id}/approve/"))
 
     @mcp.tool(
         title="Dismiss Rule Execution",
@@ -492,4 +495,4 @@ def register_rule_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        return api._make_request("POST", _executions_url(f"{execution_id}/dismiss/"))
+        return await api.arequest("POST", _executions_url(f"{execution_id}/dismiss/"))

@@ -1,7 +1,9 @@
+import asyncio
 import base64
 import json
 import logging
 import os
+import random
 import re
 from typing import Dict, Any, Optional, List
 from urllib.parse import urljoin
@@ -14,8 +16,19 @@ from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
 from norman_mcp.files.download import FileDownloadError, download_file
+from norman_mcp.tools._concurrency import gather_bounded
+from norman_mcp.tools.results import is_failure
 
 logger = logging.getLogger(__name__)
+
+# source_system used when a structured import names an external_id without one:
+# the API needs both to recognise a retried document.
+DEFAULT_SOURCE_SYSTEM = "mcp"
+# Structured imports with an external_id are idempotent, so a transient server
+# or network failure is retried with exponential backoff and jitter.
+STRUCTURED_IMPORT_ATTEMPTS = 3
+STRUCTURED_IMPORT_BACKOFF_SECONDS = 1.0
+_RETRYABLE_TRANSPORT_CODES = {"connection_error", "timeout", "request_error"}
 
 _STRUCTURED_DOCUMENT_KEYS = {
     "file_url", "file_ref", "file_content_base64", "file_name",
@@ -28,31 +41,31 @@ _STRUCTURED_METADATA_KEYS = {
 }
 
 
-def _enrich_attachment_download_urls(data: dict, api=None, company_id: str | None = None) -> dict:
-    """Add presigned downloadUrl for attachment files."""
+async def _enrich_attachment_download_urls(data: dict, api=None, company_id: str | None = None) -> dict:
+    """Add presigned downloadUrl for attachment files.
+
+    One API call per row, fanned out with bounded concurrency: chained, a page
+    of attachments used to hold the event loop for a round trip per row.
+    """
     if not isinstance(data, dict):
         return data
 
-    def _enrich_single(item: dict) -> None:
+    async def _enrich_single(item: dict) -> None:
         pk = item.get("publicId") or item.get("pk")
         if pk and item.get("file") and api and company_id:
-            try:
-                dl_endpoint = urljoin(
-                    config.api_base_url,
-                    f"api/v1/companies/{company_id}/attachments/{pk}/download/",
-                )
-                dl_resp = api._make_request("GET", dl_endpoint)
-                if dl_resp.get("url"):
-                    item["downloadUrl"] = dl_resp["url"]
-            except Exception:
-                pass
+            dl_endpoint = urljoin(
+                config.api_base_url,
+                f"api/v1/companies/{company_id}/attachments/{pk}/download/",
+            )
+            dl_resp = await api.arequest("GET", dl_endpoint)
+            if isinstance(dl_resp, dict) and dl_resp.get("url"):
+                item["downloadUrl"] = dl_resp["url"]
 
-    if data.get("publicId") or data.get("pk"):
-        _enrich_single(data)
-    if "results" in data and isinstance(data["results"], list):
-        for item in data["results"]:
-            if isinstance(item, dict):
-                _enrich_single(item)
+    items = [data] if data.get("publicId") or data.get("pk") else []
+    if isinstance(data.get("results"), list):
+        items.extend(item for item in data["results"] if isinstance(item, dict))
+    # A failed row keeps its fields and simply gets no downloadUrl.
+    await gather_bounded(_enrich_single(item) for item in items)
     return data
 
 
@@ -126,8 +139,6 @@ def _validate_structured_document(document: Dict[str, Any]) -> Optional[str]:
         return "Provide exactly one of file_url, file_ref, or file_content_base64."
     if document.get("file_content_base64") and not document.get("file_name"):
         return "file_name is required with file_content_base64."
-    if document.get("external_id") and not document.get("source_system"):
-        return "source_system is required when external_id is provided."
 
     metadata = document.get("metadata") or {}
     if not isinstance(metadata, dict):
@@ -155,6 +166,49 @@ async def _resolve_structured_document_file(document: Dict[str, Any]) -> tuple[O
 
     path = save_base64_to_temp(document["file_content_base64"], document["file_name"])
     return (path, True, None) if path else (None, False, "Failed to decode file_content_base64.")
+
+
+def _is_retryable_import_failure(response: Any) -> bool:
+    """A 5xx or transport failure, which may succeed when sent again."""
+    if not is_failure(response):
+        return False
+    status = response.get("status_code")
+    if isinstance(status, int):
+        return status >= 500
+    return response.get("code") in _RETRYABLE_TRANSPORT_CODES
+
+
+async def _post_structured_import(
+    api: Any,
+    url: str,
+    path: str,
+    metadata: Dict[str, Any],
+    *,
+    retry: bool,
+) -> Dict[str, Any]:
+    """Post one document, retrying transient failures only when ``retry``.
+
+    Only call with retry=True for a document that has an external_id: the API
+    then returns the already-stored document instead of a duplicate, even if
+    an earlier attempt succeeded but its response was lost.
+    """
+    attempts = STRUCTURED_IMPORT_ATTEMPTS if retry else 1
+    for attempt in range(1, attempts + 1):
+        # A fresh handle per attempt: the previous upload consumed the stream.
+        with open(path, "rb") as file_handle:
+            response = await api.arequest(
+                "POST",
+                url,
+                json_data=metadata,
+                files={"file": file_handle},
+            )
+        if attempt == attempts or not _is_retryable_import_failure(response):
+            break
+        delay = STRUCTURED_IMPORT_BACKOFF_SECONDS * 2 ** (attempt - 1)
+        await asyncio.sleep(delay * random.uniform(0.5, 1.5))
+    if attempt > 1 and isinstance(response, dict):
+        response = {**response, "attempts": attempt}
+    return response
 
 
 def _remove_temp_file(path: Optional[str]) -> None:
@@ -315,7 +369,7 @@ def register_document_tools(mcp):
             if cashflow_type:
                 data["cashflow_type"] = cashflow_type
                 
-            response = api._make_request("POST", upload_url, json_data=data, files=files)
+            response = await api.arequest("POST", upload_url, json_data=data, files=files)
             
             if download_errors:
                 response = {**response, "download_errors": download_errors}
@@ -358,8 +412,11 @@ def register_document_tools(mcp):
         documents: List[Dict[str, Any]] = Field(
             description=(
                 "Documents to store without OCR. Each item contains exactly one of "
-                "file_url, file_ref, or file_content_base64; optional source_system "
-                "and external_id; and optional metadata with supplier, customer, "
+                "file_url, file_ref, or file_content_base64; optional external_id (the "
+                "document's stable id in the source system) and source_system (the "
+                "system's name; required by the API with external_id and defaults to "
+                "\"mcp\" -- set it when importing from several systems so their ids "
+                "cannot collide); and optional metadata with supplier, customer, "
                 "invoice_number, invoice_date, service_date, net_amount, vat_amount, "
                 "gross_amount, currency, document_type, direction, and tags."
             ),
@@ -367,8 +424,11 @@ def register_document_tools(mcp):
     ) -> Dict[str, Any]:
         """Store pre-processed documents without transaction side effects.
 
-        Missing metadata remains missing. With source_system + external_id,
-        retries return the existing document instead of creating a duplicate.
+        Missing metadata remains missing. With an external_id, a repeated import
+        returns the existing document instead of creating a duplicate, so those
+        documents are retried automatically (up to 3 attempts) after a server
+        error or connection failure. Give every document an external_id for
+        large batches; failed documents can then simply be sent again.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -412,18 +472,22 @@ def register_document_tools(mcp):
 
             try:
                 metadata = dict(document.get("metadata") or {})
-                if document.get("source_system"):
-                    metadata["external_source"] = document["source_system"]
-                if document.get("external_id"):
-                    metadata["external_id"] = document["external_id"]
+                external_id = document.get("external_id")
+                source_system = document.get("source_system")
+                if external_id and not source_system:
+                    source_system = DEFAULT_SOURCE_SYSTEM
+                if source_system:
+                    metadata["external_source"] = source_system
+                if external_id:
+                    metadata["external_id"] = external_id
 
-                with open(path, "rb") as file_handle:
-                    response = await api.arequest(
-                        "POST",
-                        import_url,
-                        json_data=metadata,
-                        files={"file": file_handle},
-                    )
+                response = await _post_structured_import(
+                    api,
+                    import_url,
+                    path,
+                    metadata,
+                    retry=bool(external_id),
+                )
 
                 result = {"index": index, **response}
                 if response.get("error"):
@@ -464,21 +528,26 @@ def register_document_tools(mcp):
     async def list_attachments(
         ctx: Context,
         file_name: Optional[str] = Field(default=None, description="Filter by file name (case insensitive partial match)"),
-        linked: Optional[bool] = Field(default=None, description="Filter by whether attachment is linked to transactions"),
+        linked: Optional[bool] = Field(default=None, description="true: only documents attached to a transaction; false: only documents not attached to any. Omit for all."),
         attachment_type: Optional[str] = Field(default=None, description="Filter by attachment type (invoice, receipt, contract, other)"),
         description: Optional[str] = Field(default=None, description="Filter by description (case insensitive partial match)"),
-        brand_name: Optional[str] = Field(default=None, description="Filter by brand name (case insensitive partial match)")
+        brand_name: Optional[str] = Field(default=None, description="Filter by brand name (case insensitive partial match)"),
+        search: Optional[str] = Field(default=None, description="Preferred supplier/document search across brand, description, file name, invoice number and amount. Do not also fill the individual text filters unless intentionally narrowing results."),
+        date_from: Optional[str] = Field(default=None, description="Earliest document date, YYYY-MM-DD; the upload date counts when a document has none. Allow for invoice/payment lag when matching receipts."),
+        date_to: Optional[str] = Field(default=None, description="Latest document date, YYYY-MM-DD; the upload date counts when a document has none."),
+        page: int = Field(default=1, ge=1, description="Result page; continue while the response has next"),
+        page_size: int = Field(default=50, ge=1, le=100, description="Documents per page"),
+        include_download_urls: bool = Field(default=True, description="Add a temporary downloadUrl to every result. Set false for metadata searches such as receipt matching; it saves one API call per document."),
     ) -> Dict[str, Any]:
         """
-        Get list of attachments with optional filters.
-        
-        Args:
-            file_name: Filter by file name (case insensitive partial match)
-            linked: Filter by whether attachment is linked to transactions
-            attachment_type: Filter by attachment type (invoice, receipt, contract, other)
-            description: Filter by description (case insensitive partial match)
-            brand_name: Filter by brand name (case insensitive partial match)
-            
+        Search saved purchase invoices and receipts (not outgoing sales invoices).
+
+        Prefer search for supplier discovery; individual filters combine with AND.
+        For receipt matching, use search with page_size=10 and include_download_urls=false.
+        An empty filtered result does not prove a document is missing: try aliases or a
+        date-bounded search. Page within the requested scope rather than enumerating the
+        whole archive.
+
         Returns:
             List of attachments matching the filters. Use downloadUrl for direct temporary file download links.
         """
@@ -493,11 +562,20 @@ def register_document_tools(mcp):
             f"api/v1/companies/{company_id}/attachments/"
         )
         
-        params = {}
+        params: Dict[str, Any] = {"page": page, "page_size": page_size}
+        if date_from:
+            params["date_from"] = date_from
+        if date_to:
+            params["date_to"] = date_to
+        if search:
+            params["search"] = search
         if file_name:
             params["file_name"] = file_name
         if linked is not None:
-            params["linked"] = linked
+            # The API's filter is inverted for historical reasons: linked=true
+            # returns UNlinked documents (filtersets/attachment.py). Translate
+            # so the parameter means what it says.
+            params["linked"] = not linked
         if attachment_type:
             params["has_type"] = attachment_type
         if description:
@@ -505,8 +583,10 @@ def register_document_tools(mcp):
         if brand_name:
             params["brand_name"] = brand_name
             
-        result = api._make_request("GET", attachments_url, params=params)
-        return _enrich_attachment_download_urls(result, api=api, company_id=company_id)
+        result = await api.arequest("GET", attachments_url, params=params)
+        if include_download_urls:
+            return await _enrich_attachment_download_urls(result, api=api, company_id=company_id)
+        return result
 
     @mcp.tool(
         title="Create Attachment",
@@ -688,9 +768,9 @@ def register_document_tools(mcp):
                         sanitized_metadata[validate_input(key)] = value
                 data["additional_metadata"] = sanitized_metadata
                 
-            response = api._make_request("POST", attachments_url, json_data=data, files=files)
+            response = await api.arequest("POST", attachments_url, json_data=data, files=files)
             
-            return _enrich_attachment_download_urls(response, api=api, company_id=company_id)
+            return await _enrich_attachment_download_urls(response, api=api, company_id=company_id)
         except FileDownloadError as exc:
             return exc.as_result()
         except FileNotFoundError:
@@ -745,7 +825,7 @@ def register_document_tools(mcp):
             "transaction": transaction_id
         }
         
-        return api._make_request("POST", link_url, json_data=link_data)
+        return await api.arequest("POST", link_url, json_data=link_data)
 
     @mcp.tool(
         title="Delete Attachment",
@@ -796,8 +876,8 @@ def register_document_tools(mcp):
         )
         # Backend expects ?confirmed=true to override the GoBD retention guard.
         params = {"confirmed": "true"} if confirm else None
-        result = api._make_request("DELETE", attachment_url, params=params)
-        # _make_request returns {} on an empty 204 response — treat any falsy result as success.
+        result = await api.arequest("DELETE", attachment_url, params=params)
+        # The API client returns {} on an empty 204 response — treat any falsy result as success.
         if not result:
             return {"message": f"Attachment {attachment_id} deleted successfully."}
         return result
@@ -831,30 +911,42 @@ def register_document_tools(mcp):
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
 
+        def _failed(payload: Dict[str, Any]) -> CallToolResult:
+            return CallToolResult(
+                content=[TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, default=str))],
+                isError=True,
+            )
+
         if not company_id:
-            return CallToolResult(content=[
-                TextContent(type="text", text='{"error": "No company available. Please authenticate first."}')
-            ])
+            return _failed({"error": "No company available. Please authenticate first."})
 
         detail_url = urljoin(
             config.api_base_url,
             f"api/v1/companies/{company_id}/attachments/{attachment_id}/",
         )
-        detail = api._make_request("GET", detail_url)
+        detail = await api.arequest("GET", detail_url)
+        # A failed lookup used to read as "not an image" with an empty link.
+        if is_failure(detail):
+            return _failed(detail)
         file_field = detail.get("file") or ""
-        ext = os.path.splitext(file_field)[1].lower() if file_field else ""
+        # In production `file` is a presigned URL: take the extension from its
+        # path, or ".png?X-Amz-..." never matched and no image was ever shown.
+        file_path = urlparse(file_field).path if file_field else ""
+        ext = os.path.splitext(file_path)[1].lower()
 
         dl_endpoint = urljoin(
             config.api_base_url,
             f"api/v1/companies/{company_id}/attachments/{attachment_id}/download/",
         )
-        dl_resp = api._make_request("GET", dl_endpoint)
+        dl_resp = await api.arequest("GET", dl_endpoint)
+        if is_failure(dl_resp):
+            return _failed(dl_resp)
         presigned_url = dl_resp.get("url", "")
 
         if ext not in _IMAGE_EXTENSIONS or not presigned_url:
             meta = {
                 "attachmentId": attachment_id,
-                "fileName": detail.get("fileName") or os.path.basename(file_field),
+                "fileName": detail.get("fileName") or os.path.basename(file_path),
                 "downloadUrl": presigned_url,
                 "note": "File is not an image; use downloadUrl to access it.",
             }
@@ -862,7 +954,8 @@ def register_document_tools(mcp):
                 TextContent(type="text", text=json.dumps(meta, ensure_ascii=False))
             ])
 
-        resp = requests.get(presigned_url, timeout=30)
+        # Off the event loop: this download can take up to 30 seconds.
+        resp = await asyncio.to_thread(requests.get, presigned_url, timeout=30)
         resp.raise_for_status()
 
         try:
@@ -882,7 +975,7 @@ def register_document_tools(mcp):
 
         meta = {
             "attachmentId": attachment_id,
-            "fileName": detail.get("fileName") or os.path.basename(file_field),
+            "fileName": detail.get("fileName") or os.path.basename(file_path),
             "downloadUrl": presigned_url,
         }
 

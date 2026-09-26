@@ -83,7 +83,7 @@ def register_corporate_tax_registration_tools(mcp):
         transmission protocol PDF.
         """
         api = ctx.request_context.lifespan_context.get("api")
-        return api._make_request("GET", _corporate_url("my/"))
+        return await api.arequest("GET", _corporate_url("my/"))
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_corporate_tax_registration_choices(ctx: Context) -> dict[str, Any]:
@@ -110,7 +110,7 @@ def register_corporate_tax_registration_tools(mcp):
         """
         api = ctx.request_context.lifespan_context.get("api")
         payload = _clean({"source": NORMAN_AGENT_SOURCE, "incorporation": incorporation_public_id})
-        return api._make_request("POST", _corporate_url(), json_data=payload)
+        return await api.arequest("POST", _corporate_url(), json_data=payload)
 
     @mcp.tool(annotations=WRITE)
     async def update_corporate_company(  # noqa: PLR0913
@@ -164,7 +164,7 @@ def register_corporate_tax_registration_tools(mcp):
                 "taxOffice": tax_office,
             },
         )
-        return api._make_request("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
+        return await api.arequest("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
 
     @mcp.tool(annotations=WRITE)
     async def update_corporate_registration_details(  # noqa: PLR0913
@@ -196,7 +196,7 @@ def register_corporate_tax_registration_tools(mcp):
                 "registerNumber": register_number,
             },
         )
-        return api._make_request("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
+        return await api.arequest("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
 
     @mcp.tool(annotations=DESTRUCTIVE_WRITE)
     async def set_corporate_people(
@@ -223,7 +223,7 @@ def register_corporate_tax_registration_tools(mcp):
         """Sections 3+4 (people): managing directors and shareholders, replace-all semantics."""
         api = ctx.request_context.lifespan_context.get("api")
         payload = _clean({"representatives": representatives, "shareholderEntries": shareholder_entries})
-        return api._make_request("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
+        return await api.arequest("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
 
     @mcp.tool(annotations=WRITE)
     async def update_corporate_financials(  # noqa: PLR0913
@@ -251,7 +251,7 @@ def register_corporate_tax_registration_tools(mcp):
                 "expectedProfitFollowingYear": expected_profit_following_year,
             },
         )
-        return api._make_request("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
+        return await api.arequest("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
 
     @mcp.tool(annotations=WRITE)
     async def update_corporate_vat_and_bank(  # noqa: PLR0913
@@ -297,7 +297,7 @@ def register_corporate_tax_registration_tools(mcp):
                 "bankAccountHolderName": bank_account_holder_name,
             },
         )
-        return api._make_request("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
+        return await api.arequest("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_corporate_submission_link(ctx: Context) -> dict[str, Any]:
@@ -309,7 +309,7 @@ def register_corporate_tax_registration_tools(mcp):
         `readyToSubmit` is false, finish the `missing` fields first.
         """
         api = ctx.request_context.lifespan_context.get("api")
-        record = api._make_request("GET", _corporate_url("my/"))
+        record = await api.arequest("GET", _corporate_url("my/"))
         sections = record.get("sections", {}) if isinstance(record, dict) else {}
         missing = [name for section in sections.values() for name in section.get("missing", [])]
         return {

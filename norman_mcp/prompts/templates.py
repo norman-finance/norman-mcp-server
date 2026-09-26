@@ -96,8 +96,8 @@ def register_prompts(mcp):
             f"or assign a specific category.\n\n"
             f"**For SME companies (GmbH/UG):** Use company categories from the DATEV chart "
             f"of accounts (list_company_categories) instead of freelance categories. "
-            f"You can also set payment_date and payment_type (BANK_TRANSFER, CASH, CREDIT_CARD, "
-            f"PAYPAL, DIRECT_DEBIT, OTHER)."
+            f"You can also set payment_date and payment_type (BANK, CASH, CREDIT_CARD, "
+            f"PAYPAL, NOT_PAID)."
         )
 
     @mcp.prompt()
@@ -241,7 +241,7 @@ def register_prompts(mcp):
             "- **Categories**: Uses DATEV chart of accounts (SKR03 or SKR04) with numeric codes "
             "(e.g. '4200 - Telefonkosten'). Use `list_company_categories` to see available categories.\n"
             "- **Payment Tracking**: Each transaction can have a `payment_date` (when paid) and "
-            "`payment_type` (BANK_TRANSFER, CASH, CREDIT_CARD, PAYPAL, DIRECT_DEBIT, OTHER).\n"
+            "`payment_type` (BANK, CASH, CREDIT_CARD, PAYPAL, NOT_PAID).\n"
             "- **Tax Logic**: VAT and tax obligations are based on the invoice/document date "
             "(valueDate), NOT the payment date.\n"
             "- **DATEV Export**: Finalized transactions can be exported as a DATEV EXTF package "

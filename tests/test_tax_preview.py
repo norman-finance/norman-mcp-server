@@ -24,11 +24,11 @@ def test_tax_preview_preserves_api_image_format(mime_type, expected):
     if mime_type is not None:
         payload["mimeType"] = mime_type
 
-    def request(method, url):
+    async def request(method, url):
         calls.append((method, url))
         return payload
 
-    api = SimpleNamespace(_make_request=request)
+    api = SimpleNamespace(arequest=request, company_id="company-1")
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context={"api": api}))
     server = FastMCP()
     register_tax_tools(server)
@@ -45,13 +45,15 @@ def test_tax_preview_preserves_api_image_format(mime_type, expected):
     assert "previewImage" not in metadata
     assert len(calls) == 1
     assert calls[0][0] == "POST"
-    assert calls[0][1].endswith("/taxes/reports/report-1/generate-preview-url/")
+    # Company-scoped: the unscoped taxes/reports/ route serves the oldest company.
+    assert calls[0][1].endswith("/companies/company-1/taxes/reports/report-1/generate-preview-url/")
 
 
 def test_tax_preview_without_thumbnail_still_returns_pdf_link():
-    api = SimpleNamespace(
-        _make_request=lambda *_: {"downloadUrl": "https://example.test/preview.pdf"}
-    )
+    async def request(*_):
+        return {"downloadUrl": "https://example.test/preview.pdf"}
+
+    api = SimpleNamespace(arequest=request, company_id="company-1")
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context={"api": api}))
     server = FastMCP()
     register_tax_tools(server)

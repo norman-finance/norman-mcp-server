@@ -133,7 +133,8 @@ def test_list_invoices_filters_by_document_type():
     (request,) = api.requests
     assert request[0] == "GET"
     assert request[1] == COMPANY + "invoices/"
-    assert request[2]["params"] == {"limit": 100, "type": "credit_note"}
+    # The API pages by page/page_size; it ignores "limit".
+    assert request[2]["params"] == {"page_size": 100, "page": 1, "type": "credit_note"}
 
 
 def test_create_invoice_leaves_the_currency_to_the_company_unless_told() -> None:

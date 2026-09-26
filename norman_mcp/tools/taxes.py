@@ -8,24 +8,37 @@ from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 
 from norman_mcp.context import Context
 from norman_mcp import config
+from norman_mcp.tools.results import as_object, is_failure
 
 logger = logging.getLogger(__name__)
 
 
-def _enrich_report_download_url(data: dict, api=None, report_id: str | None = None) -> dict:
+NO_COMPANY_ERROR = {"error": "No company available. Please authenticate first."}
+
+
+def reports_url(company_id: str, suffix: str = "") -> str:
+    """The company-scoped tax reports route.
+
+    The unscoped api/v1/taxes/reports/ ignores X-Company-Id and serves the
+    user's OLDEST company, so after switch_company -- or for anyone whose
+    last-active company is not their first -- these tools listed, previewed
+    and submitted another company's reports. The MCP apps already use this.
+    """
+    return urljoin(config.api_base_url, f"api/v1/companies/{company_id}/taxes/reports/{suffix}")
+
+
+async def _enrich_report_download_url(
+    data: dict, api=None, report_id: str | None = None, company_id: str | None = None
+) -> dict:
     """Add a presigned downloadUrl for the submitted tax report PDF."""
     if not isinstance(data, dict):
         return data
-    if api and report_id and data.get("reportFile"):
-        try:
-            dl_endpoint = urljoin(
-                config.api_base_url,
-                f"api/v1/taxes/reports/{report_id}/download/",
-            )
-            dl_resp = api._make_request("GET", dl_endpoint)
-            if dl_resp.get("url"):
-                data["downloadUrl"] = dl_resp["url"]
-        except Exception:
+    if api and report_id and company_id and data.get("reportFile"):
+        dl_endpoint = reports_url(company_id, f"{report_id}/download/")
+        dl_resp = await api.arequest("GET", dl_endpoint)
+        if isinstance(dl_resp, dict) and dl_resp.get("url"):
+            data["downloadUrl"] = dl_resp["url"]
+        else:
             logger.debug("Could not fetch presigned download URL for report %s", report_id)
     return data
 
@@ -42,13 +55,30 @@ def register_tax_tools(mcp):
             openWorldHint=False,
         ),
     )
-    async def list_tax_reports(ctx: Context) -> Dict[str, Any]:
-        """List all available tax reports."""
+    async def list_tax_reports(
+        ctx: Context,
+        date_from: Optional[str] = Field(default=None, description="Earliest report period start (YYYY-MM-DD)"),
+        date_to: Optional[str] = Field(default=None, description="Latest report period end (YYYY-MM-DD)"),
+        report_type: Optional[str] = Field(default=None, description="Report type, e.g. ADVANCED_SALEX_TAX for German monthly/quarterly VAT"),
+        status: Optional[str] = Field(default=None, description="NOT_COMPLETED, SUBMIT, PAID, SUBMIT_AND_PAID or REQUIRE_CORRECTION"),
+        page: int = Field(default=1, ge=1, description="Page within these filters; follow next when needed"),
+    ) -> Dict[str, Any]:
+        """List the selected company's tax reports, optionally scoped to a period, type or status.
+
+        Date filters include reports wholly inside the given period. Check the returned
+        dates and type; if no exact period exists, inspect the company's filing frequency.
+        An existing draft can be passed to generate_finanzamt_preview without creating a duplicate.
+        """
         api = ctx.request_context.lifespan_context["api"]
-        
-        taxes_url = urljoin(config.api_base_url, "api/v1/taxes/reports/")
-        
-        return await api.arequest("GET", taxes_url)
+        company_id = api.company_id
+        if not company_id:
+            return NO_COMPANY_ERROR
+
+        params: Dict[str, Any] = {"page": page}
+        for key, value in (("date_from", date_from), ("date_to", date_to), ("type", report_type), ("status", status)):
+            if value is not None:
+                params[key] = value
+        return await api.arequest("GET", reports_url(company_id), params=params)
 
     @mcp.tool(
         title="Get Tax Report",
@@ -73,14 +103,14 @@ def register_tax_tools(mcp):
             Tax report details
         """
         api = ctx.request_context.lifespan_context["api"]
-        
-        report_url = urljoin(
-            config.api_base_url,
-            f"api/v1/taxes/reports/{report_id}/"
+        company_id = api.company_id
+        if not company_id:
+            return NO_COMPANY_ERROR
+
+        result = await api.arequest("GET", reports_url(company_id, f"{report_id}/"))
+        return await _enrich_report_download_url(
+            result, api=api, report_id=report_id, company_id=company_id
         )
-        
-        result = await api.arequest("GET", report_url)
-        return _enrich_report_download_url(result, api=api, report_id=report_id)
 
     @mcp.tool(
         title="Validate Tax Number",
@@ -93,18 +123,19 @@ def register_tax_tools(mcp):
     )
     async def validate_tax_number(
         ctx: Context,
-        tax_number: str = Field(description="Tax number to validate"),
-        region_code: str = Field(description="Region code (e.g., DE for Germany)")
+        tax_number: str = Field(description="German business tax number (Steuernummer) to validate"),
+        region_code: str = Field(
+            description=(
+                "Two-letter code of the federal state (Bundesland) whose Finanzamt issued "
+                "the number, e.g. BE, BY or NW; see list_tax_states. Not a country code."
+            )
+        ),
     ) -> Dict[str, Any]:
         """
-        Validate a tax number for a specific region.
-        
-        Args:
-            tax_number: Tax number to validate
-            region_code: Region code (e.g., DE for Germany)
-            
-        Returns:
-            Validation result
+        Check a German tax number (Steuernummer) with the ELSTER validator.
+
+        Returns {"valid": true|false, "message": ...}. An invalid number is a
+        normal result, not an error.
         """
         api = ctx.request_context.lifespan_context["api"]
         
@@ -114,8 +145,19 @@ def register_tax_tools(mcp):
             "tax_number": tax_number,
             "region_code": region_code
         }
-        
-        return api._make_request("POST", validate_url, json_data=validation_data)
+
+        response = await api.arequest("POST", validate_url, json_data=validation_data)
+        # The API answers 201 with the bare JSON string "Tax number is valid",
+        # and 400 with the reason as a bare string.
+        if isinstance(response, str):
+            return {"valid": True, "message": response}
+        if (
+            isinstance(response, dict)
+            and response.get("status_code") == 400
+            and isinstance(response.get("detail"), str)
+        ):
+            return {"valid": False, "message": response["detail"]}
+        return as_object(response)
 
     @mcp.tool(
         title="Generate Finanzamt Preview",
@@ -142,13 +184,17 @@ def register_tax_tools(mcp):
         if not report_id or not isinstance(report_id, str) or not report_id.strip():
             raise ValueError("Invalid report ID")
 
-        preview_url = urljoin(
-            config.api_base_url,
-            f"api/v1/taxes/reports/{report_id}/generate-preview-url/",
-        )
+        company_id = api.company_id
+        if not company_id:
+            raise ValueError(NO_COMPANY_ERROR["error"])
+        preview_url = reports_url(company_id, f"{report_id}/generate-preview-url/")
 
         try:
-            result = api._make_request("POST", preview_url)
+            result = await api.arequest("POST", preview_url)
+            if is_failure(result):
+                # Keep the API's reason (e.g. an ELSTER validation message)
+                # instead of the generic "no download URL" below.
+                raise ValueError(json.dumps(result, ensure_ascii=False, default=str))
             if not result.get("downloadUrl"):
                 raise ValueError("Preview generation failed: no download URL returned")
 
@@ -198,26 +244,20 @@ def register_tax_tools(mcp):
             
         Returns:
             Response from the submission request and a link to the tax report from reportFile to download.
-            If response status is 403, it means a paid subscription is required to file the report.
+            A 403 carries the API's reason and code, e.g. that the plan does not include
+            filing; tell the user that reason instead of retrying.
         """
         api = ctx.request_context.lifespan_context["api"]
-        
-        submit_url = urljoin(
-            config.api_base_url,
-            f"api/v1/taxes/reports/{report_id}/submit-report/"
+        company_id = api.company_id
+        if not company_id:
+            return NO_COMPANY_ERROR
+
+        # The client returns API errors (the 403 reason and code included)
+        # instead of raising, so there is nothing to catch here.
+        result = await api.arequest("POST", reports_url(company_id, f"{report_id}/submit-report/"))
+        return await _enrich_report_download_url(
+            result, api=api, report_id=report_id, company_id=company_id
         )
-        
-        try:
-            result = api._make_request("POST", submit_url)
-            return _enrich_report_download_url(result, api=api, report_id=report_id)
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 403:
-                return {
-                    "error": "Subscription required",
-                    "message": "You need a paid subscription to file tax reports. Please subscribe before submitting.",
-                    "status_code": 403
-                }
-            raise
 
     @mcp.tool(
         title="List German Tax States",
@@ -316,7 +356,7 @@ def register_tax_tools(mcp):
             
         # Only make request if there are changes
         if update_data:
-            return api._make_request("PATCH", setting_url, json_data=update_data)
+            return await api.arequest("PATCH", setting_url, json_data=update_data)
         else:
             return {"message": "No changes to apply"}
 

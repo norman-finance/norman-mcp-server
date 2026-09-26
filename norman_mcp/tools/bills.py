@@ -5,6 +5,7 @@ from urllib.parse import urljoin
 from mcp.types import ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
+from norman_mcp.tools.results import is_failure
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ def register_bill_tools(mcp):
 
         bills_url = urljoin(config.api_base_url, "api/v1/accounting/bills/")
         params = {"status": status} if status else None
-        return api._make_request("GET", bills_url, params=params)
+        return await api.arequest("GET", bills_url, params=params)
 
     @mcp.tool(
         title="Get Bill Details",
@@ -78,7 +79,7 @@ def register_bill_tools(mcp):
             return {"error": "No company available. Please authenticate first."}
 
         bill_url = urljoin(config.api_base_url, f"api/v1/accounting/bills/{bill_id}/")
-        return api._make_request("GET", bill_url)
+        return await api.arequest("GET", bill_url)
 
     @mcp.tool(
         title="Update Bill",
@@ -116,10 +117,10 @@ def register_bill_tools(mcp):
             update_data["status"] = status
 
         if not update_data:
-            current_data = api._make_request("GET", bill_url)
+            current_data = await api.arequest("GET", bill_url)
             return {"message": "No fields provided for update.", "bill": current_data}
 
-        return api._make_request("PATCH", bill_url, json_data=update_data)
+        return await api.arequest("PATCH", bill_url, json_data=update_data)
 
     @mcp.tool(
         title="Mark Bill as Paid",
@@ -151,7 +152,7 @@ def register_bill_tools(mcp):
             return {"error": "No company available. Please authenticate first."}
 
         bill_url = urljoin(config.api_base_url, f"api/v1/accounting/bills/{bill_id}/")
-        return api._make_request("PATCH", bill_url, json_data={"status": "PAID"})
+        return await api.arequest("PATCH", bill_url, json_data={"status": "PAID"})
 
     @mcp.tool(
         title="Pay Bill (SEPA)",
@@ -194,7 +195,7 @@ def register_bill_tools(mcp):
             payload["executionDate"] = execution_date
         if purpose is not None:
             payload["purpose"] = purpose
-        return api._make_request("POST", pay_url, json_data=payload)
+        return await api.arequest("POST", pay_url, json_data=payload)
 
     @mcp.tool(
         title="Delete Bill",
@@ -223,7 +224,7 @@ def register_bill_tools(mcp):
             return {"error": "No company available. Please authenticate first."}
 
         bill_url = urljoin(config.api_base_url, f"api/v1/accounting/bills/{bill_id}/")
-        result = api._make_request("DELETE", bill_url)
-        if result is None or result == "":
-            return {"message": f"Bill {bill_id} deleted successfully."}
-        return result
+        result = await api.arequest("DELETE", bill_url)
+        if is_failure(result):
+            return result
+        return {"message": f"Bill {bill_id} deleted successfully."}
