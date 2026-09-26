@@ -6,6 +6,7 @@ from pydantic import Field
 from mcp.types import ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
+from norman_mcp.tools.taxes import reports_url as company_reports_url
 from norman_mcp.tools.missing_documents import category_name, missing_document_transactions, needs_document
 
 logger = logging.getLogger(__name__)
@@ -85,9 +86,9 @@ def register_tax_advisor_tools(mcp):
             logger.warning("Could not fetch tax statistics: %s", e)
             overview["taxStatistics"] = {"error": str(e)}
 
-        reports_url = urljoin(config.api_base_url, "api/v1/taxes/reports/")
+        reports_endpoint = company_reports_url(company_id)
         try:
-            reports = api._make_request("GET", reports_url)
+            reports = api._make_request("GET", reports_endpoint)
             report_list = reports.get("results", reports) if isinstance(reports, dict) else reports
             if isinstance(report_list, list):
                 pending = [r for r in report_list if r.get("status") in ("draft", "DRAFT", "pending", "PENDING")]
@@ -229,9 +230,9 @@ def register_tax_advisor_tools(mcp):
 
         result: Dict[str, Any] = {"companyId": company_id}
 
-        reports_url = urljoin(config.api_base_url, "api/v1/taxes/reports/")
+        reports_endpoint = company_reports_url(company_id)
         try:
-            reports_resp = api._make_request("GET", reports_url)
+            reports_resp = api._make_request("GET", reports_endpoint)
             report_list = reports_resp.get("results", reports_resp) if isinstance(reports_resp, dict) else reports_resp
 
             if isinstance(report_list, list):

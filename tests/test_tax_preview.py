@@ -28,7 +28,7 @@ def test_tax_preview_preserves_api_image_format(mime_type, expected):
         calls.append((method, url))
         return payload
 
-    api = SimpleNamespace(_make_request=request)
+    api = SimpleNamespace(_make_request=request, company_id="company-1")
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context={"api": api}))
     server = FastMCP()
     register_tax_tools(server)
@@ -45,12 +45,13 @@ def test_tax_preview_preserves_api_image_format(mime_type, expected):
     assert "previewImage" not in metadata
     assert len(calls) == 1
     assert calls[0][0] == "POST"
-    assert calls[0][1].endswith("/taxes/reports/report-1/generate-preview-url/")
+    assert calls[0][1].endswith("/api/v1/companies/company-1/taxes/reports/report-1/generate-preview-url/")
 
 
 def test_tax_preview_without_thumbnail_still_returns_pdf_link():
     api = SimpleNamespace(
-        _make_request=lambda *_: {"downloadUrl": "https://example.test/preview.pdf"}
+        _make_request=lambda *_: {"downloadUrl": "https://example.test/preview.pdf"},
+        company_id="company-1",
     )
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context={"api": api}))
     server = FastMCP()
