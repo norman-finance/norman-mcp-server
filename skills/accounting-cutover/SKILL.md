@@ -46,14 +46,25 @@ Choose `opening_method=datev` when an opening-balance file exists. Choose `openi
 - Treat Preview as read-only. It does not write Ledger entries.
 - Resolve every blocking finding before proceeding.
 
-## 5. Apply only after explicit confirmation
+## 5. Prepare reviewed accounts (GmbH/UG)
+
+Preview returns `accountReview` for GmbH/UG on SKR03/SKR04 (fiscal years 2024-2026). Its rows are source accounts that must exist and have an E-Bilanz position before import; they cause the "Review and prepare accounts" and "no E-Bilanz taxonomy mapping" blockers.
+
+- Present each row with its state: `NEW` (will be created Ledger-only), `MAPPING_REQUIRED` (exists, needs a position), `CONFLICT` or `HIDDEN` (fix in the chart of accounts first; they cannot be prepared).
+- Use `mode=AUTOMATIC` only where the row has `automatic=true`. Otherwise pick a `MANUAL` position from `accountReview.positions` matching the account type, or `DEFERRED` to decide later (the account then stays a blocker).
+- Keep the name and type of existing accounts.
+- After the user confirms, call `prepare_accounting_cutover_accounts` with `review_token`, the chosen rows and `confirmed=true`. The token expires after 30 minutes; if the API reports a changed or expired review, run Preview again.
+- A single custom account can also be assigned directly: `update_chart_of_accounts_account` (or `create_chart_of_accounts_account`) with `ebilanz_assignment`; `get_ebilanz_positions` lists the allowed positions and `list_chart_of_accounts(fiscal_year=...)` shows each account's status.
+- Run Preview again with the same inputs and confirm the blockers are gone.
+
+## 6. Apply only after explicit confirmation
 
 - Ask the user to confirm the exact successful Preview.
 - Call `apply_accounting_cutover` with the same inputs and `confirmed=true` only after that confirmation.
 - If any date, file, balance row or migration mode changes, run Preview again before Apply.
 - Apply writes opening/cutover postings and establishes the boundary before which transaction-derived postings must not be duplicated.
 
-## 6. Verify the result
+## 7. Verify the result
 
 - Call `get_accounting_setup` again and inspect the returned import status and counts.
 - Use the Ledger tools to verify the affected accounts and dates.
