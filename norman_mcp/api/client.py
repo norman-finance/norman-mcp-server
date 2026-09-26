@@ -19,6 +19,104 @@ from norman_mcp.context import (
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# Bodies the API sends as text rather than JSON (e-invoice XML, CSV exports).
+_TEXTUAL_MEDIA_TYPES = {"application/xml", "application/csv"}
+
+# What a caller sees when the API gives no message of its own.
+_DEFAULT_ERROR_MESSAGES = {
+    403: "Access forbidden. Check your account permissions.",
+    404: "Resource not found.",
+    429: "Rate limit exceeded. Please try again later.",
+}
+
+# Keep a proxy's HTML error page from flooding the agent's context.
+_ERROR_BODY_LIMIT = 2000
+
+
+def _media_type(response: requests.Response) -> str:
+    return response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+
+
+def _success_result(response: requests.Response) -> Any:
+    """The parsed body of a successful response.
+
+    JSON is returned as the API sent it (an object, but also a bare list or
+    string for some endpoints -- the tool layer makes those objects). Text and
+    XML come back as ``{"content": ...}``. A file cannot travel through a JSON
+    tool result, so it is described instead of being reported as a bare
+    success: that used to hide that e.g. a DATEV ZIP had been dropped.
+    """
+    if not response.content:
+        return {}
+    try:
+        return response.json()
+    except ValueError:
+        pass
+    media_type = _media_type(response)
+    if (
+        media_type.startswith("text/")
+        or media_type in _TEXTUAL_MEDIA_TYPES
+        or media_type.endswith("+xml")
+    ):
+        return {"content": response.text}
+    return {
+        "success": True,
+        "contentType": media_type or "application/octet-stream",
+        "sizeBytes": len(response.content),
+        "message": (
+            "The API returned a file, which cannot be passed through this tool. "
+            "Use a tool that returns a download link for it instead."
+        ),
+    }
+
+
+def _error_body(response: requests.Response) -> Any:
+    try:
+        return response.json()
+    except ValueError:
+        text = (response.text or "").strip()
+        return text[:_ERROR_BODY_LIMIT] or None
+
+
+def _api_message(body: Any) -> Optional[str]:
+    """The API's own human-readable message, when the body has one."""
+    if isinstance(body, str):
+        # A short plain-text reason, not an HTML error page.
+        return body if len(body) <= 300 and "<" not in body else None
+    if isinstance(body, dict):
+        for key in ("detail", "error", "message"):
+            value = body.get(key)
+            if isinstance(value, str) and value.strip():
+                return value
+    return None
+
+
+def http_error_result(response: requests.Response) -> Dict[str, Any]:
+    """Describe a failed API response without losing what the API said.
+
+    The body used to be discarded for 403/404/429, so a paywall such as
+    ``{"detail": ..., "code": "invoice_send_limit_reached"}`` reached the
+    agent as a bare "Access forbidden". Every status now keeps the parsed body
+    in ``detail`` and lifts a machine-readable ``code`` to the top level.
+    """
+    status = response.status_code
+    body = _error_body(response)
+    reason = f" ({response.reason})" if response.reason else ""
+    result: Dict[str, Any] = {
+        "error": _api_message(body)
+        or _DEFAULT_ERROR_MESSAGES.get(status)
+        or f"Request failed with HTTP {status}{reason}.",
+        "status_code": status,
+    }
+    if body not in (None, "", {}, []):
+        result["detail"] = body
+    if isinstance(body, dict) and isinstance(body.get("code"), str) and body["code"]:
+        result["code"] = body["code"]
+    retry_after = response.headers.get("Retry-After")
+    if status == 429 and retry_after:
+        result["retry_after"] = retry_after
+    return result
+
 
 @dataclass
 class NormanAPI:
@@ -494,18 +592,7 @@ class NormanAPI:
                     timeout=config.NORMAN_API_TIMEOUT,
                 )
             response.raise_for_status()
-
-            # Attempt to parse JSON response, but handle non-JSON responses gracefully
-            try:
-                if response.content:
-                    return response.json()
-                return {}
-            except ValueError:
-                # Not JSON, return content as string if it's not binary
-                if response.headers.get("content-type", "").startswith("text/"):
-                    return {"content": response.text}
-                # For binary content, return success message
-                return {"success": True, "message": "Request successful"}
+            return _success_result(response)
 
         except requests.exceptions.HTTPError as e:
             # Handle token expiration
@@ -540,49 +627,50 @@ class NormanAPI:
                     ),
                     "status_code": 401,
                 }
-            elif e.response.status_code == 403:
+            status = e.response.status_code
+            if status == 403:
                 logger.error("Access forbidden. Check your account permissions.")
-                return {
-                    "error": "Access forbidden. Check your account permissions.",
-                    "status_code": 403,
-                }
-            elif e.response.status_code == 404:
+            elif status == 404:
                 logger.error(f"Resource not found: {url}")
-                return {"error": "Resource not found", "status_code": 404}
-            elif e.response.status_code == 429:
+            elif status == 429:
                 logger.error("Rate limit exceeded. Please try again later.")
-                return {
-                    "error": "Rate limit exceeded. Please try again later.",
-                    "status_code": 429,
-                }
             else:
                 logger.error(f"HTTP error: {str(e)}")
-                error_detail = None
-                if hasattr(e, "response") and e.response is not None:
-                    logger.error(f"Response: {e.response.text}")
-                    try:
-                        error_detail = e.response.json()
-                    except (ValueError, AttributeError):
-                        error_detail = e.response.text
-                result = {
-                    "error": f"Request failed: {str(e)}",
-                    "status_code": e.response.status_code,
-                }
-                if error_detail:
-                    result["detail"] = error_detail
-                return result
+                logger.error(f"Response: {e.response.text}")
+            return http_error_result(e.response)
+        # `code` lets a caller tell transport failures apart from API answers,
+        # e.g. to retry an idempotent request (see upload_structured_attachments).
         except requests.exceptions.ConnectionError:
             logger.error(f"Connection error when accessing {url}")
-            return {"error": "Connection error. Please check your network connection."}
+            return {
+                "error": "Connection error. Please check your network connection.",
+                "code": "connection_error",
+            }
         except requests.exceptions.Timeout:
             logger.error(f"Request timed out when accessing {url}")
-            return {"error": "Request timed out. Please try again later."}
+            # Abandoning the response does not cancel the work: the API keeps
+            # processing the request we stopped waiting for. Telling the model to
+            # just retry a write is how one slow create becomes two records.
+            if method.upper() in ("GET", "HEAD", "OPTIONS"):
+                return {
+                    "error": "Request timed out. Please try again later.",
+                    "code": "timeout",
+                }
+            return {
+                "error": (
+                    "Request timed out, but it may still have been applied. "
+                    "Check whether the change exists before retrying, and tell "
+                    "the user to verify rather than repeating the operation."
+                ),
+                "code": "timeout",
+                "timed_out": True,
+            }
         except requests.exceptions.RequestException as e:
             logger.error(f"Error making request to {url}: {str(e)}")
-            return {"error": f"Request failed: {str(e)}"}
+            return {"error": f"Request failed: {str(e)}", "code": "request_error"}
         except Exception as e:
             logger.error(f"Unexpected error making request to {url}: {str(e)}")
-            return {"error": f"Unexpected error: {str(e)}"}
+            return {"error": f"Unexpected error: {str(e)}", "code": "unexpected_error"}
 
     async def arequest(
         self,
