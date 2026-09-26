@@ -815,19 +815,31 @@ def register_accounting_tools(mcp: Any) -> None:
         name: str,
         asset_type: str = Field(description="tangible or intangible"),
         acquisition_date: str = Field(
-            description="Original acquisition date in YYYY-MM-DD format"
+            description="Original acquisition date in YYYY-MM-DD format; AfA starts in its month"
         ),
         depreciation_basis: float = Field(
             gt=0, description="Net basis, or gross when input VAT is not deductible"
         ),
         useful_lifetime_months: int = Field(gt=0),
-        gross_purchase_price: Optional[float] = None,
+        gross_purchase_price: Optional[float] = Field(
+            default=None,
+            gt=0,
+            description=(
+                "Purchase price including VAT, as on the invoice. Recorded with the asset; "
+                "AfA is always computed from depreciation_basis. Defaults to "
+                "depreciation_basis, which is exact when input VAT is not deductible"
+            ),
+        ),
         business_use_percent: float = Field(default=100, ge=0, le=100),
         ledger_account_code: Optional[str] = None,
         transaction_id: Optional[str] = None,
         transaction_item_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Create an asset, optionally linked to a Norman Transaction or split item."""
+        """Create an active asset, optionally linked to a Norman Transaction or split item.
+
+        New assets are active and have no disposal date; record a sale or loss
+        later with update_asset (status plus disposal_date).
+        """
         api, company_id, error = _api_and_company(ctx)
         if error:
             return error
@@ -837,9 +849,17 @@ def register_accounting_tools(mcp: Any) -> None:
                 "type": asset_type,
                 "status": "active",
                 "date": acquisition_date,
-                "depreciationDate": acquisition_date,
+                # depreciationDate is the DISPOSAL date, not the AfA start: the
+                # API rejects it on active assets, and it used to end AfA in the
+                # month of acquisition.
                 "amount": depreciation_basis,
-                "amountIncVat": gross_purchase_price,
+                # Required by the API. Like its own asset-register import, fall
+                # back to the basis when only the AfA basis is known.
+                "amountIncVat": (
+                    gross_purchase_price
+                    if gross_purchase_price is not None
+                    else depreciation_basis
+                ),
                 # The public form speaks in percentages; the Asset model stores a
                 # fraction (1.00 == 100%). Keep that conversion at the MCP edge so
                 # agents cannot accidentally create a 100x depreciation basis.
@@ -863,15 +883,37 @@ def register_accounting_tools(mcp: Any) -> None:
         ctx: Context,
         asset_id: str,
         name: Optional[str] = None,
-        acquisition_date: Optional[str] = None,
+        acquisition_date: Optional[str] = Field(
+            default=None, description="Acquisition date in YYYY-MM-DD format; AfA starts in its month"
+        ),
         depreciation_basis: Optional[float] = Field(default=None, gt=0),
-        gross_purchase_price: Optional[float] = None,
+        gross_purchase_price: Optional[float] = Field(
+            default=None,
+            gt=0,
+            description="Purchase price including VAT; informational, AfA uses depreciation_basis",
+        ),
         useful_lifetime_months: Optional[int] = Field(default=None, gt=0),
         business_use_percent: Optional[float] = Field(default=None, ge=0, le=100),
         ledger_account_code: Optional[str] = None,
-        status: Optional[str] = Field(default=None, description="active, lost or sold"),
+        status: Optional[str] = Field(
+            default=None,
+            description="active, lost or sold. sold/lost need disposal_date; active clears it",
+        ),
+        disposal_date: Optional[str] = Field(
+            default=None,
+            description=(
+                "Disposal date in YYYY-MM-DD for sold/lost assets, separate from the "
+                "acquisition date; AfA ends in its month"
+            ),
+        ),
     ) -> Dict[str, Any]:
-        """Edit an asset through the audited Asset service."""
+        """Edit an asset through the audited Asset service.
+
+        Record a sale or loss with status plus disposal_date. status=active
+        without disposal_date clears a stored disposal date, which also repairs
+        an active asset that the API rejects with "Active assets cannot have a
+        disposal date" (older clients stored the acquisition date there).
+        """
         api, company_id, error = _api_and_company(ctx)
         if error:
             return error
@@ -879,7 +921,7 @@ def register_accounting_tools(mcp: Any) -> None:
             {
                 "name": name,
                 "date": acquisition_date,
-                "depreciationDate": acquisition_date,
+                "depreciationDate": disposal_date,
                 "amount": depreciation_basis,
                 "amountIncVat": gross_purchase_price,
                 "usefulLifetime": useful_lifetime_months,
@@ -890,6 +932,10 @@ def register_accounting_tools(mcp: Any) -> None:
                 "status": status,
             }
         )
+        if status == "active" and disposal_date is None:
+            # Reactivation explicitly clears the old disposal date. _compact
+            # drops null values, so preserve this intentional clear afterwards.
+            payload["depreciationDate"] = None
         return await _request(
             api,
             "PATCH",

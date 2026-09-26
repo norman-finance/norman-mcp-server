@@ -5,8 +5,12 @@ from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 from norman_mcp.files.upload import store_file
 from norman_mcp.tools.accounting import register_accounting_tools
+from tests.mcp_harness import FakeApi as HarnessApi
+from tests.mcp_harness import call_tool
 
 
 class FakeMcp:
@@ -311,6 +315,122 @@ def test_asset_business_use_percent_is_converted_to_model_fraction() -> None:
     assert method == "POST"
     assert url.endswith("/api/v1/companies/company-1/accounting/assets/")
     assert kwargs["json_data"]["useProfessionalPart"] == 0.8
+    assert kwargs["json_data"]["date"] == "2026-08-28"
+    assert kwargs["json_data"]["status"] == "active"
+    assert kwargs["json_data"]["amountIncVat"] == 1190
+    # depreciationDate is the disposal date: the API rejects it on an active
+    # asset, and it used to end AfA in the month of acquisition.
+    assert "depreciationDate" not in kwargs["json_data"]
+
+
+def test_asset_gross_price_defaults_to_the_depreciation_basis() -> None:
+    # amountIncVat is required by the API; the tool used to drop it when omitted.
+    payload = asset_create_payload(gross_purchase_price=None)
+
+    assert payload["amount"] == 48000.0
+    assert payload["amountIncVat"] == 48000.0
+
+
+def asset_create_payload(**changes: Any) -> dict[str, Any]:
+    mcp, api = registered_tools()
+    data = {
+        "name": "Building",
+        "asset_type": "tangible",
+        "acquisition_date": "2021-03-15",
+        "depreciation_basis": 48000.0,
+        "useful_lifetime_months": 480,
+        "gross_purchase_price": None,
+        "business_use_percent": 100,
+        "ledger_account_code": None,
+        "transaction_id": None,
+        "transaction_item_id": None,
+        **changes,
+    }
+    asyncio.run(mcp.tools["create_asset"](context_for(api), **data))
+    return api.requests[-1][2]["json_data"]
+
+
+def asset_update_payload(**changes: Any) -> dict[str, Any]:
+    mcp, api = registered_tools()
+    data = {
+        "asset_id": "asset-1",
+        "name": None,
+        "acquisition_date": None,
+        "depreciation_basis": None,
+        "gross_purchase_price": None,
+        "useful_lifetime_months": None,
+        "business_use_percent": None,
+        "ledger_account_code": None,
+        "status": None,
+        "disposal_date": None,
+        **changes,
+    }
+    asyncio.run(mcp.tools["update_asset"](context_for(api), **data))
+    method, url, kwargs = api.requests[-1]
+    assert method == "PATCH"
+    assert url.endswith("/accounting/assets/asset-1/")
+    return kwargs["json_data"]
+
+
+@pytest.mark.parametrize(
+    "changes", [{"acquisition_date": "2025-07-01"}, {"name": "Updated name"}]
+)
+def test_asset_metadata_update_does_not_write_disposal_date(
+    changes: dict[str, Any],
+) -> None:
+    payload = asset_update_payload(**changes)
+    assert "depreciationDate" not in payload
+
+
+@pytest.mark.parametrize("asset_status", ["sold", "lost"])
+def test_asset_disposal_uses_its_own_date(asset_status: str) -> None:
+    payload = asset_update_payload(
+        acquisition_date="2025-06-01",
+        status=asset_status,
+        disposal_date="2025-11-30",
+    )
+    assert payload["date"] == "2025-06-01"
+    assert payload["depreciationDate"] == "2025-11-30"
+
+
+def test_asset_reactivation_explicitly_clears_disposal_date() -> None:
+    assert asset_update_payload(status="active") == {
+        "status": "active",
+        "depreciationDate": None,
+    }
+
+
+def test_conflicting_explicit_disposal_date_is_left_for_api_validation() -> None:
+    payload = asset_update_payload(status="active", disposal_date="2025-11-30")
+    assert payload["depreciationDate"] == "2025-11-30"
+
+
+def test_asset_tools_through_the_server_resolve_defaults() -> None:
+    """The MCP call path fills Field defaults; the payload must still be right."""
+    api = HarnessApi({"publicId": "asset-1"})
+
+    call_tool(
+        "create_asset",
+        {
+            "name": "Building",
+            "asset_type": "tangible",
+            "acquisition_date": "2021-03-15",
+            "depreciation_basis": 48000.0,
+            "useful_lifetime_months": 480,
+        },
+        api,
+    )
+    created = api.requests[-1][2]["json_data"]
+    assert created["date"] == "2021-03-15"
+    assert created["amountIncVat"] == 48000.0
+    assert created["useProfessionalPart"] == 1
+    assert "depreciationDate" not in created
+
+    call_tool("update_asset", {"asset_id": "asset-1", "status": "active"}, api)
+    assert api.requests[-1][2]["json_data"] == {"status": "active", "depreciationDate": None}
+
+    call_tool("update_asset", {"asset_id": "asset-1", "acquisition_date": "2025-07-01"}, api)
+    assert api.requests[-1][2]["json_data"] == {"date": "2025-07-01"}
 
 
 def test_storno_requires_confirmation() -> None:
