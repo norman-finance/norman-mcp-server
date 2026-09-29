@@ -178,16 +178,60 @@ class InvoiceChanges(DocumentFields):
     type: Literal["invoice", "quote", "delivery_note", "cancel", "credit_note"] | None = None
 
 
-class RecurringChanges(DocumentFields):
-    recurring_number: str | None = None
-    frequency_unit: int | None = None
-    frequency_type: Literal["weekly", "monthly"] | None = None
-    starts_from_date: str | None = None
-    ends_on_date: str | None = None
-    ends_on_invoice_count: int | None = None
-    is_ongoing: bool | None = None
+class RecurringChanges(ApiInput):
+    """Only supplied fields change. Changes apply to the invoices still to come."""
+
+    client: str | None = Field(default=None, description="Client public ID.")
+    invoice_type: Literal["SERVICES", "GOODS"] | None = None
+    invoiced_items: list[InvoiceItem] | None = None
+    currency: str | None = None
+    currency_exchanged: str | None = None
+    language: str | None = Field(default=None, description="Document language: en, de, pl, it or es.")
+    is_vat_included: bool | None = None
+    discount_percents: int | None = None
+    payment_terms: str | None = None
+    notes: str | None = None
+    instructions: str | None = None
+    message: str | None = None
+    tax_exempt_reason: str | None = Field(
+        default=None, max_length=500, description="Explicit null derives the VAT note per invoice; empty prints none.",
+    )
+    company_email: str | None = None
+    create_qr: bool | None = None
+    settings_on_overdue: OverdueSettings | None = None
+    mailing_data: MailingData | None = None
+    online_payment_enabled: bool | None = None
+    document_design: DocumentDesign | None = None
+    color_schema: str | None = None
+    font: str | None = None
+    source_contract: str | None = None
+    interval: Literal["week", "month", "year"] | None = None
+    interval_count: int | None = Field(default=None, ge=1, le=99)
+    starts_on: str | None = Field(default=None, description="First invoice date, YYYY-MM-DD.")
+    ends_on: str | None = Field(default=None, description="Last possible invoice date; explicit null removes it.")
+    ends_after: int | None = Field(default=None, ge=1, description="Number of invoices; explicit null removes it.")
     payment_due_days: int | None = Field(default=None, ge=0, le=365)
     billing_in_advance: bool | None = None
+    mode: Literal["draft", "issue", "send"] | None = Field(
+        default=None, description="draft: a draft for review; issue: issued, not sent; send: issued and emailed.",
+    )
+
+
+class RepeatRule(ApiInput):
+    """How an invoice repeats. It becomes the first of a series; Norman makes the next ones."""
+
+    interval: Literal["week", "month", "year"]
+    starts_on: str = Field(description="Date of the next invoice, YYYY-MM-DD: after this one, not before today.")
+    interval_count: int | None = Field(default=None, ge=1, le=99)
+    ends_on: str | None = Field(default=None, description="Last possible invoice date.")
+    ends_after: int | None = Field(default=None, ge=1, description="All invoices of the series, this one included.")
+    payment_due_days: int | None = Field(default=None, ge=0, le=365, description="Omit to keep this invoice's term.")
+    billing_in_advance: bool | None = None
+    mode: Literal["draft", "issue", "send"] | None = Field(
+        default=None,
+        description="draft (default): a draft for review; issue: issued, not sent; send: issued and emailed.",
+    )
+    mailing_data: MailingData | None = None
 
 
 class InvoiceSettings(ApiInput):

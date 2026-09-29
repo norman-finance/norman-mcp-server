@@ -118,12 +118,12 @@ def register_invoice_management_tools(mcp, enrich=None):
 
     @mcp.tool(title="Update Recurring Invoice", annotations=EDIT)
     async def update_recurring_invoice(ctx: Context, recurring_invoice_id: str, changes: RecurringChanges) -> dict:
-        """Update a recurring schedule, its lines, branding and future invoice settings.
+        """Update a recurring invoice: its template, its rule or its mode.
 
-        Only supplied fields change. Use explicit null to clear end conditions or
-        paymentDueDays. isOngoing=true removes end conditions. The API validates
-        the schedule and may regenerate pending children; issued children remain.
-        A partial documentDesign keeps the schedule's saved controls; changing its
+        Only supplied fields change. Use explicit null to remove endsOn or endsAfter;
+        with neither, the series runs until it is ended. Changes apply to the invoices
+        still to come; invoices already made stay as they are. An ended series cannot
+        change. A partial documentDesign keeps the series' saved controls; changing its
         template starts from that template's defaults.
         """
         patch = input_payload(changes, RecurringChanges)

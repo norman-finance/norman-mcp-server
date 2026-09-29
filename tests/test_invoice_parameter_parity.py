@@ -120,14 +120,25 @@ INVOICE = {
     "isToCreateTransaction": False,
     "paidAmount": 0,
 }
+# A series takes bank details and client data from the company and client on each date.
+NOT_ON_A_SERIES = {
+    "fullCostOriginExchanged",
+    "iban",
+    "bic",
+    "bankName",
+    "isToSend",
+    "skipBankDetails",
+    "saveClientDetails",
+    "clientData",
+    "companyData",
+}
 RECURRING = {
-    **COMMON,
-    "recurringNumber": "MCP-SERIES",
-    "frequencyType": "monthly",
-    "frequencyUnit": 2,
-    "startsFromDate": "2026-10-01",
-    "endsOnInvoiceCount": 5,
-    "isOngoing": False,
+    **{key: value for key, value in COMMON.items() if key not in NOT_ON_A_SERIES},
+    "interval": "month",
+    "intervalCount": 2,
+    "startsOn": "2026-10-01",
+    "endsAfter": 5,
+    "mode": "send",
     "paymentDueDays": 0,
     "billingInAdvance": True,
 }
@@ -140,7 +151,6 @@ def arguments(payload):
         "invoicedItems": "items",
         "sourceContract": "source_contract_id",
         "type": "document_type",
-        "recurringNumber": "invoice_number",
     }
     return {names.get(key, re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower()): value for key, value in payload.items()}
 
@@ -199,21 +209,21 @@ def test_partial_template_keeps_api_defaults(server, template, tool):
 @pytest.mark.parametrize("tool", ["create_invoice", "create_recurring_invoice"])
 def test_omitted_branding_inherits_and_does_not_send(server, tool):
     api = Api()
-    kwargs = {
-        "client_id": None,
-        "items": [{"name": "Service", "quantity": 1, "rate": 1000, "vatRate": 19}],
-        "invoice_number": "MCP-1",
-    }
-    if tool == "create_recurring_invoice":
-        kwargs.update(frequency_type="monthly", frequency_unit=1, starts_from_date="2026-10-01", is_ongoing=True)
+    kwargs = {"items": [{"name": "Service", "quantity": 1, "rate": 1000, "vatRate": 19}]}
+    if tool == "create_invoice":
+        kwargs.update(client_id=None, invoice_number="MCP-1")
+    else:
+        kwargs.update(client_id="client-1", interval="month", starts_on="2026-10-01")
     call(server, api, tool, **kwargs)
     data = api.requests[-1][2]["json_data"]
-    assert data["client"] is None
-    assert data["isToSend"] is False
     assert (
         not {"colorSchema", "font", "documentDesign", "onlinePaymentEnabled", "companyId", "companyEmail"} & data.keys()
     )
-    if tool == "create_recurring_invoice":
+    if tool == "create_invoice":
+        assert data["client"] is None
+        assert data["isToSend"] is False
+    else:
+        assert data["mode"] == "draft"
         assert (
             not {
                 "invoiceNumber",
@@ -224,10 +234,12 @@ def test_omitted_branding_inherits_and_does_not_send(server, tool):
                 "deliveryDate",
                 "type",
                 "isRecurring",
+                "isToSend",
+                "endsAfter",
+                "endsOn",
             }
             & data.keys()
         )
-        assert not {"endsOnInvoiceCount", "endsOnDate"} & data.keys()
 
 
 @pytest.mark.parametrize(

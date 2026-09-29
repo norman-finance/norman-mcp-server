@@ -55,10 +55,9 @@ def proposal():
                 {"name": "Service", "quantity": "1.5", "rate": "1250.50", "vatRate": 19}
             ],
             "isRecurring": True,
-            "isOngoing": True,
-            "frequencyType": "monthly",
-            "frequencyUnit": 1,
-            "startsFromDate": "2026-10-01",
+            "interval": "month",
+            "intervalCount": 1,
+            "startsOn": "2026-10-01",
             "paymentDueDays": 14,
             "billingInAdvance": True,
         },
@@ -78,7 +77,7 @@ def test_prepare_does_not_create_and_returns_minor_unit_arguments(proposal):
     assert arguments["items"][0]["rate"] == 125050
     assert arguments["items"][0]["quantity"] == 1.5
     assert arguments["source_contract_id"] == "contract-1"
-    assert arguments["is_to_send"] is False
+    assert arguments["mode"] == "draft"
     assert arguments["payment_due_days"] == 14
     assert arguments["billing_in_advance"] is True
 
@@ -86,16 +85,16 @@ def test_prepare_does_not_create_and_returns_minor_unit_arguments(proposal):
 def test_reviewed_recurring_creation_keeps_contract_and_has_no_artificial_end(proposal):
     arguments = invoice_arguments_from_contract(proposal)
     api = Api({"publicId": "invoice-1"})
-    call("create_recurring_invoice", api, invoice_number="2026-1", **arguments)
+    call("create_recurring_invoice", api, **arguments)
     data = api.requests[-1][2]["json_data"]
     assert data["invoicedItems"][0]["rate"] == 125050
     assert data["sourceContract"] == "contract-1"
-    assert data["isOngoing"] is True
+    assert (data["interval"], data["intervalCount"], data["startsOn"]) == ("month", 1, "2026-10-01")
     assert data["paymentDueDays"] == 14
     assert data["billingInAdvance"] is True
-    assert data["isToSend"] is False
-    assert "endsOnInvoiceCount" not in data
-    assert "endsOnDate" not in data
+    assert data["mode"] == "draft"
+    assert "endsAfter" not in data
+    assert "endsOn" not in data
 
 
 def test_one_off_arguments_are_accepted_by_create_invoice(proposal):
@@ -122,12 +121,12 @@ def test_prepare_requires_one_source_and_selected_company():
     assert not api.requests
 
 
-def test_cancel_stops_the_selected_series_through_the_company_endpoint():
-    api = Api({"publicId": "series-1", "lifeCycleStatus": "cancelled"})
-    result = call("cancel_recurring_invoice", api, recurring_invoice_id="series-1")
-    assert result["lifeCycleStatus"] == "cancelled"
+def test_end_stops_the_selected_series_through_the_company_endpoint():
+    api = Api({"publicId": "series-1", "status": "ended"})
+    result = call("end_recurring_invoice", api, recurring_invoice_id="series-1")
+    assert result["status"] == "ended"
     assert api.requests == [(
         "POST",
-        "https://api.norman.finance/api/v1/companies/company-1/recurring-invoices/series-1/cancel/",
+        "https://api.norman.finance/api/v1/companies/company-1/recurring-invoices/series-1/end/",
         {},
     )]
