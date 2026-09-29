@@ -516,18 +516,21 @@ def register_invoice_tools(mcp):
     async def list_recurring_invoices(
         ctx: Context,
         status: Optional[Literal["active", "paused", "ended"]] = None,
+        page_size: int = 100,
     ) -> Dict[str, Any]:
         """
         List the company's recurring invoices with client, amount, rule, mode, status and nextRunOn.
 
         Args:
             status: Only series in this status
+            page_size: Series per page (up to 1000); count in the result says how many there are
         """
         api = ctx.request_context.lifespan_context["api"]
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
         url = urljoin(config.api_base_url, f"api/v1/companies/{api.company_id}/recurring-invoices/")
-        return await api.arequest("GET", url, params={"status": status} if status else None)
+        params = {"page_size": page_size, **({"status": status} if status else {})}
+        return await api.arequest("GET", url, params=params)
 
     async def _series_action(ctx: Context, series_id: str, action: str) -> Dict[str, Any]:
         api = ctx.request_context.lifespan_context["api"]
