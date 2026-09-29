@@ -35,6 +35,8 @@
 
 **Automation rules** — "Always book Telekom to Internet costs": preview, create, and manage rules that categorize matching transactions automatically
 
+**Workflows** — "Close August for me": Norman runs month-end close, bank reconciliation, VAT-return readiness, invoice-to-payment and client document requests on its own servers, stops only to ask you something, and can run them by itself every month; answer its questions and see what the agents did this week from your AI client
+
 **Client Management** — Maintain your client database and contact details
 
 **Products & Services** — Keep a catalog of what you sell, with prices, VAT rates and units, and fill invoice lines from it
@@ -384,6 +386,7 @@ Ready-to-use skills compatible with **Claude Code**, **OpenClaw**, and the [Agen
 | `expense-report` | Expense breakdown by category, top vendors, and trends |
 | `tax-deduction-finder` | Scan transactions for missed deductions and suggest fixes |
 | `monthly-reconciliation` | Full monthly close — transactions, invoices, receipts, and taxes |
+| `run-workflow` | Start a Norman workflow, answer its questions, and schedule it to run by itself |
 | `company-incorporation` | Found a German GmbH/UG — data, documents, name check, and notary hand-off |
 
 <br/>

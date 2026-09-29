@@ -13,6 +13,7 @@ def test_shared_endpoint_retains_auth_and_full_tool_inventory():
     assert {
         "pay_bill",
         "toggle_agent",
+        "start_workflow",
         "set_corporate_people",
         "add_incorporation_shareholder",
     } <= tools.keys()
