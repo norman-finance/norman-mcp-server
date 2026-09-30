@@ -413,6 +413,10 @@
           status = document.querySelector("#status"),
           freshness = document.querySelector("#freshness");
         const POLL_MS = 30000;
+        function say(text, error = false) {
+          status.textContent = error ? stripUrls(text) : text;
+          status.className = error ? "error" : "";
+        }
         const REVIEW_CHANGED =
           "This approval changed. Review the current values and confirm again.";
         const stable = (x) =>
@@ -509,10 +513,7 @@
           if (state.consent !== reviewKey(next)) state.consent = "";
           state.detail = next;
           state.reviewStale = false;
-          if (changedReview) {
-            status.textContent = REVIEW_CHANGED;
-            status.className = "";
-          }
+          if (changedReview) say(REVIEW_CHANGED);
         }
         function setInbox(next) {
           if (
@@ -536,9 +537,7 @@
             state.consent = "";
             state.answer = "";
             state.contexts.clear();
-            status.textContent =
-              "Company changed. Select a decision to review.";
-            status.className = "";
+            say("Company changed. Select a decision to review.");
           }
           state.data = next;
           state.lastCheck = Date.now();
@@ -555,11 +554,53 @@
                 "'": "&#39;",
               })[c],
           );
-        const object = (x) => {
-          if (x?.isError)
-            throw Error(
-              x.content?.[0]?.text || "Norman could not complete the request.",
+        // Error text may embed the API URL ("... for url: https://...").
+        const stripUrls = (text) =>
+          String(text ?? "")
+            .replace(/\s*\b(?:for|with) url\b:?\s*['"]?[^\s'"]*['"]?/gi, "")
+            .replace(
+              /\s*(?:\(\s*https?:\/\/[^\s)]*\s*\)|https?:\/\/[^\s)'"]*)/gi,
+              "",
+            )
+            .replace(/\s*For more information check:?/gi, "")
+            .replace(/\s+([.,;:!?])/g, "$1")
+            .replace(/\s{2,}/g, " ")
+            .trim();
+        const words = (x) =>
+          typeof x === "string"
+            ? x
+            : Array.isArray(x) &&
+                x.length &&
+                x.every((v) => typeof v === "string")
+              ? x.join(" ")
+              : "";
+        // Tool errors are {error, detail?: string | {detail?, message?, code?}}.
+        // Prefer the API's own words; skip markup such as proxy error pages.
+        function explain(d) {
+          const detail = d?.detail,
+            specific = stripUrls(
+              detail && typeof detail === "object" && !Array.isArray(detail)
+                ? words(detail.detail) || words(detail.message)
+                : words(detail),
             );
+          return (
+            (specific.length <= 300 && !/<[a-z!/]/i.test(specific)
+              ? specific
+              : "") ||
+            stripUrls(words(d?.error)) ||
+            "Norman could not complete the request."
+          );
+        }
+        const problem = (d) => Error(explain(d));
+        const object = (x) => {
+          if (x?.isError) {
+            const text = x.content?.find?.((v) => v.type === "text")?.text;
+            let d = null;
+            try {
+              d = JSON.parse(text);
+            } catch {}
+            throw problem(d?.error ? d : { error: text });
+          }
           let d = x?.structuredContent;
           if (!d) {
             const t = x?.content?.find((v) => v.type === "text")?.text;
@@ -570,7 +611,7 @@
             }
           }
           if (d?.result && Object.keys(d).length === 1) d = d.result;
-          if (d?.error) throw Error(d.error);
+          if (d?.error) throw problem(d);
           return d;
         };
         function rpc(method, params, timeout = 30000) {
@@ -625,17 +666,14 @@
           state.busy = true;
           stopPolling();
           syncControls();
-          status.className = "";
-          status.textContent = "Working…";
+          say("Working…");
           try {
             await fn(revision);
             guard(revision);
-            status.textContent = "Updated from Norman.";
+            say("Updated from Norman.");
           } catch (e) {
-            if (e.name !== "StaleResponse" && !state.disposed) {
-              status.textContent = e.message;
-              status.className = "error";
-            }
+            if (e.name !== "StaleResponse" && !state.disposed)
+              say(e.message, true);
           } finally {
             state.busy = false;
             syncControls();
@@ -732,10 +770,8 @@
           try {
             await refresh();
           } catch (error) {
-            if (error.name !== "StaleResponse" && !state.disposed) {
-              status.textContent = `Could not refresh: ${error.message}`;
-              status.className = "error";
-            }
+            if (error.name !== "StaleResponse" && !state.disposed)
+              say(`Could not refresh: ${error.message}`, true);
           } finally {
             schedulePolling(state.refreshWanted ? 0 : POLL_MS);
           }
@@ -825,7 +861,7 @@
             set_payment_type: ["paymentType"],
             mark_verified: ["userStatus"],
           };
-          return `<h2>${esc(e.ruleName || e.rule?.name || "Automation approval")}</h2><p>${esc(e.transaction?.description || "")}</p><div class="tag">${esc(human(e.status))}</div>${d.currentUnavailable ? '<p class="error">Current transaction values are unavailable. Discuss this in chat before deciding.</p>' : ""}${state.reviewStale ? '<p class="error">Latest review unavailable. Refresh before confirming.</p>' : ""}<table><thead><tr><th>Action</th><th>Current</th><th>Proposed</th></tr></thead><tbody>${actions.map((a) => `<tr><td>${esc(labels[a.type] || a.type.replaceAll("_", " "))}</td><td>${keys[a.type] && before ? keys[a.type].map((k) => value(before[k])).join("<br>") : "—"}</td><td>${proposed(a)}</td></tr>`).join("")}</tbody></table>${!actions.length ? '<p class="muted">No planned actions returned.</p>' : ""}<p class="notice">Approval executes the full action list. Actions may send messages or affect payments when listed above.</p><div class="row"><button id="approval-ask">Explain in chat</button></div>${d.canApprove && actions.length && !d.currentUnavailable ? '<label class="confirm"><input type="checkbox" id="confirm"> <span>I reviewed every listed action and approve this execution.</span></label><div class="row"><button class="primary" id="approve" disabled>Approve execution</button></div>' : ""}${d.canApprove ? '<button id="dismiss">Dismiss</button>' : ""}${["success", "partial"].includes(e.status) && !e.revertedAt ? '<button id="undo">Undo execution</button>' : ""}${e.error ? `<p class="error">${esc(e.error)}</p>` : ""}${e.actionsResult?.length ? `<h3>Actual result</h3><table><tbody>${e.actionsResult.map((a) => `<tr><td>${esc(labels[a.type] || a.type || "Action")}</td><td>${esc(human(a.status) || "Result returned")}${a.detail ? `<br>${esc(a.detail)}` : ""}</td></tr>`).join("")}</tbody></table>` : ""}`;
+          return `<h2>${esc(e.ruleName || e.rule?.name || "Automation approval")}</h2><p>${esc(e.transaction?.description || "")}</p><div class="tag">${esc(human(e.status))}</div>${d.currentUnavailable ? '<p class="error">Current transaction values are unavailable. Discuss this in chat before deciding.</p>' : ""}${state.reviewStale ? '<p class="error">Latest review unavailable. Refresh before confirming.</p>' : ""}<table><thead><tr><th>Action</th><th>Current</th><th>Proposed</th></tr></thead><tbody>${actions.map((a) => `<tr><td>${esc(labels[a.type] || a.type.replaceAll("_", " "))}</td><td>${keys[a.type] && before ? keys[a.type].map((k) => value(before[k])).join("<br>") : "—"}</td><td>${proposed(a)}</td></tr>`).join("")}</tbody></table>${!actions.length ? '<p class="muted">No planned actions returned.</p>' : ""}<p class="notice">Approval executes the full action list. Actions may send messages or affect payments when listed above.</p><div class="row"><button id="approval-ask">Explain in chat</button></div>${d.canApprove && actions.length && !d.currentUnavailable ? '<label class="confirm"><input type="checkbox" id="confirm"> <span>I reviewed every listed action and approve this execution.</span></label><div class="row"><button class="primary" id="approve" disabled>Approve execution</button></div>' : ""}${d.canApprove ? '<button id="dismiss">Dismiss</button>' : ""}${["success", "partial"].includes(e.status) && !e.revertedAt ? '<button id="undo">Undo execution</button>' : ""}${e.error ? `<p class="error">${esc(stripUrls(e.error))}</p>` : ""}${e.actionsResult?.length ? `<h3>Actual result</h3><table><tbody>${e.actionsResult.map((a) => `<tr><td>${esc(labels[a.type] || a.type || "Action")}</td><td>${esc(human(a.status) || "Result returned")}${a.detail ? `<br>${esc(stripUrls(a.detail))}` : ""}</td></tr>`).join("")}</tbody></table>` : ""}`;
         }
         function render() {
           const d = state.data;
@@ -1059,7 +1095,7 @@
             state.refreshWanted = true;
             schedulePolling(0);
           } catch (err) {
-            status.textContent = err.message;
+            say(err.message, true);
           }
         }
         const reply = (id, body) =>

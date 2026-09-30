@@ -25,6 +25,7 @@ async function fixture(width = 1100, { clock = false } = {}) {
   await page.evaluate(() => {
     window.calls = [];
     window.mode = "";
+    window.hooks = {};
     window.holdNames = [];
     window.held = [];
     window.release = () => {
@@ -125,6 +126,7 @@ async function fixture(width = 1100, { clock = false } = {}) {
           window.detail.canApprove = false;
           window.detail.execution.status = "dismissed";
         }
+        if (window.hooks[name]) result = window.hooks[name](args);
         result = { structuredContent: structuredClone(result), content: [] };
         if (window.holdNames.includes(name)) {
           window.held.push({ target: e.source, id: m.id, result });
@@ -210,6 +212,19 @@ async function flush(page) {
           channel.port2.postMessage(null);
         }),
     );
+}
+async function settled(page) {
+  // Real-time wait for tests without a fake clock: the action finished.
+  await page
+    .frames()[1]
+    .waitForFunction(
+      () =>
+        !window.__inboxTestState.busy &&
+        window.__inboxTestState.pending.size === 0,
+    );
+  return page
+    .frames()[1]
+    .evaluate(() => document.querySelector("#status").textContent);
 }
 async function mutations(page) {
   return page.evaluate(() =>
@@ -870,6 +885,85 @@ test("host without ui/initialize renders window.openai tool output and polls thr
     assert.deepEqual(
       await page.evaluate(() => window.calls.map((call) => call.method)),
       ["ui/initialize", "ui/notifications/initialized"],
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("tool errors show the API's own message and never a raw URL", async () => {
+  const { page, ui, errors } = await fixture();
+  try {
+    const api = "https://api.norman.finance/api/v1";
+    for (const [result, message] of [
+      [
+        {
+          error: `Request failed: 404 Client Error: Not Found for url: ${api}/accounting/rule-executions/?page=9`,
+          detail: { detail: "Invalid page." },
+        },
+        "Invalid page.",
+      ],
+      [
+        {
+          error: `Request failed: 409 Client Error: Conflict for url: ${api}/assistant/workflow-runs/`,
+          detail: { message: "Norman is busy. Try again shortly.", code: "busy" },
+        },
+        "Norman is busy. Try again shortly.",
+      ],
+      [
+        {
+          error: `Request failed: 400 Client Error: Bad Request for url: ${api}/x/`,
+          detail: "Page size must be positive.",
+        },
+        "Page size must be positive.",
+      ],
+      [
+        {
+          error: `Request failed: 502 Server Error: Bad Gateway for url: ${api}/x/`,
+          detail: "<html><body><h1>502 Bad Gateway</h1></body></html>",
+        },
+        "Request failed: 502 Server Error: Bad Gateway",
+      ],
+      [
+        { error: `Norman is unavailable (${api.replace("/api/v1", "")}/status).` },
+        "Norman is unavailable.",
+      ],
+    ]) {
+      await page.evaluate(
+        (result) => (window.hooks.get_norman_inbox_data = () => result),
+        result,
+      );
+      await ui.getByRole("button", { name: "Refresh", exact: true }).click();
+      // The Refresh action or a follow-up poll may report the failure.
+      assert.equal(
+        (await settled(page)).replace(/^Could not refresh: /, ""),
+        message,
+      );
+    }
+    await page.evaluate((api) => {
+      delete window.hooks.get_norman_inbox_data;
+      window.detail.execution.error = `Vendor lookup failed for url: ${api}/vendors/0f9e8d7c/`;
+      window.hooks.approve_rule_execution = () => ({
+        error: `Request failed: 400 Client Error: Bad Request for url: ${api}/accounting/rule-executions/approval-1/approve/`,
+        detail: { detail: "This execution is no longer awaiting review." },
+      });
+    }, api);
+    await ui.getByRole("button", { name: "Review changes" }).click();
+    await settled(page);
+    assert.equal(
+      await ui.locator("aside p.error").innerText(),
+      "Vendor lookup failed",
+    );
+    await ui.locator("#confirm").check();
+    await ui.getByRole("button", { name: "Approve execution" }).click();
+    assert.equal(
+      await settled(page),
+      "This execution is no longer awaiting review.",
+    );
+    assert.doesNotMatch(
+      await page.frames()[1].evaluate(() => document.body.innerText),
+      /https?:|for url/i,
     );
     assert.deepEqual(errors, []);
   } finally {
