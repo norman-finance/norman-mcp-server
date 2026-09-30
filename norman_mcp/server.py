@@ -105,18 +105,23 @@ def _flexible_validate_redirect_uri(self, redirect_uri):
     Note: we deliberately do NOT trust the client's own registered redirect_uris
     here — with open Dynamic Client Registration an attacker controls that list,
     so the only meaningful check is the server-level allow-list above.
+
+    That includes the RFC 6749 fallback for a request that omits redirect_uri:
+    the client's single registered URI is attacker-controlled too, so it gets
+    exactly the same allow-list check as an explicit one. Returning it unchecked
+    let a self-registered client receive a victim's authorization code.
     """
-    if redirect_uri is not None:
-        uri_str = str(redirect_uri)
-        if is_allowed_redirect_uri(uri_str):
-            return redirect_uri
-        raise InvalidRedirectUriError(f"redirect_uri not allowed: {uri_str}")
-    elif self.redirect_uris is not None and len(self.redirect_uris) == 1:
-        return self.redirect_uris[0]
-    else:
-        raise InvalidRedirectUriError(
-            "redirect_uri must be specified when client has multiple registered URIs"
-        )
+    if redirect_uri is None:
+        if self.redirect_uris is not None and len(self.redirect_uris) == 1:
+            redirect_uri = self.redirect_uris[0]
+        else:
+            raise InvalidRedirectUriError(
+                "redirect_uri must be specified when client has multiple registered URIs"
+            )
+    uri_str = str(redirect_uri)
+    if is_allowed_redirect_uri(uri_str):
+        return redirect_uri
+    raise InvalidRedirectUriError(f"redirect_uri not allowed: {uri_str}")
 
 OAuthClientInformationFull.validate_redirect_uri = _flexible_validate_redirect_uri
 
@@ -239,8 +244,10 @@ async def lifespan(app):
     if transport == "stdio":
         await authenticate_with_credentials(api_client)
     else:
-        # SDK 2 runs lifespan once per server, outside an authenticated request.
-        # Identity must be resolved when tools run, never from startup state.
+        # Streamable HTTP enters this lifespan once per process, outside any
+        # request; SSE enters it once per connection. Either way identity must
+        # be resolved when tools run, never from startup state, and nothing
+        # process-wide may be started or stopped here without a transport check.
         api_client.token_source = "oauth"
         from norman_mcp.context import get_api_token
         token = get_api_token()
@@ -335,9 +342,15 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
         auth=auth_settings,
         extensions=[Apps()],
         subscriptions=live_bus,
-        debug=True,
+        # Starlette debug mode returns full tracebacks to HTTP clients; keep it
+        # opt-in for local debugging only.
+        debug=os.environ.get("NORMAN_MCP_DEBUG") == "1",
     )
     
+    # SDK 2 bounds subscriptions/listen only process-wide; bound it per connection.
+    from norman_mcp.security.listen_limits import ListenLimits
+    server.middleware.append(ListenLimits())
+
     server._transport = transport_type
     server._http_options = {
         "host": host,

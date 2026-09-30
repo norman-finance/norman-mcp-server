@@ -1,0 +1,191 @@
+name: deploy-dev
+
+# Build any branch, tag or commit into the pre-release image and roll it out to
+# https://mcp-dev.norman.finance, which talks to the sandbox API
+# (norman-devops: roles/swarm-manager/stacks/develop/mcp-dev.yml).
+#
+# Production is untouched: ci.yml still deploys only from main.
+#
+# Run it from the Actions tab ("Run workflow" on main, then enter the ref), or:
+#   gh workflow run deploy-dev.yml -f ref=<branch-or-sha>
+# The ref does not need to contain this file, so open PRs can be deployed as-is.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or commit SHA to deploy to mcp-dev
+        required: true
+        default: main
+      deploy:
+        description: Roll the image out (untick to only build and push it)
+        type: boolean
+        default: true
+  push:
+    branches:
+      - develop
+
+# One rollout at a time; a newer request waits instead of cancelling a rollout
+# that is already touching the service.
+concurrency:
+  group: deploy-mcp-dev
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository_owner == 'norman-finance'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      sha: ${{ steps.rev.outputs.sha }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: resolve commit
+        id: rev
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: set up buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: login to ghcr
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Separate image name, like the other *-develop images: a dev build can
+      # never become production's :latest.
+      - name: build dev image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/norman-finance/norman-mcp-server-develop:latest
+            ghcr.io/norman-finance/norman-mcp-server-develop:${{ steps.rev.outputs.sha }}
+          build-args: |
+            RELEASE=${{ steps.rev.outputs.sha }}
+          cache-from: type=gha,scope=mcp-dev
+          cache-to: type=gha,mode=max,scope=mcp-dev
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push' || inputs.deploy
+    runs-on: ubuntu-latest
+    # No checkout here: the job that holds the deploy key runs only this file's
+    # own script, never code from the ref being deployed.
+    steps:
+      - name: update mcp-dev image
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: root
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -eu
+            service="norman-dev_mcp"
+            image="ghcr.io/norman-finance/norman-mcp-server-develop:${{ needs.build.outputs.sha }}"
+
+            if ! docker service inspect "$service" >/dev/null 2>&1; then
+              echo "$service does not exist. Deploy norman-devops (stacks/develop/mcp-dev.yml) first," >&2
+              echo "or re-run with deploy unticked to only push the image." >&2
+              exit 1
+            fi
+
+            diagnostics() {
+              # Never print the full service spec: it contains runtime
+              # environment variables and can expose credentials in CI logs.
+              docker service inspect "$service" \
+                --format 'UpdateStatus={{if .UpdateStatus}}{{.UpdateStatus.State}}: {{.UpdateStatus.Message}}{{else}}unknown{{end}}' || true
+              docker service inspect "$service" \
+                --format 'Image={{.Spec.TaskTemplate.ContainerSpec.Image}}' || true
+              docker service ps "$service" --no-trunc || true
+              docker service logs "$service" --tail 200 || true
+            }
+
+            docker service update "$service" --image "$image" --with-registry-auth
+
+            # Same convergence check as the production deploy in ci.yml: wait for
+            # the terminal UpdateStatus and fail on any rollback.
+            state="unknown"
+            attempt=0
+            while [ "$attempt" -lt 60 ]; do
+              state=$(docker service inspect "$service" \
+                --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{else}}unknown{{end}}' 2>/dev/null || echo unknown)
+
+              case "$state" in
+                completed)
+                  break
+                  ;;
+                rollback_started|rollback_paused|rollback_completed|paused)
+                  echo "Deployment entered a failure state: $state" >&2
+                  diagnostics
+                  exit 1
+                  ;;
+              esac
+
+              attempt=$((attempt + 1))
+              sleep 2
+            done
+
+            running_image=$(docker service inspect "$service" --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}')
+
+            if [ "$state" != "completed" ]; then
+              echo "Deployment did not reach completed state within 120 seconds: $state" >&2
+              diagnostics
+              exit 1
+            fi
+
+            case "$running_image" in
+              "$image"|"$image"@*) ;;
+              *)
+                echo "Deployment image mismatch: expected $image, running $running_image" >&2
+                diagnostics
+                exit 1
+                ;;
+            esac
+
+      # From outside, through Cloudflare: OAuth discovery must answer and /mcp
+      # must demand a token. Catches a wrong route, a dead container or an app
+      # that came up without auth.
+      - name: smoke test
+        run: |
+          set -eu
+          base="https://mcp-dev.norman.finance"
+          code=000
+          for attempt in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$base/.well-known/oauth-authorization-server" || true)
+            [ "$code" = 200 ] && break
+            sleep 5
+          done
+          if [ "$code" != 200 ]; then
+            echo "OAuth discovery returned $code, expected 200" >&2
+            exit 1
+          fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$base/mcp" \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"deploy-dev-smoke","version":"1"}}}' || true)
+          if [ "$code" != 401 ]; then
+            echo "/mcp without a token returned $code, expected 401" >&2
+            exit 1
+          fi
+
+      - name: summary
+        # Through env, never interpolated into the script: the ref is free text.
+        env:
+          DEPLOYED_REF: ${{ inputs.ref || github.ref_name }}
+          DEPLOYED_SHA: ${{ needs.build.outputs.sha }}
+        run: |
+          {
+            echo "### mcp-dev deployed"
+            printf -- '- ref: `%s`\n' "$DEPLOYED_REF"
+            printf -- '- commit: `%s`\n' "$DEPLOYED_SHA"
+            echo "- url: https://mcp-dev.norman.finance/mcp (sandbox API)"
+          } >> "$GITHUB_STEP_SUMMARY"
