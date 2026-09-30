@@ -24,7 +24,7 @@ Help the user manage overdue invoices and send payment reminders:
 ## Step 2: Check what Norman already sent
 - Call `list_invoice_emails` for each overdue invoice. It lists every reminder with its level and status, and `nextReminder`, the reminder Norman's own rule sends next
 - Leave out an invoice with a planned reminder (`nextReminder`, or an email with status `scheduled`) or a reminder sent in the last few days, unless the user asks for it by name
-- An invoice with `autoReminders` true and `remindersPaused` not true is reminded automatically by the company's rule. Say so instead of sending by hand
+- An invoice with `remindersActive` true is reminded automatically by the company's rule. Say so instead of sending by hand
 
 ## Step 3: Levels
 Norman keeps the reminder levels; a reminder sent by hand takes the level after the last one:
@@ -42,7 +42,8 @@ For each overdue invoice (or batch per client):
 - Use `send_invoice_overdue_reminder` for each approved reminder
 - Wait for user confirmation before each send
 - Omit `subject` and `body`: Norman uses the company's template for that level in the invoice's language. Write your own text only when the user asks for it
-- Pass `fee` only when the user names a dunning fee
+- Pass `fee` only when the user names a dunning fee. The client pays a fee by bank transfer; a reminder with a fee has no online payment button
+- A send that fails returns an error with the reason. Report it; do not say the reminder went out
 
 ## Automatic reminders
 - To let Norman remind on its own, call `update_invoice` with `autoReminders: true`, after the user agreed. This also works for an invoice that is already issued. `remindersPaused: true` stops them for one invoice

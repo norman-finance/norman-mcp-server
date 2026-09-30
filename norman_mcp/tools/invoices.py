@@ -671,7 +671,8 @@ def register_invoice_tools(mcp):
             custom_client_email: Replaces the client's address for this email
 
         Returns:
-            The sent text and the email record with its delivery status
+            The sent text and the email record. email.status is "sent", or "queued" while Norman retries.
+            A send that fails at once returns an error with the reason; nothing reached the client.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -731,7 +732,8 @@ def register_invoice_tools(mcp):
             custom_client_email: Replaces the client's address for this email
 
         Returns:
-            The sent text, the reminder level and the email record with its delivery status
+            The sent text, the reminder level and the email record. email.status is "sent", or "queued" while
+            Norman retries. A send that fails at once returns an error with the reason.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id

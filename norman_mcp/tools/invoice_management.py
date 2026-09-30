@@ -66,7 +66,8 @@ def _register_email_tools(mcp):  # noqa: ANN001, ANN202
         Each email has its kind (document or reminder), level, recipients (to, cc),
         status (scheduled, queued, sent, delivered, delayed, bounced, complained,
         failed, cancelled) and viewedAt, the moment the client opened the page.
-        nextReminder is what the company's reminder rule sends next, or null.
+        nextReminder is what the company's reminder rule sends next, or null. The invoice's
+        remindersActive says whether Norman reminds by itself at all right now.
         viewUrl is the page the client opens. Check this before sending a reminder
         by hand, so the client does not get two.
         """
@@ -102,6 +103,8 @@ def _register_email_tools(mcp):  # noqa: ANN001, ANN202
         Reminders go out on working days and stop once the invoice is paid or
         cancelled. Supply reminderSteps as all four levels; read them first and
         change only what the user asked for. Automatic reminders need a paid plan.
+        A step's fee is shown in the reminder and paid by bank transfer; an email
+        with a fee has no online payment button.
         """
         patch = input_payload(changes, EmailSettings)
         if not patch:
