@@ -14,7 +14,8 @@ from pydantic import Field
 from norman_mcp import config
 from norman_mcp.context import Context, set_api_company_id
 
-INBOX_URI = "ui://norman/inbox-v1.html"
+# Bump when the HTML changes: hosts cache widget templates by URI.
+INBOX_URI = "ui://norman/inbox-v2.html"
 READ = ToolAnnotations(
     read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False
 )

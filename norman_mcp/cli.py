@@ -105,7 +105,9 @@ def main():
         if transport == "streamable-http":
             import uvicorn
             cors_app = create_cors_app(mcp)
-            uvicorn.run(cors_app, host=args.host, port=args.port)
+            # Long-lived subscription streams would otherwise hold shutdown open
+            # until their leases expire, past the orchestrator's kill timeout.
+            uvicorn.run(cors_app, host=args.host, port=args.port, timeout_graceful_shutdown=10)
         else:
             # For stdio and sse, use the standard run method
             mcp.run(transport=args.transport, **({"host": args.host, "port": args.port} if args.transport == "sse" else {}))

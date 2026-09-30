@@ -28,6 +28,9 @@ class Provider:
     def get_norman_token(self, token):
         return self.mapping.get(token)
 
+    def refresh_norman_token_sync(self, token):
+        return None  # tests that need a refresh set their own
+
     def get_company_for_token(self, token):
         return self.companies.get(token)
 
@@ -195,7 +198,7 @@ async def test_revoke_during_awaited_observation_and_read_fails_closed(setup, mo
     received = []
     service.bus.subscribe(received.append)
 
-    async def revoke(_api, _page):
+    async def revoke(_api, _page, **_kwargs):
         provider.mapping.pop("alice", None)
         await asyncio.sleep(0)
         return {"companyId": "company-a", "summary": {"approvals": 999}}, False
@@ -249,7 +252,7 @@ def test_pinned_client_never_falls_back_to_ambient_or_env_credentials(setup, mon
 async def test_shutdown_during_open_does_not_recreate_watch(setup, monkeypatch):
     service, provider, current, api = setup
 
-    async def shutdown(_api, _page):
+    async def shutdown(_api, _page, **_kwargs):
         service.close()
         await asyncio.sleep(0)
         return {"summary": {}, "unavailable": []}, False
@@ -373,3 +376,114 @@ async def test_canceled_native_http_read_stops_its_transport(monkeypatch):
     with pytest.raises(asyncio.CancelledError):
         await task
     assert stopped.is_set()
+
+
+# --- Regression tests for the review of #149 ---------------------------------
+
+
+@pytest.mark.asyncio
+async def test_expired_norman_token_is_refreshed_through_the_watch_grant(monkeypatch):
+    import httpx
+
+    provider = Provider()
+    refreshed = []
+
+    def refresh(token):
+        refreshed.append(token)
+        provider.mapping[token] = "norman-alice-2"
+        return "norman-alice-2"
+
+    provider.refresh_norman_token_sync = refresh
+    watch = inbox_live.Watch(
+        "uri", "alice", "client", "company-a", "company-a", 1, time.time() + 300, "hash"
+    )
+
+    def handle(request):
+        if request.headers["Authorization"] == "Bearer norman-alice":
+            return httpx.Response(401, json={"detail": "expired"})
+        return httpx.Response(200, json={"runs": []})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handle))
+    result = await PinnedAPI(provider, watch, client).arequest(
+        "GET", "https://api.norman.finance/api/v1/assistant/workflow-runs/"
+    )
+    assert result == {"runs": []}
+    assert refreshed == ["alice"]  # the watch's own grant
+
+
+@pytest.mark.asyncio
+async def test_lease_company_is_resolved_off_the_event_loop(setup):
+    import threading
+
+    service, provider, current, api = setup
+    threads = []
+
+    class ThreadAwareAPI(API):
+        @property
+        def company_id(self):
+            threads.append(threading.current_thread())
+            return "company-a"
+
+    await service.open(ThreadAwareAPI(), 1)
+    assert threads and threading.main_thread() not in threads
+
+
+@pytest.mark.asyncio
+async def test_one_token_cannot_hold_every_snapshot_read(setup, monkeypatch):
+    service, provider, current, api = setup
+    uri = (await service.open(api, 1))["resourceUri"]
+    release = asyncio.Event()
+    original = inbox_live.load_inbox
+
+    async def slow(observed, page):
+        await release.wait()
+        return await original(observed, page)
+
+    monkeypatch.setattr(inbox_live, "load_inbox", slow)
+    held = [asyncio.create_task(service.read(uri, api)) for _ in range(inbox_live.MAX_READS_PER_TOKEN)]
+    await asyncio.sleep(0.05)
+    with pytest.raises(MCPError, match="busy"):
+        await service.read(uri, api)
+    release.set()
+    await asyncio.gather(*held)
+    assert not service._reads
+
+
+@pytest.mark.asyncio
+async def test_listen_gate_surfaces_sdk_errors_instead_of_an_exception_group(setup):
+    service, provider, current, api = setup
+    uri = (await service.open(api, 1))["resourceUri"]
+
+    async def refused(_ctx):
+        raise MCPError(-32603, "Subscription limit reached")
+
+    ctx = SimpleNamespace(
+        method="subscriptions/listen",
+        params={"notifications": {"resourceSubscriptions": [uri]}},
+        lifespan_context={"api": api},
+        request_id=7,
+    )
+    with pytest.raises(MCPError, match="Subscription limit reached") as exc:
+        await service.gate(ctx, refused)
+    assert exc.value.code == -32603
+    assert service.listeners == 0
+
+
+@pytest.mark.parametrize("transport, enabled", [("streamable-http", True), ("sse", False)])
+def test_live_inbox_only_runs_on_streamable_http(monkeypatch, tmp_path, transport, enabled):
+    import norman_mcp.auth.provider as provider_module
+    import norman_mcp.context as context_module
+    from norman_mcp.server import create_app
+
+    monkeypatch.setattr(provider_module, "_STATE_FILE", str(tmp_path / "oauth.json"))
+    monkeypatch.setattr(context_module, "oauth_provider", context_module.oauth_provider)
+    monkeypatch.setattr(context_module, "_api_client", context_module._api_client)
+    monkeypatch.setenv("NORMAN_MCP_INBOX_LIVE", "1")
+    monkeypatch.delenv("NORMAN_MCP_EVENTS_DB", raising=False)
+    monkeypatch.delenv("NORMAN_MCP_EVENTS_KEY", raising=False)
+
+    server = create_app(transport=transport)
+
+    # SSE enters the lifespan once per connection; a process-wide observer there
+    # would multiply per client and close for everyone on the first disconnect.
+    assert (getattr(server, "_inbox_live", None) is not None) is enabled

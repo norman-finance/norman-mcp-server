@@ -460,8 +460,9 @@ clear it. This uses the portable Apps `tools/call` bridge: iframe support for
 SDK 2 resource subscriptions is not assumed.
 
 Hosted SDK 2 clients can separately opt into resource invalidations by setting
-`NORMAN_MCP_INBOX_LIVE=1` on a **single-process** MCP deployment. Credential-only
-stdio does not enable this feature. Existing tools and legacy refresh continue
+`NORMAN_MCP_INBOX_LIVE=1` on a **single-process** MCP deployment using the
+streamable-http transport (SSE starts one lifespan per connection, so the flag is
+ignored there with a warning). Credential-only stdio does not enable this feature. Existing tools and legacy refresh continue
 working when the setting is absent.
 
 1. Call `watch_norman_inbox` with an approval `page` (default 1). It returns an
@@ -474,14 +475,18 @@ working when the setting is absent.
    outlive their MCP bearer token. There is no replay; always refetch on reconnect.
 
 Read and listen both check the exact OAuth grant, client and selected company.
-Observers resolve only that grant's current Norman token and pin its company;
-401/403 closes the watch. Local grant revocation, company changes and expiry
+Observers resolve only that grant's current Norman token and pin its company.
+An expired Norman token (one hour) is refreshed through that grant; a 401 that
+survives the refresh, or a 403, closes the watch. Local grant revocation, company changes and expiry
 end its stream within one second. The observer reads only while a stream is
 connected, with 30 seconds between observation cycles. Each watch observes one
 approval page, workflow state and bounded tax reviews; it is not a complete
 company event log and may miss intermediate changes. Financial snapshots are
 never cached in the change bus. There are at most 128 leases/streams, four leases
-per grant, and four concurrent snapshot reads (three API sources per snapshot).
+and four open streams per access token, four concurrent snapshot reads (three API
+sources per snapshot) and two per access token. Limits count access tokens: a
+client that keeps refreshing holds several at once, so one account can still use
+a larger share until those tokens expire.
 
 Leases and the SDK subscription bus are in memory. Use one process/replica;
 multiple replicas require shared lease state, OAuth state and a distributed

@@ -11,6 +11,7 @@ import json
 import logging
 import secrets
 import time
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
@@ -24,7 +25,8 @@ from mcp.types import SubscriptionsListenRequestParams, SubscriptionsListenResul
 from pydantic import Field
 
 from norman_mcp.api.client import NormanAPI
-from norman_mcp.apps.inbox import READ, load_inbox
+from norman_mcp.api.grant import GrantAPI
+from norman_mcp.apps.inbox import READ, load_inbox, resolve_company
 from norman_mcp.context import Context
 from norman_mcp.security.utils import validate_url
 
@@ -35,7 +37,14 @@ INTERVAL = 30
 MAX_WATCHES = 128
 MAX_PER_GRANT = 4
 MAX_LISTENERS = 128
+# Interactive snapshot reads per access token, so one caller cannot occupy every slot.
+MAX_READS_PER_TOKEN = 2
 logger = logging.getLogger(__name__)
+
+try:
+    BaseExceptionGroup
+except NameError:  # Python 3.10
+    from exceptiongroup import BaseExceptionGroup
 
 
 def fingerprint(data: dict[str, Any]) -> str:
@@ -61,10 +70,13 @@ class Watch:
 class PinnedAPI(NormanAPI):
     """Background reads never resolve a caller ContextVar or env credentials."""
 
-    def __init__(self, provider: Any, watch: Watch):
+    def __init__(self, provider: Any, watch: Watch, client: httpx.AsyncClient | None = None):
         super().__init__(authenticate_on_init=False, token_source="oauth")
         self.provider = provider
         self.watch = watch
+        # The watch's own grant: a Norman 401 (tokens last an hour) is refreshed
+        # through it, so a routine expiry no longer ends every lease.
+        self.grant = GrantAPI(provider, watch.token, watch.company, client=client)
 
     @property
     def company_id(self) -> str:
@@ -79,35 +91,10 @@ class PinnedAPI(NormanAPI):
         # requests threads running after a snapshot releases its concurrency slot.
         if method != "GET" or not validate_url(url):
             raise ValueError("Inbox observer only supports trusted API reads.")
-        token = self._resolve_norman_token()
-        if not token:
-            return {"error": "Inbox connection is unavailable.", "status_code": 401}
-        try:
-            async with httpx.AsyncClient(
-                timeout=10.0, follow_redirects=False, trust_env=False
-            ) as client:
-                response = await client.get(
-                    url,
-                    params=kwargs.get("params"),
-                    headers={
-                        "Authorization": "Bearer " + token,
-                        "X-Company-Id": self.watch.company,
-                        "User-Agent": "NormanMCPServer/0.1.0",
-                        "X-Requested-With": "XMLHttpRequest",
-                    },
-                )
-                if response.status_code != 200:
-                    return {
-                        "error": "Inbox source is unavailable.",
-                        "status_code": response.status_code,
-                    }
-                data = response.json()
-                return data if isinstance(data, dict) else {"error": "Inbox source is unavailable."}
-        except (httpx.RequestError, ValueError):
-            return {"error": "Inbox source is unavailable."}
+        return await self.grant.arequest(method, url, **kwargs)
 
     def _refresh_oauth_norman_token(self) -> None:
-        # A failed grant ends the lease; no ambient credential fallback.
+        # Refresh happens inside arequest, through the watch's grant only.
         return None
 
 
@@ -138,6 +125,9 @@ class InboxLive:
         self.listeners = 0
         self.closed = False
         self._snapshot_slots = asyncio.Semaphore(4)
+        self._reads: Counter[str] = Counter()
+        # One connection pool for every observer and snapshot read; set by run().
+        self.http: httpx.AsyncClient | None = None
 
     def valid(self, watch: Watch) -> bool:
         access = self.provider.tokens.get(watch.token)
@@ -152,7 +142,8 @@ class InboxLive:
             and self.provider.get_company_for_token(watch.token) == watch.selection
         )
 
-    def permitted(self, uri: str, api: Any) -> Watch:
+    def permitted(self, uri: str, company: str | None) -> Watch:
+        # `company` is resolved by the async caller: api.company_id can block on HTTP.
         watch = self.watches.get(uri)
         access = get_access_token()
         if (
@@ -161,7 +152,7 @@ class InboxLive:
             or not secrets.compare_digest(access.token, watch.token)
             or access.client_id != watch.client_id
             or not self.valid(watch)
-            or str(api.company_id) != watch.company
+            or str(company) != watch.company
         ):
             raise MCPError(-32602, DENIED)
         return watch
@@ -171,28 +162,38 @@ class InboxLive:
             if not self.valid(watch):
                 self.watches.pop(uri, None)
 
-    async def snapshot(self, api: Any, page: int) -> tuple[dict[str, Any], bool]:
+    async def snapshot(
+        self, api: Any, page: int, *, reader: str | None = None
+    ) -> tuple[dict[str, Any], bool]:
+        if reader is not None and self._reads[reader] >= MAX_READS_PER_TOKEN:
+            raise TimeoutError  # reported as busy, like a full set of slots
         observed = ObservedAPI(api)
-        with anyio.fail_after(15):
-            async with self._snapshot_slots:
-                data = await load_inbox(observed, page)
+        if reader is not None:
+            self._reads[reader] += 1
+        try:
+            with anyio.fail_after(15):
+                async with self._snapshot_slots:
+                    data = await load_inbox(observed, page)
+        finally:
+            if reader is not None:
+                self._reads[reader] -= 1
+                if self._reads[reader] <= 0:
+                    del self._reads[reader]
         return data, observed.denied
 
     async def open(self, api: Any, page: int) -> dict[str, Any]:
         access = get_access_token()
         if self.closed:
             raise ToolError(DENIED)
-        if not access or not api.company_id:
+        company = await resolve_company(api) if access else None
+        if not access or not company:
             raise ToolError("Inbox watches require an authenticated Norman connection.")
+        company = str(company)
         self.prune()
         # Idempotent within the lease; no extra watchers on tool retries.
         for watch in self.watches.values():
-            if (
-                watch.token == access.token
-                and watch.company == str(api.company_id)
-                and watch.page == page
-            ):
-                self.permitted(watch.uri, api)
+            if watch.token == access.token and watch.company == company and watch.page == page:
+                self.permitted(watch.uri, company)
                 return self.description(watch)
         if (
             len(self.watches) >= MAX_WATCHES
@@ -200,10 +201,11 @@ class InboxLive:
         ):
             raise ToolError("Inbox watch limit reached. Retry after the current lease expires.")
         selection = self.provider.get_company_for_token(access.token)
-        company = str(api.company_id)
         provisional = Watch("", access.token, access.client_id, company, selection, page, 0, "")
         try:
-            data, denied = await self.snapshot(PinnedAPI(self.provider, provisional), page)
+            data, denied = await self.snapshot(
+                PinnedAPI(self.provider, provisional, self.http), page, reader=access.token
+            )
         except TimeoutError:
             raise ToolError("Inbox is busy. Retry opening the watch shortly.") from None
         watch = Watch(
@@ -231,11 +233,11 @@ class InboxLive:
                 and existing.company == company
                 and existing.page == page
             ):
-                self.permitted(existing.uri, api)
+                self.permitted(existing.uri, company)
                 return self.description(existing)
         self.watches[watch.uri] = watch
         try:
-            self.permitted(watch.uri, api)
+            self.permitted(watch.uri, company)
         except MCPError:
             self.watches.pop(watch.uri, None)
             raise ToolError(DENIED) from None
@@ -258,12 +260,18 @@ class InboxLive:
         }
 
     async def read(self, uri: str, api: Any) -> str:
-        watch = self.permitted(uri, api)
-        data, denied = await self.snapshot(PinnedAPI(self.provider, watch), watch.page)
+        company = await resolve_company(api)
+        watch = self.permitted(uri, company)
+        try:
+            data, denied = await self.snapshot(
+                PinnedAPI(self.provider, watch, self.http), watch.page, reader=watch.token
+            )
+        except TimeoutError:
+            raise MCPError(-32603, "Inbox is busy. Retry shortly.") from None
         if denied:
             self.watches.pop(uri, None)
             raise MCPError(-32602, DENIED)
-        self.permitted(uri, api)
+        self.permitted(uri, company)
         return json.dumps(data)
 
     async def gate(self, ctx: Any, call_next: Any) -> Any:
@@ -278,13 +286,11 @@ class InboxLive:
         if ctx.method != "subscriptions/listen":
             return await call_next(ctx)
         params = SubscriptionsListenRequestParams.model_validate(ctx.params or {}, by_name=False)
-        watches = {
-            uri: self.permitted(uri, ctx.lifespan_context["api"])
-            for uri in params.notifications.resource_subscriptions or ()
-            if uri.startswith(PREFIX)
-        }
-        if not watches:
+        uris = [u for u in params.notifications.resource_subscriptions or () if u.startswith(PREFIX)]
+        if not uris:
             return await call_next(ctx)
+        company = await resolve_company(ctx.lifespan_context["api"])
+        watches = {uri: self.permitted(uri, company) for uri in uris}
         if self.listeners >= MAX_LISTENERS:
             raise MCPError(-32602, "Inbox stream limit reached.")
         self.listeners += 1
@@ -293,18 +299,26 @@ class InboxLive:
         try:
             # Cancel only this listen request. The SDK performs unsubscribe and
             # stream cleanup in its own finally; no private SDK stream access.
-            with anyio.CancelScope() as scope:
-                async with anyio.create_task_group() as group:
+            try:
+                with anyio.CancelScope() as scope:
+                    async with anyio.create_task_group() as group:
 
-                    async def until_invalid() -> None:
-                        while all(self.valid(w) for w in watches.values()):
-                            delay = min(1.0, min(w.expires for w in watches.values()) - time.time())
-                            await anyio.sleep(max(0, delay))
-                        scope.cancel()
+                        async def until_invalid() -> None:
+                            while all(self.valid(w) for w in watches.values()):
+                                delay = min(1.0, min(w.expires for w in watches.values()) - time.time())
+                                await anyio.sleep(max(0, delay))
+                            scope.cancel()
 
-                    group.start_soon(until_invalid)
-                    result = await call_next(ctx)
-                    group.cancel_scope.cancel()
+                        group.start_soon(until_invalid)
+                        result = await call_next(ctx)
+                        group.cancel_scope.cancel()
+            except BaseExceptionGroup as group_error:
+                # The task group wraps the SDK's own MCP errors (e.g. a subscription
+                # limit); surface them so the client gets their code and message.
+                inner = group_error.exceptions
+                if len(inner) == 1 and isinstance(inner[0], MCPError):
+                    raise inner[0] from None
+                raise
             if scope.cancel_called:
                 return SubscriptionsListenResult(
                     _meta={"io.modelcontextprotocol/subscriptionId": ctx.request_id}
@@ -319,7 +333,7 @@ class InboxLive:
         if not self.valid(watch) or not watch.listeners:
             return
         try:
-            data, denied = await self.snapshot(PinnedAPI(self.provider, watch), watch.page)
+            data, denied = await self.snapshot(PinnedAPI(self.provider, watch, self.http), watch.page)
         except TimeoutError:
             return
         except Exception:
@@ -347,9 +361,17 @@ class InboxLive:
                 logger.warning("Inbox observer failed; retrying next cycle")
 
     async def run(self) -> None:
-        while True:
-            await self.tick()
-            await asyncio.sleep(INTERVAL)
+        self.http = httpx.AsyncClient(timeout=10.0, follow_redirects=False, trust_env=False)
+        try:
+            while True:
+                try:
+                    await self.tick()
+                except Exception:
+                    logger.warning("Inbox observer cycle failed; retrying next cycle")
+                await asyncio.sleep(INTERVAL)
+        finally:
+            client, self.http = self.http, None
+            await client.aclose()
 
     def close(self) -> None:
         self.closed = True

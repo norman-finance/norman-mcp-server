@@ -37,6 +37,9 @@ class Provider:
     def get_norman_token(self, token):
         return "norman-" + token if token in self.tokens else None
 
+    def refresh_norman_token_sync(self, token):
+        return None
+
     def get_company_for_token(self, token):
         return COMPANY
 

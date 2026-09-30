@@ -331,7 +331,13 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
         )
     
     from mcp.server.subscriptions import InMemorySubscriptionBus
-    live_enabled = os.environ.get("NORMAN_MCP_INBOX_LIVE") == "1" and oauth_provider is not None
+    live_requested = os.environ.get("NORMAN_MCP_INBOX_LIVE") == "1" and oauth_provider is not None
+    # The observer is process-wide, but SSE enters the lifespan once per
+    # connection: every client would start another observer and the first
+    # disconnect would close the feed for everyone. Streamable HTTP only.
+    live_enabled = live_requested and transport_type == "streamable-http"
+    if live_requested and not live_enabled:
+        logger.warning("NORMAN_MCP_INBOX_LIVE needs the streamable-http transport; live Inbox is off")
     live_bus = InMemorySubscriptionBus() if live_enabled else None
 
     server = MCPServer(
