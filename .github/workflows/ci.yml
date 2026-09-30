@@ -17,7 +17,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: pip install '.[dev,sse]'
+      # sentry-sdk ships in the production image; without it the Sentry
+      # scrubbing tests in tests/test_observability.py are skipped.
+      - run: pip install '.[dev,sse]' sentry-sdk
       - name: Full MCP suite (SDK 2, tenant isolation, Inbox and Events)
         run: python -m pytest -q
       - run: node --test tests/tax_filing_ui.test.cjs
