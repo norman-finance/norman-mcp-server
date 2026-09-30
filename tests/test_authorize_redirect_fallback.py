@@ -129,3 +129,20 @@ def test_validator_applies_the_allow_list_to_the_single_registered_uri():
     )
     with pytest.raises(InvalidRedirectUriError):
         validate(Registered("https://claude.ai/a", "https://claude.ai/b"), None)
+
+
+def test_registration_response_shows_the_refresh_grant_it_stores(client):
+    response = client.post(
+        "/register",
+        json={
+            "client_name": "Auth-code-only client",
+            "redirect_uris": ["http://127.0.0.1:51000/callback"],
+            "token_endpoint_auth_method": "none",
+            "grant_types": ["authorization_code"],
+            "response_types": ["code"],
+            "scope": "read write",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["grant_types"] == ["authorization_code", "refresh_token"]
