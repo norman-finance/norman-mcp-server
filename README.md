@@ -452,6 +452,42 @@ again. The backend remains responsible for atomic execution and permissions.
 Non-transaction approvals whose current target is unavailable can be discussed or
 dismissed; they cannot be approved from this card.
 
+The visible Inbox refreshes through `get_norman_inbox_data` every 30 seconds
+between completed reads. It pauses while hidden/offscreen, during actions, and on
+teardown. It keeps the selected page and typed workflow answer; an unchanged
+approval keeps explicit consent, while changed current values or planned actions
+clear it. This uses the portable Apps `tools/call` bridge: iframe support for
+SDK 2 resource subscriptions is not assumed.
+
+Hosted SDK 2 clients can separately opt into resource invalidations by setting
+`NORMAN_MCP_INBOX_LIVE=1` on a **single-process** MCP deployment. Credential-only
+stdio does not enable this feature. Existing tools and legacy refresh continue
+working when the setting is absent.
+
+1. Call `watch_norman_inbox` with an approval `page` (default 1). It returns an
+   opaque `resourceUri`, `expiresAt` (Unix seconds), and observation interval.
+2. Open SDK 2 `subscriptions/listen` for that exact URI. After acknowledgment,
+   call `resources/read` for the current snapshot; refetch on each
+   `notifications/resources/updated`. Events contain only the opaque URI.
+3. Reopen the watch after expiry, reconnect, token refresh, restart, or an
+   attempted `switch_company`. Watches last at most five minutes and never
+   outlive their MCP bearer token. There is no replay; always refetch on reconnect.
+
+Read and listen both check the exact OAuth grant, client and selected company.
+Observers resolve only that grant's current Norman token and pin its company;
+401/403 closes the watch. Local grant revocation, company changes and expiry
+end its stream within one second. The observer reads only while a stream is
+connected, with 30 seconds between observation cycles. Each watch observes one
+approval page, workflow state and bounded tax reviews; it is not a complete
+company event log and may miss intermediate changes. Financial snapshots are
+never cached in the change bus. There are at most 128 leases/streams, four leases
+per grant, and four concurrent snapshot reads (three API sources per snapshot).
+
+Leases and the SDK subscription bus are in memory. Use one process/replica;
+multiple replicas require shared lease state, OAuth state and a distributed
+subscription bus before this feature can be enabled reliably. This read-only
+feed is separate from the durable webhook events below.
+
 The opt-in `workflow.attention_required` event implements the
 [draft MCP Events contract](https://developers.openai.com/plugins/build/mcp-events)
 on SDK 2 / protocol `2026-07-28`. It watches one explicitly selected company and

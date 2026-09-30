@@ -379,6 +379,7 @@
         <button id="refresh">Refresh</button>
       </header>
       <div id="status" role="status" aria-live="polite"></div>
+      <div id="freshness" class="muted notice"></div>
       <section id="content">
         <div class="empty">Connecting to Norman…</div>
       </section>
@@ -392,9 +393,155 @@
           ready: false,
           pending: new Map(),
           id: 1,
+          revision: 0,
+          consent: "",
+          answer: "",
+          reviewStale: false,
+          renderedSelection: "",
+          contexts: new Map(),
+          initialized: false,
+          disposed: false,
+          intersecting: true,
+          visible: document.visibilityState !== "hidden",
+          pollTimer: null,
+          refreshPromise: null,
+          refreshWanted: false,
+          lastCheck: null,
         };
         const content = document.querySelector("#content"),
-          status = document.querySelector("#status");
+          status = document.querySelector("#status"),
+          freshness = document.querySelector("#freshness");
+        const POLL_MS = 30000;
+        const REVIEW_CHANGED =
+          "This approval changed. Review the current values and confirm again.";
+        const stable = (x) =>
+          JSON.stringify(x, (_, value) =>
+            value && typeof value === "object" && !Array.isArray(value)
+              ? Object.fromEntries(
+                  Object.entries(value).sort(([a], [b]) => a.localeCompare(b)),
+                )
+              : value,
+          );
+        const selectionKey = (d) =>
+          d
+            ? `${d.companyId}:${d.kind === "workflow" ? "workflow:" + d.run.publicId : "approval:" + d.execution.publicId}`
+            : "";
+        function reviewKey(d) {
+          if (!d?.execution) return "";
+          const e = d.execution;
+          return stable({
+            companyId: d.companyId,
+            execution: {
+              publicId: e.publicId,
+              ruleName: e.ruleName || e.rule?.name,
+              transaction: e.transaction,
+              status: e.status,
+              actionsPlanned: e.actionsPlanned,
+              actionsResult: e.actionsResult,
+              error: e.error,
+              revertedAt: e.revertedAt,
+            },
+            before: d.before,
+            currentUnavailable: d.currentUnavailable,
+            canApprove: d.canApprove,
+          });
+        }
+        function stale() {
+          const error = Error(
+            "A newer Inbox request superseded this response.",
+          );
+          error.name = "StaleResponse";
+          return error;
+        }
+        function guard(revision) {
+          if (state.disposed || revision !== state.revision) throw stale();
+        }
+        function syncControls() {
+          document
+            .querySelectorAll("button")
+            .forEach((button) => (button.disabled = state.busy));
+          const confirm = document.querySelector("#confirm"),
+            approve = document.querySelector("#approve");
+          if (confirm) {
+            confirm.checked =
+              !!state.consent && state.consent === reviewKey(state.detail);
+            confirm.disabled = state.busy || state.reviewStale;
+          }
+          if (approve)
+            approve.disabled =
+              state.busy || state.reviewStale || !confirm?.checked;
+        }
+        function updateFreshness() {
+          const checked = state.lastCheck
+            ? `Checked ${new Date(state.lastCheck).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · `
+            : "";
+          freshness.textContent =
+            checked +
+            (state.visible && !state.disposed
+              ? "Auto refresh every 30s while visible"
+              : "Auto refresh paused");
+        }
+        function stopPolling() {
+          clearTimeout(state.pollTimer);
+          state.pollTimer = null;
+        }
+        function schedulePolling(delay = POLL_MS) {
+          stopPolling();
+          if (
+            !state.initialized ||
+            state.disposed ||
+            !state.visible ||
+            state.busy
+          )
+            return;
+          state.pollTimer = setTimeout(() => {
+            state.pollTimer = null;
+            void autoRefresh();
+          }, delay);
+        }
+        function setDetail(next) {
+          const previousKey = selectionKey(state.detail),
+            nextKey = selectionKey(next),
+            changedReview =
+              !!state.consent && state.consent !== reviewKey(next);
+          if (previousKey !== nextKey) state.answer = "";
+          if (state.consent !== reviewKey(next)) state.consent = "";
+          state.detail = next;
+          state.reviewStale = false;
+          if (changedReview) {
+            status.textContent = REVIEW_CHANGED;
+            status.className = "";
+          }
+        }
+        function setInbox(next) {
+          if (
+            next.view !== "inbox" ||
+            !next.summary ||
+            !next.pagination ||
+            ![
+              "questions",
+              "runs",
+              "approvals",
+              "taxReviews",
+              "unavailable",
+            ].every((key) => Array.isArray(next[key]))
+          )
+            throw Error(
+              "Norman returned unavailable Inbox data. Refresh to retry.",
+            );
+          if (state.data && state.data.companyId !== next.companyId) {
+            state.revision++;
+            setDetail(null);
+            state.consent = "";
+            state.answer = "";
+            state.contexts.clear();
+            status.textContent =
+              "Company changed. Select a decision to review.";
+            status.className = "";
+          }
+          state.data = next;
+          state.lastCheck = Date.now();
+        }
         const esc = (x) =>
           String(x ?? "").replace(
             /[&<>"']/g,
@@ -447,10 +594,19 @@
                 : rpc("tools/call", { name, arguments: args })),
           );
         }
-        async function context(data) {
-          if (state.ready)
-            await rpc("ui/update-model-context", { structuredContent: data });
-          else window.openai?.setWidgetState?.(data);
+        async function context(data, channel = "selection") {
+          const fingerprint = stable(data);
+          if (state.contexts.get(channel) === fingerprint) return;
+          state.contexts.set(channel, fingerprint);
+          try {
+            if (state.ready)
+              await rpc("ui/update-model-context", { structuredContent: data });
+            else window.openai?.setWidgetState?.(data);
+          } catch (error) {
+            if (state.contexts.get(channel) === fingerprint)
+              state.contexts.delete(channel);
+            throw error;
+          }
         }
         async function ask(text) {
           if (state.ready)
@@ -463,39 +619,125 @@
           throw Error("Conversation messaging is unavailable in this host.");
         }
         async function action(fn) {
-          if (state.busy) return;
+          if (state.busy || state.disposed) return;
+          const revision = ++state.revision;
           state.busy = true;
-          document
-            .querySelectorAll("button")
-            .forEach((b) => (b.disabled = true));
+          stopPolling();
+          syncControls();
           status.className = "";
           status.textContent = "Working…";
           try {
-            await fn();
+            await fn(revision);
+            guard(revision);
             status.textContent = "Updated from Norman.";
           } catch (e) {
-            status.textContent = e.message;
-            status.className = "error";
+            if (e.name !== "StaleResponse" && !state.disposed) {
+              status.textContent = e.message;
+              status.className = "error";
+            }
           } finally {
             state.busy = false;
-            document
-              .querySelectorAll("button")
-              .forEach((b) => (b.disabled = false));
-            const approve = document.querySelector("#approve");
-            if (approve)
-              approve.disabled = !document.querySelector("#confirm")?.checked;
+            syncControls();
+            schedulePolling(state.refreshWanted ? 0 : POLL_MS);
+            updateFreshness();
           }
         }
-        async function refresh(page = 1) {
-          const next = await tool("get_norman_inbox_data", { page });
-          if (state.data?.companyId !== next.companyId) state.detail = null;
-          state.data = next;
-          render();
-          await context({
-            companyId: next.companyId,
-            view: "inbox",
-            summary: next.summary,
-          });
+        async function refresh(
+          page = state.data?.pagination.page || 1,
+          revision = state.revision,
+        ) {
+          if (state.refreshPromise) {
+            await state.refreshPromise.catch(() => {});
+            guard(revision);
+          }
+          const request = (async () => {
+            guard(revision);
+            const selected = state.detail,
+              next = await tool("get_norman_inbox_data", { page });
+            guard(revision);
+            let latestDetail = null,
+              detailError = null;
+            if (selected && next.companyId === state.data?.companyId) {
+              try {
+                if (selected.kind === "workflow") {
+                  const run = await tool("get_workflow_run", {
+                    run_id: selected.run.publicId,
+                  });
+                  latestDetail = {
+                    kind: "workflow",
+                    companyId: next.companyId,
+                    run,
+                  };
+                } else {
+                  latestDetail = await tool("get_norman_approval_data", {
+                    execution_id: selected.execution.publicId,
+                  });
+                }
+                guard(revision);
+                if (latestDetail.companyId !== next.companyId) {
+                  setDetail(null);
+                  state.revision++;
+                  state.refreshWanted = true;
+                  throw stale();
+                }
+              } catch (error) {
+                guard(revision);
+                detailError = error;
+                state.consent = "";
+                state.reviewStale = true;
+              }
+            }
+            guard(revision);
+            setInbox(next);
+            revision = state.revision;
+            if (latestDetail) setDetail(latestDetail);
+            render();
+            updateFreshness();
+            await context(
+              {
+                companyId: next.companyId,
+                view: "inbox",
+                summary: next.summary,
+              },
+              "inbox",
+            ).catch(() => {});
+            guard(revision);
+            if (latestDetail)
+              await context({
+                companyId: next.companyId,
+                ...(latestDetail.kind === "workflow"
+                  ? { workflow: latestDetail.run }
+                  : latestDetail),
+              }).catch(() => {});
+            if (detailError) throw detailError;
+          })();
+          state.refreshPromise = request;
+          try {
+            await request;
+          } finally {
+            if (state.refreshPromise === request) state.refreshPromise = null;
+          }
+        }
+        async function autoRefresh() {
+          if (!state.visible || state.disposed || state.busy) {
+            schedulePolling();
+            return;
+          }
+          if (state.refreshPromise) {
+            state.refreshWanted = true;
+            return;
+          }
+          state.refreshWanted = false;
+          try {
+            await refresh();
+          } catch (error) {
+            if (error.name !== "StaleResponse" && !state.disposed) {
+              status.textContent = `Could not refresh: ${error.message}`;
+              status.className = "error";
+            }
+          } finally {
+            schedulePolling(state.refreshWanted ? 0 : POLL_MS);
+          }
         }
         const human = (x) =>
           ({
@@ -528,7 +770,7 @@
             return '<h2>Review a decision</h2><p class="muted">Select an approval to see the current values and every planned action.</p>';
           if (d.kind === "workflow") {
             const r = d.run;
-            return `<h2>${esc(r.title)}</h2><div class="tag">${esc(human(r.blockedReason))}</div><p>${esc(r.blockedDetail)}</p>${r.blockedReason === "user_input" ? '<label for="answer">Your answer</label><textarea id="answer" placeholder="Provide the missing information"></textarea><button class="primary" id="answer-send">Send answer to Norman</button>' : '<button id="workflow-ask">Discuss in chat</button>'}`;
+            return `<h2>${esc(r.title)}</h2><div class="tag">${esc(human(r.blockedReason || r.state))}</div><p>${esc(r.blockedDetail)}</p>${r.state === "active" && r.blockedReason === "user_input" ? `<label for="answer">Your answer</label><textarea id="answer" placeholder="Provide the missing information">${esc(state.answer)}</textarea><button class="primary" id="answer-send">Send answer to Norman</button>` : '<button id="workflow-ask">Discuss in chat</button>'}`;
           }
           const e = d.execution,
             actions = e.actionsPlanned || [],
@@ -582,11 +824,20 @@
             set_payment_type: ["paymentType"],
             mark_verified: ["userStatus"],
           };
-          return `<h2>${esc(e.ruleName || e.rule?.name || "Automation approval")}</h2><p>${esc(e.transaction?.description || "")}</p><div class="tag">${esc(human(e.status))}</div>${d.currentUnavailable ? '<p class="error">Current transaction values are unavailable. Discuss this in chat before deciding.</p>' : ""}<table><thead><tr><th>Action</th><th>Current</th><th>Proposed</th></tr></thead><tbody>${actions.map((a) => `<tr><td>${esc(labels[a.type] || a.type.replaceAll("_", " "))}</td><td>${keys[a.type] && before ? keys[a.type].map((k) => value(before[k])).join("<br>") : "—"}</td><td>${proposed(a)}</td></tr>`).join("")}</tbody></table>${!actions.length ? '<p class="muted">No planned actions returned.</p>' : ""}<p class="notice">Approval executes the full action list. Actions may send messages or affect payments when listed above.</p><div class="row"><button id="approval-ask">Explain in chat</button></div>${d.canApprove && actions.length && !d.currentUnavailable ? '<label class="confirm"><input type="checkbox" id="confirm"> <span>I reviewed every listed action and approve this execution.</span></label><div class="row"><button class="primary" id="approve" disabled>Approve execution</button></div>' : ""}${d.canApprove ? '<button id="dismiss">Dismiss</button>' : ""}${["success", "partial"].includes(e.status) && !e.revertedAt ? '<button id="undo">Undo execution</button>' : ""}${e.error ? `<p class="error">${esc(e.error)}</p>` : ""}${e.actionsResult?.length ? `<h3>Actual result</h3><table><tbody>${e.actionsResult.map((a) => `<tr><td>${esc(labels[a.type] || a.type || "Action")}</td><td>${esc(human(a.status) || "Result returned")}${a.detail ? `<br>${esc(a.detail)}` : ""}</td></tr>`).join("")}</tbody></table>` : ""}`;
+          return `<h2>${esc(e.ruleName || e.rule?.name || "Automation approval")}</h2><p>${esc(e.transaction?.description || "")}</p><div class="tag">${esc(human(e.status))}</div>${d.currentUnavailable ? '<p class="error">Current transaction values are unavailable. Discuss this in chat before deciding.</p>' : ""}${state.reviewStale ? '<p class="error">Latest review unavailable. Refresh before confirming.</p>' : ""}<table><thead><tr><th>Action</th><th>Current</th><th>Proposed</th></tr></thead><tbody>${actions.map((a) => `<tr><td>${esc(labels[a.type] || a.type.replaceAll("_", " "))}</td><td>${keys[a.type] && before ? keys[a.type].map((k) => value(before[k])).join("<br>") : "—"}</td><td>${proposed(a)}</td></tr>`).join("")}</tbody></table>${!actions.length ? '<p class="muted">No planned actions returned.</p>' : ""}<p class="notice">Approval executes the full action list. Actions may send messages or affect payments when listed above.</p><div class="row"><button id="approval-ask">Explain in chat</button></div>${d.canApprove && actions.length && !d.currentUnavailable ? '<label class="confirm"><input type="checkbox" id="confirm"> <span>I reviewed every listed action and approve this execution.</span></label><div class="row"><button class="primary" id="approve" disabled>Approve execution</button></div>' : ""}${d.canApprove ? '<button id="dismiss">Dismiss</button>' : ""}${["success", "partial"].includes(e.status) && !e.revertedAt ? '<button id="undo">Undo execution</button>' : ""}${e.error ? `<p class="error">${esc(e.error)}</p>` : ""}${e.actionsResult?.length ? `<h3>Actual result</h3><table><tbody>${e.actionsResult.map((a) => `<tr><td>${esc(labels[a.type] || a.type || "Action")}</td><td>${esc(human(a.status) || "Result returned")}${a.detail ? `<br>${esc(a.detail)}` : ""}</td></tr>`).join("")}</tbody></table>` : ""}`;
         }
         function render() {
           const d = state.data;
           if (!d) return;
+          const focused = document.activeElement,
+            keepFocus =
+              state.renderedSelection === selectionKey(state.detail) &&
+              content.contains(focused) &&
+              focused.id,
+            range =
+              keepFocus && focused.tagName === "TEXTAREA"
+                ? [focused.selectionStart, focused.selectionEnd]
+                : null;
           content.innerHTML = `<div class="metrics"><div class="metric"><strong>${display(d.summary.questions)}</strong><span>Workflows need you</span></div><div class="metric"><strong>${display(d.summary.approvals)}</strong><span>Pending approvals</span></div><div class="metric"><strong>${display(d.summary.taxReviewsShown)}</strong><span>Tax reviews shown</span></div></div>${d.unavailable.length ? `<p class="error">Unavailable: ${esc(d.unavailable.join(", "))}. Refresh to retry.</p>` : ""}<div class="layout"><div><h2>Needs your attention</h2>${d.questions.map((r) => `<article class="card"><div class="tag">Workflow · ${esc(human(r.blockedReason))}</div><strong>${esc(r.title)}</strong><p>${esc(r.blockedDetail || r.steps?.find((s) => s.active)?.title || "Review the current step.")}</p><button data-run="${esc(r.publicId)}">Review question</button></article>`).join("")}${d.approvals.map((e) => `<article class="card"><div class="tag">Automation approval</div><strong>${esc(e.ruleName || e.rule?.name || "Automation")}</strong><p>${esc(e.transaction?.description || "Review planned actions")}</p><button data-execution="${esc(e.publicId)}">Review changes</button></article>`).join("")}${d.taxReviews.map((t) => `<article class="card"><div class="tag">Tax review</div><strong>${esc(t.title)}</strong><p>${esc(t.detail)}</p><button data-tax="${esc(t.key)}">Discuss in chat</button></article>`).join("")}${!d.questions.length && !d.approvals.length && !d.taxReviews.length ? '<div class="empty">No items returned by the available sources.</div>' : ""}<div class="row">${d.pagination.page > 1 ? '<button id="previous">Previous approvals</button>' : ""}${d.pagination.hasNext ? '<button id="next">More approvals</button>' : ""}</div><p class="muted notice">Tax reviews are a bounded list. Approval totals include all pages.</p><h2>In progress</h2>${
             d.runs
               .filter((r) => !r.blockedReason)
@@ -599,10 +850,19 @@
           content.querySelectorAll("[data-execution]").forEach(
             (b) =>
               (b.onclick = () =>
-                action(async () => {
-                  state.detail = await tool("get_norman_approval_data", {
-                    execution_id: b.dataset.execution,
-                  });
+                action(async (revision) => {
+                  const companyId = state.data.companyId,
+                    detail = await tool("get_norman_approval_data", {
+                      execution_id: b.dataset.execution,
+                    });
+                  guard(revision);
+                  if (detail.companyId !== companyId) {
+                    state.refreshWanted = true;
+                    throw Error(
+                      "Company changed. Refresh to load current decisions.",
+                    );
+                  }
+                  setDetail(detail);
                   render();
                   await context({
                     companyId: state.data.companyId,
@@ -613,11 +873,13 @@
           content.querySelectorAll("[data-run]").forEach(
             (b) =>
               (b.onclick = () =>
-                action(async () => {
+                action(async (revision) => {
+                  const companyId = state.data.companyId;
                   const r = await tool("get_workflow_run", {
                     run_id: b.dataset.run,
                   });
-                  state.detail = { kind: "workflow", run: r };
+                  guard(revision);
+                  setDetail({ kind: "workflow", companyId, run: r });
                   render();
                   await context({
                     companyId: state.data.companyId,
@@ -641,12 +903,15 @@
             ["next", d.pagination.page + 1],
           ]) {
             const b = document.getElementById(id);
-            if (b) b.onclick = () => action(() => refresh(page));
+            if (b)
+              b.onclick = () => action((revision) => refresh(page, revision));
           }
           const confirm = document.querySelector("#confirm");
           if (confirm)
-            confirm.onchange = () =>
-              (document.querySelector("#approve").disabled = !confirm.checked);
+            confirm.onchange = () => {
+              state.consent = confirm.checked ? reviewKey(state.detail) : "";
+              syncControls();
+            };
           for (const [id, name] of [
             ["approve", "approve_rule_execution"],
             ["dismiss", "dismiss_rule_execution"],
@@ -655,39 +920,54 @@
             const b = document.getElementById(id);
             if (b)
               b.onclick = () =>
-                action(async () => {
+                action(async (revision) => {
                   if (
                     id === "approve" &&
-                    !document.querySelector("#confirm").checked
+                    (!state.consent ||
+                      state.consent !== reviewKey(state.detail) ||
+                      state.reviewStale)
                   )
                     return;
-                  const executionId = state.detail.execution.publicId;
+                  const executionId = state.detail.execution.publicId,
+                    companyId = state.data.companyId,
+                    reviewed = reviewKey(state.detail);
                   if (id === "approve") {
                     const fresh = await tool("get_norman_approval_data", {
                       execution_id: executionId,
                     });
+                    guard(revision);
                     if (
                       !fresh.canApprove ||
                       fresh.currentUnavailable ||
-                      JSON.stringify(fresh.execution.actionsPlanned) !==
-                        JSON.stringify(state.detail.execution.actionsPlanned) ||
-                      JSON.stringify(fresh.before) !==
-                        JSON.stringify(state.detail.before)
+                      fresh.companyId !== companyId ||
+                      reviewKey(fresh) !== reviewed
                     ) {
-                      state.detail = fresh;
+                      if (fresh.companyId === companyId) setDetail(fresh);
+                      else {
+                        setDetail(null);
+                        state.refreshWanted = true;
+                      }
                       render();
-                      throw Error(
-                        "This approval changed. Review the current values and confirm again.",
-                      );
+                      throw Error(REVIEW_CHANGED);
                     }
                   }
+                  guard(revision);
+                  state.consent = "";
                   const result = await tool(name, {
                     execution_id: executionId,
                   });
-                  state.detail = await tool("get_norman_approval_data", {
+                  guard(revision);
+                  const fresh = await tool("get_norman_approval_data", {
                     execution_id: executionId,
                   });
-                  await refresh(state.data.pagination.page);
+                  guard(revision);
+                  if (fresh.companyId !== companyId) {
+                    setDetail(null);
+                    state.refreshWanted = true;
+                    throw stale();
+                  }
+                  setDetail(fresh);
+                  await refresh(state.data.pagination.page, revision);
                   if (result.error) throw Error(result.error);
                 });
           }
@@ -708,35 +988,91 @@
                 ),
               );
           const answer = document.querySelector("#answer-send");
+          const input = document.querySelector("#answer");
+          if (input) input.oninput = () => (state.answer = input.value);
           if (answer)
             answer.onclick = () =>
-              action(async () => {
-                const text = document.querySelector("#answer").value.trim();
+              action(async (revision) => {
+                const text = state.answer.trim(),
+                  run = state.detail.run;
                 if (!text) throw Error("Please enter your answer.");
+                const fresh = await tool("get_workflow_run", {
+                  run_id: run.publicId,
+                });
+                guard(revision);
+                if (
+                  fresh.state !== "active" ||
+                  fresh.blockedReason !== "user_input" ||
+                  fresh.blockedDetail !== run.blockedDetail
+                ) {
+                  setDetail({
+                    kind: "workflow",
+                    companyId: state.data.companyId,
+                    run: fresh,
+                  });
+                  render();
+                  throw Error(
+                    "This workflow question changed. Review your answer before sending.",
+                  );
+                }
                 await tool("answer_workflow_question", {
-                  run_id: state.detail.run.publicId,
+                  run_id: run.publicId,
                   answer: text,
                 });
-                state.detail = null;
-                await refresh();
+                guard(revision);
+                setDetail(null);
+                await refresh(state.data.pagination.page, revision);
               });
+          state.renderedSelection = selectionKey(state.detail);
+          syncControls();
+          if (keepFocus) {
+            const replacement = document.getElementById(keepFocus);
+            replacement?.focus({ preventScroll: true });
+            if (range && replacement) replacement.setSelectionRange(...range);
+          }
         }
         window.addEventListener("message", (e) => {
           if (e.source !== parent) return;
           const m = e.data;
-          if (m?.id && state.pending.has(m.id)) {
+          if (m?.jsonrpc !== "2.0" || state.disposed) return;
+          if (m.id !== undefined && state.pending.has(m.id)) {
             const p = state.pending.get(m.id);
             clearTimeout(p.timer);
             state.pending.delete(m.id);
             m.error ? p.reject(Error(m.error.message)) : p.resolve(m.result);
+            return;
+          }
+          if (m.method === "ui/resource-teardown") {
+            dispose();
+            parent.postMessage({ jsonrpc: "2.0", id: m.id, result: {} }, "*");
+            return;
           }
           if (m?.method === "ui/notifications/tool-result") {
             try {
               const d = object(m.params);
               if (d.view === "inbox") {
-                if (state.data?.companyId !== d.companyId) state.detail = null;
-                state.data = d;
+                const incomingTime = Date.parse(d.asOf),
+                  currentTime = Date.parse(state.data?.asOf);
+                if (
+                  Number.isFinite(incomingTime) &&
+                  Number.isFinite(currentTime) &&
+                  incomingTime < currentTime
+                )
+                  return;
+                // Hosts may also push the result of our own read. An identical
+                // result must not invalidate that read or an approval preflight.
+                if (
+                  state.data &&
+                  stable({ ...d, asOf: null }) ===
+                    stable({ ...state.data, asOf: null })
+                )
+                  return;
+                state.revision++;
+                setInbox(d);
                 render();
+                updateFreshness();
+                state.refreshWanted = true;
+                schedulePolling(0);
               }
             } catch (err) {
               status.textContent = err.message;
@@ -744,7 +1080,55 @@
           }
         });
         document.querySelector("#refresh").onclick = () =>
-          action(() => refresh(state.data?.pagination.page || 1));
+          action((revision) =>
+            refresh(state.data?.pagination.page || 1, revision),
+          );
+        function wake() {
+          if (!state.initialized || !state.visible || state.disposed) return;
+          // Restoring a focused input during a render may also focus the iframe.
+          // The active read/action already refreshes it, so do not queue a loop.
+          if (state.busy || state.refreshPromise) return;
+          state.refreshWanted = true;
+          schedulePolling(0);
+        }
+        function visibilityChanged() {
+          const visible =
+            document.visibilityState !== "hidden" && state.intersecting;
+          if (visible === state.visible) return;
+          state.visible = visible;
+          if (visible) {
+            state.refreshWanted = true;
+            wake();
+          } else {
+            stopPolling();
+            state.revision++;
+          }
+          updateFreshness();
+        }
+        const observer = new IntersectionObserver(([entry]) => {
+          state.intersecting = entry.isIntersecting;
+          visibilityChanged();
+        });
+        observer.observe(document.querySelector("main"));
+        document.addEventListener("visibilitychange", visibilityChanged);
+        window.addEventListener("focus", wake);
+        function dispose() {
+          if (state.disposed) return;
+          state.disposed = true;
+          state.revision++;
+          stopPolling();
+          observer.disconnect();
+          document.removeEventListener("visibilitychange", visibilityChanged);
+          window.removeEventListener("focus", wake);
+          for (const pending of state.pending.values()) {
+            clearTimeout(pending.timer);
+            pending.reject(stale());
+          }
+          state.pending.clear();
+          updateFreshness();
+        }
+        window.addEventListener("pagehide", dispose, { once: true });
+        updateFreshness();
         (async () => {
           try {
             await rpc("ui/initialize", {
@@ -764,13 +1148,17 @@
               "*",
             );
           } catch {}
-          if (window.openai?.toolOutput) {
+          if (!state.data && window.openai?.toolOutput) {
             try {
-              state.data = object(window.openai.toolOutput);
+              setInbox(object(window.openai.toolOutput));
               render();
             } catch {}
           }
-          if (!state.data) await action(() => refresh());
+          state.initialized = true;
+          if (!state.data && state.visible)
+            await action((revision) => refresh(1, revision));
+          schedulePolling();
+          updateFreshness();
         })();
       })();
     </script>

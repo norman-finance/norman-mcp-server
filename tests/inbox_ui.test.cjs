@@ -11,16 +11,38 @@ after(async () => {
   await browser?.close();
 });
 
-async function fixture(width = 1100) {
+async function fixture(width = 1100, { clock = false } = {}) {
   const page = await browser.newPage({ viewport: { width, height: 1000 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  if (clock) {
+    await page.clock.install({ time: new Date("2026-09-30T10:00:00Z") });
+    await page.clock.pauseAt(new Date("2026-09-30T10:00:01Z"));
+  }
   await page.setContent(
     '<iframe title="Norman Inbox" style="border:0;width:100%;height:960px"></iframe>',
   );
   await page.evaluate(() => {
     window.calls = [];
     window.mode = "";
+    window.holdNames = [];
+    window.held = [];
+    window.release = () => {
+      for (const held of window.held.splice(0))
+        held.target.postMessage(
+          { jsonrpc: "2.0", id: held.id, result: held.result },
+          "*",
+        );
+    };
+    window.pushInbox = () =>
+      document.querySelector("iframe").contentWindow.postMessage(
+        {
+          jsonrpc: "2.0",
+          method: "ui/notifications/tool-result",
+          params: { structuredContent: structuredClone(window.inbox) },
+        },
+        "*",
+      );
     const companyId = "11111111-1111-4111-8111-111111111111";
     window.detail = {
       companyId,
@@ -76,7 +98,10 @@ async function fixture(width = 1100) {
           window.inbox.pagination.page = args.page;
           result = window.inbox;
         }
-        if (name === "get_norman_approval_data") result = window.detail;
+        if (name === "get_norman_approval_data")
+          result = window.detailFailure
+            ? { error: "Review temporarily unavailable." }
+            : window.detail;
         if (name === "get_workflow_run") result = window.inbox.questions[0];
         if (name === "answer_workflow_question") {
           window.inbox.questions = [];
@@ -100,6 +125,10 @@ async function fixture(width = 1100) {
           window.detail.execution.status = "dismissed";
         }
         result = { structuredContent: structuredClone(result), content: [] };
+        if (window.holdNames.includes(name)) {
+          window.held.push({ target: e.source, id: m.id, result });
+          return;
+        }
       }
       e.source.postMessage({ jsonrpc: "2.0", id: m.id, result }, "*");
     });
@@ -107,13 +136,76 @@ async function fixture(width = 1100) {
   const html = readFileSync(
     join(__dirname, "../norman_mcp/apps/inbox.html"),
     "utf8",
-  );
+  ).replace("const state = {", "const state = window.__inboxTestState = {");
   await page
     .locator("iframe")
     .evaluate((frame, html) => (frame.srcdoc = html), html);
   const ui = page.frameLocator("iframe");
   await ui.getByRole("button", { name: "Review changes" }).waitFor();
+  await idle(page);
   return { page, ui, errors };
+}
+async function idle(page) {
+  // Rendering precedes context RPC completion. Observe the test-exposed state
+  // so advancing fake time cannot run an RPC timeout before polling is armed.
+  // Node's clock remains real; browser waitForFunction retries can freeze along
+  // with RAF when page.clock.pauseAt is active.
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    await flush(page);
+    if (
+      await page.frames()[1].evaluate(() => {
+        const state = window.__inboxTestState;
+        return (
+          state.initialized &&
+          !state.busy &&
+          !state.refreshPromise &&
+          state.pending.size === 0 &&
+          state.pollTimer !== null
+        );
+      })
+    )
+      return;
+  }
+  assert.fail(
+    `Inbox did not become idle: ${JSON.stringify(
+      await page.frames()[1].evaluate(() => {
+        const state = window.__inboxTestState;
+        return {
+          initialized: state.initialized,
+          busy: state.busy,
+          refresh: !!state.refreshPromise,
+          pending: [...state.pending.keys()],
+          pollTimer: state.pollTimer,
+          visible: state.visible,
+          wanted: state.refreshWanted,
+          status: document.querySelector("#status").textContent,
+        };
+      }),
+    )}`,
+  );
+}
+async function toolCalls(page, name) {
+  return page.evaluate(
+    (name) => window.calls.filter((call) => call.params?.name === name),
+    name,
+  );
+}
+async function flush(page) {
+  // Flush browser message tasks without advancing the polling clock.
+  for (let i = 0; i < 3; i++)
+    await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          const channel = new MessageChannel();
+          channel.port1.onmessage = () => {
+            channel.port1.close();
+            channel.port2.close();
+            resolve();
+          };
+          channel.port2.postMessage(null);
+        }),
+    );
 }
 async function mutations(page) {
   return page.evaluate(() =>
@@ -265,3 +357,389 @@ test("failed approval stays unconfirmed; missing current values cannot be approv
     await page.close();
   }
 });
+
+test("visible Inbox refreshes without writes or repeated unchanged model context", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    const count = (name) => toolCalls(page, name);
+    assert.equal((await count("get_norman_inbox_data")).length, 1);
+    await page.evaluate(() => (window.inbox.summary.approvals = 52));
+    await page.clock.runFor(30_001);
+    await ui
+      .locator(".metric strong")
+      .nth(1)
+      .getByText("52", { exact: true })
+      .waitFor();
+    await idle(page);
+    const contexts = await page.evaluate(
+      () =>
+        window.calls.filter((call) => call.method === "ui/update-model-context")
+          .length,
+    );
+    for (let i = 0; i < 2; i++) {
+      await page.clock.runFor(30_001);
+      await idle(page);
+    }
+    assert.equal((await count("get_norman_inbox_data")).length, 4);
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.calls.filter(
+            (call) => call.method === "ui/update-model-context",
+          ).length,
+      ),
+      contexts,
+    );
+    assert.equal(
+      await page.evaluate(() =>
+        window.calls.some((call) => call.method === "ui/message"),
+      ),
+      false,
+    );
+    assert.equal((await mutations(page)).length, 0);
+    assert.match(
+      await ui.locator("#freshness").innerText(),
+      /Checked .*Auto refresh every 30s/,
+    );
+    assert.equal(
+      await page
+        .frames()[1]
+        .evaluate(() =>
+          [...document.querySelectorAll("button,.card,.metric,.detail")].every(
+            (element) =>
+              getComputedStyle(element).borderTopLeftRadius === "0px" &&
+              getComputedStyle(element).boxShadow === "none",
+          ),
+        ),
+      true,
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("poll keeps page, selected review and consent only for an unchanged review", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    await ui.getByRole("button", { name: "More approvals" }).click();
+    await idle(page);
+    await ui.getByRole("button", { name: "Review changes" }).click();
+    await idle(page);
+    await ui.locator("#confirm").check();
+    await page.clock.runFor(1);
+    await idle(page);
+    await page.evaluate(() => {
+      window.inbox.summary.approvals = 52;
+      window.detail.execution.updatedAt = "2026-09-30T10:01:00Z";
+    });
+    await page.clock.runFor(30_001);
+    await ui
+      .locator(".metric strong")
+      .nth(1)
+      .getByText("52", { exact: true })
+      .waitFor();
+    await idle(page);
+    assert.equal(
+      (await toolCalls(page, "get_norman_inbox_data")).at(-1).params.arguments
+        .page,
+      2,
+    );
+    assert.equal(
+      await ui.locator("aside h2").innerText(),
+      "Software VAT review",
+    );
+    assert.equal(await ui.locator("#confirm").isChecked(), true);
+    assert.equal(await ui.locator("#approve").isEnabled(), true);
+    await page.evaluate(() => (window.detail.before.vatRate = 0));
+    await page.clock.runFor(30_001);
+    await ui
+      .getByText(
+        "This approval changed. Review the current values and confirm again.",
+      )
+      .waitFor();
+    await idle(page);
+    assert.equal(await ui.locator("#confirm").isChecked(), false);
+    assert.equal(await ui.locator("#approve").isDisabled(), true);
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("poll preserves workflow draft and typing focus while refreshing its question", async () => {
+  const { page, ui, errors } = await fixture(390, { clock: true });
+  try {
+    await ui.getByRole("button", { name: "Review question" }).click();
+    await idle(page);
+    await ui.locator("#answer").fill("Annual software license, not sent yet");
+    await page.clock.runFor(1);
+    await idle(page);
+    await ui
+      .locator("#answer")
+      .evaluate((input) => input.setSelectionRange(6, 14));
+    await page.evaluate(() => {
+      window.inbox.summary.approvals = 53;
+      window.inbox.questions[0].blockedDetail =
+        "What was the Adobe purchase for?";
+    });
+    await page.clock.runFor(30_001);
+    await ui
+      .locator("aside")
+      .getByText("What was the Adobe purchase for?", { exact: true })
+      .waitFor();
+    await idle(page);
+    assert.equal(
+      await ui.locator("#answer").inputValue(),
+      "Annual software license, not sent yet",
+    );
+    assert.deepEqual(
+      await ui
+        .locator("#answer")
+        .evaluate((input) => [
+          document.activeElement === input,
+          input.selectionStart,
+          input.selectionEnd,
+        ]),
+      [true, 6, 14],
+    );
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("hidden iframe pauses polling and visibility/focus resume with a fresh read", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    await page
+      .locator("iframe")
+      .evaluate((frame) => (frame.style.display = "none"));
+    await ui
+      .locator("#freshness")
+      .getByText(/Auto refresh paused/)
+      .waitFor({ state: "attached" });
+    const before = (await toolCalls(page, "get_norman_inbox_data")).length;
+    await page.clock.runFor(90_001);
+    await flush(page);
+    assert.equal(
+      (await toolCalls(page, "get_norman_inbox_data")).length,
+      before,
+    );
+    await page.evaluate(() => (window.inbox.summary.approvals = 54));
+    await page
+      .locator("iframe")
+      .evaluate((frame) => (frame.style.display = ""));
+    await page.clock.runFor(1);
+    await flush(page);
+    await page.clock.runFor(1);
+    await ui
+      .locator(".metric strong")
+      .nth(1)
+      .getByText("54", { exact: true })
+      .waitFor();
+    await idle(page);
+    const resumed = (await toolCalls(page, "get_norman_inbox_data")).length;
+    await page
+      .frames()[1]
+      .evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.clock.runFor(1);
+    await idle(page);
+    assert.equal(
+      (await toolCalls(page, "get_norman_inbox_data")).length,
+      resumed + 1,
+    );
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("polls never overlap and next interval starts after the read completes", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    await page.evaluate(() => (window.holdNames = ["get_norman_inbox_data"]));
+    await page.clock.runFor(30_001);
+    await flush(page);
+    assert.equal(await page.evaluate(() => window.held.length), 1);
+    await page.clock.runFor(20_000);
+    await flush(page);
+    assert.equal((await toolCalls(page, "get_norman_inbox_data")).length, 2);
+    await page.evaluate(() => {
+      window.holdNames = [];
+      window.inbox.summary.approvals = 55;
+      window.release();
+    });
+    await idle(page);
+    await page.clock.runFor(29_999);
+    assert.equal((await toolCalls(page, "get_norman_inbox_data")).length, 2);
+    await page.clock.runFor(2);
+    await ui
+      .locator(".metric strong")
+      .nth(1)
+      .getByText("55", { exact: true })
+      .waitFor();
+    assert.equal((await toolCalls(page, "get_norman_inbox_data")).length, 3);
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("company notification rejects older pending reads and clears the previous review", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    await ui.getByRole("button", { name: "Review changes" }).click();
+    await idle(page);
+    await ui.locator("#confirm").check();
+    await page.clock.runFor(1);
+    await idle(page);
+    await page.evaluate(() => (window.holdNames = ["get_norman_inbox_data"]));
+    await page.clock.runFor(30_001);
+    await flush(page);
+    await page.evaluate(() => {
+      window.inbox.companyId = "22222222-2222-4222-8222-222222222222";
+      window.inbox.summary.approvals = 56;
+      window.inbox.approvals = [];
+      window.inbox.questions = [];
+      window.inbox.summary.questions = 0;
+      window.pushInbox();
+    });
+    await ui.getByText("Review a decision", { exact: true }).waitFor();
+    assert.equal(await ui.locator("#confirm").count(), 0);
+    await page.evaluate(() => {
+      window.holdNames = [];
+      window.release();
+    });
+    await flush(page);
+    await page.clock.runFor(1);
+    await flush(page);
+    assert.equal(await ui.locator(".metric strong").nth(1).innerText(), "56");
+    assert.equal(
+      await ui.getByText("Adobe subscription", { exact: true }).count(),
+      0,
+    );
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("company change during approval preflight prevents the mutation and late detail", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    await ui.getByRole("button", { name: "Review changes" }).click();
+    await idle(page);
+    await ui.locator("#confirm").check();
+    await page.clock.runFor(1);
+    await idle(page);
+    await page.evaluate(
+      () => (window.holdNames = ["get_norman_approval_data"]),
+    );
+    await ui.getByRole("button", { name: "Approve execution" }).click();
+    await flush(page);
+    assert.equal(await page.evaluate(() => window.held.length), 1);
+    await page.evaluate(() => {
+      window.inbox.companyId = "22222222-2222-4222-8222-222222222222";
+      window.inbox.approvals = [];
+      window.inbox.questions = [];
+      window.pushInbox();
+    });
+    await ui.getByText("Review a decision", { exact: true }).waitFor();
+    await page.evaluate(() => {
+      window.holdNames = [];
+      window.release();
+    });
+    await flush(page);
+    await page.clock.runFor(1);
+    await flush(page);
+    assert.equal((await mutations(page)).length, 0);
+    assert.equal(await ui.locator("#confirm").count(), 0);
+    assert.equal(
+      await ui.getByText("Adobe subscription", { exact: true }).count(),
+      0,
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("unavailable live approval keeps the selection but cannot preserve consent", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    await ui.getByRole("button", { name: "Review changes" }).click();
+    await idle(page);
+    await ui.locator("#confirm").check();
+    await page.clock.runFor(1);
+    await idle(page);
+    await page.evaluate(() => (window.detailFailure = true));
+    await page.clock.runFor(30_001);
+    await ui
+      .getByText("Latest review unavailable. Refresh before confirming.")
+      .waitFor();
+    await idle(page);
+    assert.equal(
+      await ui.locator("aside h2").innerText(),
+      "Software VAT review",
+    );
+    assert.equal(await ui.locator("#confirm").isChecked(), false);
+    assert.equal(await ui.locator("#confirm").isDisabled(), true);
+    assert.equal(await ui.locator("#approve").isDisabled(), true);
+    await page.evaluate(() => (window.detailFailure = false));
+    await page.clock.runFor(30_001);
+    await idle(page);
+    assert.equal(await ui.locator("#confirm").isEnabled(), true);
+    assert.equal(await ui.locator("#confirm").isChecked(), false);
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+for (const lifecycle of ["pagehide", "ui/resource-teardown"])
+  test(`${lifecycle} disposes polling instead of leaving a background loop`, async () => {
+    const { page, ui, errors } = await fixture(1100, { clock: true });
+    try {
+      if (lifecycle === "pagehide")
+        await page
+          .frames()[1]
+          .evaluate(() => window.dispatchEvent(new Event("pagehide")));
+      else
+        await page.evaluate(() =>
+          document
+            .querySelector("iframe")
+            .contentWindow.postMessage(
+              {
+                jsonrpc: "2.0",
+                id: 900,
+                method: "ui/resource-teardown",
+                params: {},
+              },
+              "*",
+            ),
+        );
+      await ui.getByText(/Auto refresh paused/).waitFor();
+      const before = (await toolCalls(page, "get_norman_inbox_data")).length;
+      await page.clock.runFor(90_001);
+      await page
+        .frames()[1]
+        .evaluate(() => window.dispatchEvent(new Event("focus")));
+      await page.clock.runFor(1);
+      await flush(page);
+      assert.equal(
+        (await toolCalls(page, "get_norman_inbox_data")).length,
+        before,
+      );
+      assert.equal((await mutations(page)).length, 0);
+      assert.deepEqual(errors, []);
+    } finally {
+      await page.close();
+    }
+  });
