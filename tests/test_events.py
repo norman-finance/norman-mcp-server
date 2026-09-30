@@ -7,7 +7,7 @@ import time
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import jwt
+import httpx
 import pytest
 from cryptography.fernet import Fernet
 from mcp.server.auth.provider import AccessToken
@@ -21,7 +21,6 @@ from norman_mcp.events.service import (
     Subscribe,
     Unsubscribe,
     identity,
-    principal,
     register_events,
 )
 from norman_mcp.events.store import SubscriptionStore
@@ -46,11 +45,11 @@ def setup(tmp_path):
     access = AccessToken(
         token="mcp-test", client_id="client-1", scopes=["read"], expires_at=int(time.time()) + 7200
     )
+    # Norman issues opaque access tokens (django-oauth-toolkit), never JWTs.
     provider = SimpleNamespace(
         tokens={access.token: access},
-        get_norman_token=lambda t: jwt.encode(
-            {"user_id": "user-1"}, "fixture-key-with-at-least-32-bytes", algorithm="HS256"
-        ),
+        get_norman_token=lambda t: "opaque-norman-token",
+        refresh_norman_token_sync=lambda t: None,
     )
     store = SubscriptionStore(str(tmp_path / "events.sqlite"), Fernet.generate_key().decode())
     sent = []
@@ -63,7 +62,7 @@ def setup(tmp_path):
             else (200, {})
         )
 
-    service = EventService(store, provider, post=post)
+    service = EventService(store, provider, post=post, http=norman_users_me())
 
     async def request(method, url, **kwargs):
         return {"publicId": RUN, "state": "active", "blockedReason": None}
@@ -71,6 +70,17 @@ def setup(tmp_path):
     api = SimpleNamespace(company_id=COMPANY, arequest=request)
     ctx = SimpleNamespace(lifespan_context={"api": api})
     return service, access, provider, ctx, sent
+
+
+def norman_users_me(user="user-1", seen=None):
+    def handler(request):
+        if seen is not None:
+            seen.append(request)
+        if request.url.path.endswith("/api/v1/users/me/"):
+            return httpx.Response(200, json={"publicId": user})
+        return httpx.Response(404, json={})
+
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
 
 def create(setup):
@@ -263,7 +273,14 @@ def test_pins_public_destination_without_second_dns_lookup():
     ):
         connection.connect()
         create.assert_called_once_with(("8.8.8.8", 443), 10)
-        wrap.assert_called_once_with(create.return_value, server_hostname="receiver.example.com")
+        wrap.assert_called_once_with(
+            create.return_value,
+            server_hostname="receiver.example.com",
+            do_handshake_on_connect=False,
+        )
+        # The handshake runs on the stored socket, so the delivery deadline can stop it.
+        assert connection.sock is wrap.return_value
+        wrap.return_value.do_handshake.assert_called_once_with()
 
 
 @pytest.mark.parametrize("version", ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"])
@@ -409,3 +426,194 @@ def test_expiry_and_signing_key_rotation_are_bounded(setup):
     service.store.put(record)
     asyncio.run(service.tick())
     assert service.store.get(first["id"]) is None
+
+
+# --- Regression tests for the review of #148 ---------------------------------
+
+
+def test_owner_comes_from_the_norman_user_not_the_token(setup):
+    service, access, provider, ctx, sent = setup
+    first = create(setup)
+    # A refreshed Norman token for the same user keeps the same subscription.
+    provider.get_norman_token = lambda t: "another-opaque-token"
+    with patch("norman_mcp.events.service.get_access_token", return_value=access):
+        second = asyncio.run(service.subscribe(ctx, subscribe_params()))
+    assert first["id"] == second["id"]
+
+    service.http = norman_users_me(user=None)  # users/me without a publicId
+    service._identities.clear()
+    with (
+        patch("norman_mcp.events.service.get_access_token", return_value=access),
+        pytest.raises(MCPError) as exc,
+    ):
+        asyncio.run(service.subscribe(ctx, subscribe_params()))
+    assert exc.value.code == -32602
+
+
+def grant_backend(seen, *, stale="opaque-norman-token"):
+    def handler(request):
+        seen.append(request)
+        if request.url.path.endswith("/api/v1/users/me/"):
+            return httpx.Response(200, json={"publicId": "user-1"})
+        if request.headers["Authorization"] == "Bearer " + stale:
+            return httpx.Response(401, json={"detail": "expired"})
+        return httpx.Response(
+            200,
+            json={
+                "publicId": RUN,
+                "state": "active",
+                "title": "Close September",
+                "blockedReason": "user_input",
+                "blockedDetail": "Which invoice matches this payment?",
+                "steps": [{"key": "match", "active": True}],
+            },
+        )
+
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+def test_worker_refreshes_the_subscribers_own_grant(setup, monkeypatch):
+    monkeypatch.setenv("NORMAN_EMAIL", "operator@example.invalid")
+    monkeypatch.setenv("NORMAN_PASSWORD", "not-to-be-used")
+    service, _, provider, _, sent = setup
+    create(setup)
+    refreshed = []
+    provider.refresh_norman_token_sync = lambda t: refreshed.append(t) or "refreshed-token"
+    seen = []
+    service.http = grant_backend(seen)
+
+    asyncio.run(service.tick())
+
+    runs = [r for r in seen if "workflow-runs" in r.url.path]
+    assert [r.headers["Authorization"] for r in runs] == [
+        "Bearer opaque-norman-token",
+        "Bearer refreshed-token",
+    ]
+    assert {r.headers["X-Company-Id"] for r in runs} == {COMPANY}
+    assert refreshed == ["mcp-test"]  # the subscription's grant, nothing else
+    assert not [r for r in seen if "auth/token" in r.url.path]
+    assert len([s for s in sent if s[4].get("name")]) == 1
+
+
+def test_worker_without_a_refreshable_grant_delivers_nothing(setup, monkeypatch):
+    monkeypatch.setenv("NORMAN_EMAIL", "operator@example.invalid")
+    monkeypatch.setenv("NORMAN_PASSWORD", "not-to-be-used")
+    service, _, _, _, sent = setup
+    create(setup)
+    seen = []
+    service.http = grant_backend(seen)
+
+    asyncio.run(service.tick())
+
+    assert len([r for r in seen if "workflow-runs" in r.url.path]) == 1
+    assert not [r for r in seen if "auth/token" in r.url.path]
+    assert not [s for s in sent if s[4].get("name")]
+
+
+def test_a_renewal_during_the_tick_is_not_deleted(setup):
+    service, _, provider, _, _ = setup
+    sid = create(setup)["id"]
+    snapshot = dict(service.store.get(sid), expires=time.time() - 1)
+
+    asyncio.run(service.process(provider, snapshot))
+
+    assert service.store.get(sid)
+
+
+def test_worker_survives_store_errors(setup):
+    service, *_ = setup
+    calls = []
+
+    def records():
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("database is locked")
+        return []
+
+    service.store.records = records
+
+    async def scenario():
+        task = asyncio.create_task(service.run(interval=0.01))
+        await asyncio.sleep(0.1)
+        assert not task.done()
+        task.cancel()
+
+    asyncio.run(scenario())
+    assert len(calls) >= 2
+
+
+def test_resubscribing_redelivers_an_event_parked_after_rejection(setup):
+    service, _, _, _, sent = setup
+    sid = create(setup)["id"]
+    original = service.post
+    service.post = lambda *a, **kw: (sent.append(a), (400, {}))[1]
+    with patch("norman_mcp.events.service.read", side_effect=blocked):
+        asyncio.run(service.tick())
+    assert service.store.get(sid)["pending"]["attempts"] == 8
+
+    service.post = original  # the receiver was fixed
+    create(setup)  # the documented recovery: renew the subscription
+    with patch("norman_mcp.events.service.read", side_effect=blocked):
+        asyncio.run(service.tick())
+    assert "pending" not in service.store.get(sid)
+    assert sent[-1][4]["name"] == "workflow.attention_required"
+
+
+def test_non_ascii_challenge_echo_is_a_failed_verification(setup):
+    service, access, _, ctx, _ = setup
+    service.post = lambda *args: (200, {"challenge": "ünicode"})
+    with (
+        patch("norman_mcp.events.service.get_access_token", return_value=access),
+        pytest.raises(MCPError) as exc,
+    ):
+        asyncio.run(service.subscribe(ctx, subscribe_params()))
+    assert exc.value.code == -32015
+
+
+def test_webhook_delivery_has_a_total_deadline(monkeypatch):
+    import socket
+    import threading
+
+    server = socket.create_server(("127.0.0.1", 0))
+    port = server.getsockname()[1]
+    stop = threading.Event()
+
+    def drip():
+        conn, _ = server.accept()
+        with conn:
+            try:
+                # A valid TLS record header announcing 16 KiB, then one byte at a
+                # time: every read succeeds, so only a total deadline ends it.
+                conn.sendall(b"\x16\x03\x03\x40\x00")
+                while not stop.is_set():
+                    conn.sendall(b"\x00")
+                    time.sleep(0.05)
+            except OSError:
+                return
+
+    threading.Thread(target=drip, daemon=True).start()
+    monkeypatch.setattr(webhooks, "TOTAL_TIMEOUT", 0.5)
+    monkeypatch.setattr(webhooks, "destination", lambda url: ("localhost", port, "/", "127.0.0.1"))
+    started = time.monotonic()
+    try:
+        with pytest.raises(Exception):
+            webhooks.post(URL, SECRET, "sub", "evt", {"x": 1})
+    finally:
+        stop.set()
+        server.close()
+    assert time.monotonic() - started < 5
+
+
+def test_webhook_calls_leave_the_default_executor_free(setup):
+    service, *_ = setup
+    service.post = lambda *a, **kw: (time.sleep(0.5), (200, {}))[1]
+
+    async def scenario():
+        posts = [asyncio.create_task(service._post("u", "s", "i", "e", {})) for _ in range(6)]
+        started = time.monotonic()
+        assert await asyncio.to_thread(lambda: "free") == "free"
+        waited = time.monotonic() - started
+        await asyncio.gather(*posts)
+        return waited
+
+    assert asyncio.run(scenario()) < 0.3

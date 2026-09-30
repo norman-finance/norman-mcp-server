@@ -8,10 +8,14 @@ import ipaddress
 import json
 import socket
 import ssl
+import threading
 import time
 from urllib.parse import urlsplit
 
 MAX_BODY = 256 * 1024
+# Whole delivery, however slowly the receiver answers; socket timeouts bound only
+# each read, so a receiver dripping bytes could otherwise hold a thread for hours.
+TOTAL_TIMEOUT = 15
 
 
 def signing_key(secret: str) -> bytes:
@@ -76,10 +80,24 @@ class PinnedHTTPSConnection(http.client.HTTPSConnection):
         # Preserve the original hostname for SNI and certificate verification.
         raw = socket.create_connection((self.address, self.port), self.timeout)
         try:
-            self.sock = self.ssl_context.wrap_socket(raw, server_hostname=self.host)
+            # Wrap first and handshake second: wrapping takes over the socket, and
+            # abort() can only interrupt a handshake on a socket it can reach.
+            self.sock = self.ssl_context.wrap_socket(
+                raw, server_hostname=self.host, do_handshake_on_connect=False
+            )
+            self.sock.do_handshake()
         except BaseException:
             raw.close()
             raise
+
+    def abort(self) -> None:
+        # Unblocks a read in progress on another thread, TLS handshake included.
+        # The plain socket shutdown leaves the TLS object to the reading thread.
+        if self.sock is not None:
+            try:
+                socket.socket.shutdown(self.sock, socket.SHUT_RDWR)
+            except OSError:
+                pass
 
 
 def post(
@@ -96,6 +114,9 @@ def post(
         raise ValueError("Event payload exceeds 256 KiB")
     host, port, path, address = destination(url)
     connection = PinnedHTTPSConnection(host, port, address)
+    watchdog = threading.Timer(TOTAL_TIMEOUT, connection.abort)
+    watchdog.daemon = True
+    watchdog.start()
     try:
         signed = headers(secret, event_id, body, subscription_id)
         if old_secret:
@@ -113,4 +134,5 @@ def post(
             data = {}
         return response.status, data if isinstance(data, dict) else {}
     finally:
+        watchdog.cancel()
         connection.close()

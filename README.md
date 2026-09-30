@@ -471,9 +471,12 @@ Both settings are required. Without them, events are not advertised. SQLite stat
 contains encrypted authentication references, callback URLs, signing keys and
 pending payloads. Persist the existing `MCP_OAUTH_STATE_FILE` on a private volume
 as well: delivery after restart needs valid OAuth tokens and Norman token mappings.
-Expired or revoked authentication suspends delivery until the client refreshes
-the subscription. Multiple worker processes/replicas require coordinated OAuth
-storage and a distributed delivery lease before enabling events.
+The worker reads each run with the subscriber's own grant and company; an
+expired Norman access token (one hour) is refreshed through that grant, and a
+grant that cannot be refreshed suspends delivery until the client refreshes the
+subscription. Nothing falls back to other credentials. Multiple worker
+processes/replicas require coordinated OAuth storage and a distributed delivery
+lease before enabling events.
 
 Subscriptions use `events/list`, `events/subscribe` and `events/unsubscribe`, with
 arguments `{ "company_id": "UUID", "run_id": "UUID" }` and webhook delivery
@@ -482,8 +485,10 @@ The receiver must echo the signed verification challenge. Subscription lifetime
 is capped at one hour and authentication expiry; renew before `refreshBefore`.
 Secret rotation accepts the previous signing key for five minutes. Each retry
 keeps the same `eventId`; receivers should deduplicate by it. Permanent callback
-failures stop retries, and HTTP 410 removes the subscription. Callback addresses
-are validated and DNS-pinned to public HTTPS endpoints; redirects are not followed.
+failures stop retries until the subscription is renewed, and HTTP 410 removes
+the subscription. Callback addresses are validated and DNS-pinned to public HTTPS
+endpoints; redirects are not followed. Each callback, verification included, has
+15 seconds in total and runs in a small dedicated pool.
 
 Host support, plugin submission and production activation need separate
 verification. Local protocol and browser fixtures do not establish ChatGPT
