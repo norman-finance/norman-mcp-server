@@ -31,6 +31,8 @@
 
 **Invoicing** — Create and edit invoices, quotes, and recurring schedules, including document templates, line discounts, units, service dates, payment links, and ZUGFeRD e-invoices; cancel an issued invoice with a Stornorechnung, credit part of it with a Rechnungskorrektur, or make a delivery note (Lieferschein) from an invoice or an approved quote
 
+**Client emails and reminders** — Send invoices with the company's own email wording and CC recipients, see whether the client opened them, switch automatic payment reminders on for an invoice, and set the reminder rule (days and dunning fees per level)
+
 **Bookkeeping** — Categorize transactions, match receipts, and verify entries
 
 **Automation rules** — "Always book Telekom to Internet costs": preview, create, and manage rules that categorize matching transactions automatically
@@ -85,6 +87,12 @@ Omit `document_design`, `font`, and `color_schema` to inherit saved branding. On
 Use `update_invoice` for an invoice or quote, `update_recurring_invoice` for a schedule, and `update_invoice_settings` for future document defaults. Their typed `changes` object accepts camelCase or snake_case field names. Unset fields stay unchanged; explicit `false`, `0`, empty strings and valid nulls keep their meaning. A partial document design keeps the document's other saved controls; changing its template starts from that template's defaults. Keep existing line IDs when editing lines. Rates use minor currency units; the API calculates totals. Only set `isToSend` when sending is intended.
 
 Use `cancel_invoice`, `create_credit_note` and `create_delivery_note` for documents derived from an existing invoice or an approved quote; each links back to its source, and a cancelled invoice is read-only afterwards. `duplicate_invoice` copies an invoice or quote into a fresh draft without a link. API keys need `read_invoices` for template/settings reads and `write_invoices` for edits. Settings updates use the invoice-specific endpoint and cannot edit other company fields. Deploy the matching invoice API endpoints before deploying this MCP version.
+
+#### Client emails and payment reminders
+
+`send_invoice` and `send_invoice_overdue_reminder` use the company's email template when `subject` and `body` are left out; `additional_emails` go out as CC, and the company's own copy follows its setting unless `is_send_to_company` is given. `list_invoice_emails` returns every email about a document with its delivery status, the moment the client opened it, and the reminder the rule sends next.
+
+Automatic reminders are off until `autoReminders` is true on the invoice (`create_invoice`, `create_recurring_invoice`, or `update_invoice`, also after the invoice was issued); `remindersPaused` stops them for one invoice and `skip_invoice_reminder` stops one planned reminder. The company's rule and wording live in `get_invoice_email_settings` / `update_invoice_email_settings` and `list_invoice_email_templates` / `save_invoice_email_template` / `reset_invoice_email_template`. `settings_on_overdue` is kept for older integrations and sends nothing. These tools need the invoice email endpoints of the API to be live before this MCP version is deployed.
 
 ### 💬 Try asking
 
