@@ -10,6 +10,8 @@ This server uses Norman's OAuth for authentication:
 
 import os
 import logging
+import asyncio
+from contextvars import Context as TaskContext
 from contextlib import asynccontextmanager
 
 from pydantic import AnyHttpUrl
@@ -45,6 +47,7 @@ from norman_mcp.tools.corporate_tax_registration import register_corporate_tax_r
 from norman_mcp.prompts.templates import register_prompts
 from norman_mcp.resources.endpoints import register_resources
 from norman_mcp.apps import register_public_apps
+from norman_mcp.apps.inbox import register_inbox
 from norman_mcp.auth.provider import NormanOAuthProvider
 from norman_mcp.auth.routes import create_norman_auth_routes
 
@@ -256,7 +259,17 @@ async def lifespan(app):
     from norman_mcp.context import set_api_client
     set_api_client(api_client)
     
-    yield {"api": api_client}
+    service = getattr(app, "_event_service", None)
+    worker = TaskContext().run(asyncio.create_task, service.run()) if service else None
+    try:
+        yield {"api": api_client}
+    finally:
+        if worker:
+            worker.cancel()
+            try:
+                await worker
+            except asyncio.CancelledError:
+                pass
 
     logger.info("Shutting down Norman MCP server")
 
@@ -399,6 +412,18 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
     register_prompts(server)
     register_resources(server)
     register_public_apps(server)
+    register_inbox(server)
+
+    # Explicit persistent storage and encryption are required before advertising events.
+    events_path = os.environ.get("NORMAN_MCP_EVENTS_DB")
+    events_key = os.environ.get("NORMAN_MCP_EVENTS_KEY")
+    if events_path or events_key:
+        if not events_path or not events_key or transport_type != "streamable-http":
+            raise ValueError("MCP Events requires HTTPS hosted transport, NORMAN_MCP_EVENTS_DB and NORMAN_MCP_EVENTS_KEY")
+        from norman_mcp.events.service import EventService, register_events
+        from norman_mcp.events.store import SubscriptionStore
+        server._event_service = EventService(SubscriptionStore(events_path, events_key), oauth_provider)
+        register_events(server, server._event_service)
 
     return server
 
@@ -425,7 +450,7 @@ def create_cors_app(server: MCPServer):
 
 
 # Create default server instance
-mcp = create_app()
+mcp = create_app(transport="streamable-http" if os.environ.get("NORMAN_MCP_EVENTS_DB") else "sse")
 
 if __name__ == "__main__":
     from norman_mcp.cli import main

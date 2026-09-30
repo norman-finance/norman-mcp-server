@@ -108,6 +108,7 @@ with the current accounting context.
 
 | Interactive workspace | Use case |
 |:--|:--|
+| **Norman Inbox** | Review blocked workflows and pending automation approvals. Inspect current values and the complete planned action list, then explicitly approve or dismiss. |
 | **Document Review** | Review uploaded invoices and receipts, find documents that still need a transaction match, and inspect linked records. |
 | **Reconciliation Cockpit** | Find transactions with missing documents, missing categories, or accounts from a previous SKR before month-end or year-end close. |
 | **Ledger Explorer** | Browse the chart of accounts, inspect balances, and drill into the postings behind an account. |
@@ -115,6 +116,7 @@ with the current accounting context.
 
 Try prompts such as:
 
+- *"Open my Norman Inbox and show what needs my attention."*
 - *"Open my Document Review for the last 60 days."*
 - *"Show my Reconciliation Cockpit and highlight missing documents or categories."*
 - *"Open the Ledger Explorer and show the postings for account 1200."*
@@ -433,3 +435,61 @@ Ready-to-use skills compatible with **Claude Code**, **OpenClaw**, and the [Agen
 ### Mixed VAT and documented input tax
 
 See [the VAT item workflow](docs/vat-item-workflows.md) for item-level treatments, fixed documented EUR input VAT, refunds and manual VAT-only corrections. Requires the corresponding API migrations and calculation updates.
+
+
+### Norman Inbox and MCP Events (development)
+
+`open_norman_inbox` declares global/sidebar and thread entrypoints for hosts that
+support [plugin extensions](https://developers.openai.com/plugins/build/extensions).
+MCP Apps hosts can render the same self-contained UI; other clients can call
+`get_norman_inbox_data` and `get_norman_approval_data` for structured results.
+Workflow questions use actual blocking state. Pending approval totals include all
+pages; tax reviews are a bounded list. Source failures are shown as unavailable.
+The review card uses existing approve/dismiss/undo tools and refreshes actual
+results. Approval requires a checkbox and re-reads current values and planned
+actions immediately before executing. A changed review requires confirmation
+again. The backend remains responsible for atomic execution and permissions.
+Non-transaction approvals whose current target is unavailable can be discussed or
+dismissed; they cannot be approved from this card.
+
+The opt-in `workflow.attention_required` event implements the
+[draft MCP Events contract](https://developers.openai.com/plugins/build/mcp-events)
+on SDK 2 / protocol `2026-07-28`. It watches one explicitly selected company and
+workflow through the Norman API and sends signed webhooks when the active run
+becomes blocked. It does not advance workflows, send invoice reminders or file
+taxes. Current delivery waits 30 seconds between source observation cycles; it does not yet
+consume a backend event stream and can miss transitions between observations.
+
+To enable events on a hosted **single-worker** Streamable HTTP deployment, set:
+
+- `NORMAN_MCP_EVENTS_DB`: an absolute SQLite path on a persistent private volume.
+- `NORMAN_MCP_EVENTS_KEY`: a Fernet encryption key from your secret manager. Keep
+  the same key across restarts; changing it makes stored subscriptions unreadable.
+
+Start with `norman-mcp --transport streamable-http --public-url https://your-host`.
+Both settings are required. Without them, events are not advertised. SQLite state
+contains encrypted authentication references, callback URLs, signing keys and
+pending payloads. Persist the existing `MCP_OAUTH_STATE_FILE` on a private volume
+as well: delivery after restart needs valid OAuth tokens and Norman token mappings.
+The worker reads each run with the subscriber's own grant and company; an
+expired Norman access token (one hour) is refreshed through that grant, and a
+grant that cannot be refreshed suspends delivery until the client refreshes the
+subscription. Nothing falls back to other credentials. Multiple worker
+processes/replicas require coordinated OAuth storage and a distributed delivery
+lease before enabling events.
+
+Subscriptions use `events/list`, `events/subscribe` and `events/unsubscribe`, with
+arguments `{ "company_id": "UUID", "run_id": "UUID" }` and webhook delivery
+`{ "mode": "webhook", "url": "https://public-callback", "secret": "whsec_…" }`.
+The receiver must echo the signed verification challenge. Subscription lifetime
+is capped at one hour and authentication expiry; renew before `refreshBefore`.
+Secret rotation accepts the previous signing key for five minutes. Each retry
+keeps the same `eventId`; receivers should deduplicate by it. Permanent callback
+failures stop retries until the subscription is renewed, and HTTP 410 removes
+the subscription. Callback addresses are validated and DNS-pinned to public HTTPS
+endpoints; redirects are not followed. Each callback, verification included, has
+15 seconds in total and runs in a small dedicated pool.
+
+Host support, plugin submission and production activation need separate
+verification. Local protocol and browser fixtures do not establish ChatGPT
+catalog availability or a successful production OAuth/webhook connection.
