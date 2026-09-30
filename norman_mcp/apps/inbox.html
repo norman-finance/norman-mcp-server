@@ -399,7 +399,7 @@
           answer: "",
           reviewStale: false,
           renderedSelection: "",
-          contexts: new Map(),
+          context: "",
           initialized: false,
           disposed: false,
           intersecting: true,
@@ -536,7 +536,7 @@
             setDetail(null);
             state.consent = "";
             state.answer = "";
-            state.contexts.clear();
+            state.context = "";
             say("Company changed. Select a decision to review.");
           }
           state.data = next;
@@ -636,18 +636,41 @@
                 : rpc("tools/call", { name, arguments: args })),
           );
         }
-        async function context(data, channel = "selection") {
-          const fingerprint = stable(data);
-          if (state.contexts.get(channel) === fingerprint) return;
-          state.contexts.set(channel, fingerprint);
+        function modelContext() {
+          const d = state.data,
+            s = state.detail;
+          return {
+            companyId: d.companyId,
+            view: "inbox",
+            summary: d.summary,
+            selected: !s
+              ? null
+              : s.kind === "workflow"
+                ? { kind: "workflow", workflow: s.run }
+                : {
+                    kind: "approval",
+                    execution: s.execution,
+                    before: s.before,
+                    currentUnavailable: s.currentUnavailable,
+                    canApprove: s.canApprove,
+                  },
+          };
+        }
+        // Each ui/update-model-context replaces the previous one, so every
+        // update carries the summary and the current selection together.
+        async function syncContext() {
+          if (!state.initialized || state.disposed || !state.data) return;
+          if (!state.ready && !window.openai?.setWidgetState) return;
+          const data = modelContext(),
+            fingerprint = stable(data);
+          if (state.context === fingerprint) return;
+          state.context = fingerprint;
           try {
             if (state.ready)
               await rpc("ui/update-model-context", { structuredContent: data });
-            else window.openai?.setWidgetState?.(data);
-          } catch (error) {
-            if (state.contexts.get(channel) === fingerprint)
-              state.contexts.delete(channel);
-            throw error;
+            else window.openai.setWidgetState(data);
+          } catch {
+            if (state.context === fingerprint) state.context = "";
           }
         }
         async function ask(text) {
@@ -728,26 +751,9 @@
             }
             guard(revision);
             setInbox(next);
-            revision = state.revision;
             if (latestDetail) setDetail(latestDetail);
             render();
             updateFreshness();
-            await context(
-              {
-                companyId: next.companyId,
-                view: "inbox",
-                summary: next.summary,
-              },
-              "inbox",
-            ).catch(() => {});
-            guard(revision);
-            if (latestDetail)
-              await context({
-                companyId: next.companyId,
-                ...(latestDetail.kind === "workflow"
-                  ? { workflow: latestDetail.run }
-                  : latestDetail),
-              }).catch(() => {});
             if (detailError) throw detailError;
           })();
           state.refreshPromise = request;
@@ -901,10 +907,6 @@
                   }
                   setDetail(detail);
                   render();
-                  await context({
-                    companyId: state.data.companyId,
-                    ...state.detail,
-                  });
                 })),
           );
           content.querySelectorAll("[data-run]").forEach(
@@ -918,10 +920,6 @@
                   guard(revision);
                   setDetail({ kind: "workflow", companyId, run: r });
                   render();
-                  await context({
-                    companyId: state.data.companyId,
-                    workflow: r,
-                  });
                 })),
           );
           content
@@ -1062,6 +1060,7 @@
               });
           state.renderedSelection = selectionKey(state.detail);
           syncControls();
+          void syncContext();
           if (keepFocus) {
             const replacement = document.getElementById(keepFocus);
             replacement?.focus({ preventScroll: true });
@@ -1225,6 +1224,7 @@
           state.initialized = true;
           if (!state.data && state.visible)
             await action((revision) => refresh(1, revision));
+          else void syncContext();
           // Keep an immediate re-read the initial load asked for.
           if (state.pollTimer === null)
             schedulePolling(state.refreshWanted ? 0 : POLL_MS);

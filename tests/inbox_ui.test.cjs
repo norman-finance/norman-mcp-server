@@ -892,6 +892,45 @@ test("host without ui/initialize renders window.openai tool output and polls thr
   }
 });
 
+test("model context carries the summary and the selected review in every update", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    const contexts = () =>
+      page.evaluate(() =>
+        window.calls
+          .filter((call) => call.method === "ui/update-model-context")
+          .map((call) => call.params.structuredContent),
+      );
+    // The host keeps only the last update (ext-apps overwrite semantics).
+    const kept = async () => {
+      const last = (await contexts()).at(-1);
+      return [last.view, last.summary?.approvals, last.selected?.execution?.publicId];
+    };
+    await ui.getByRole("button", { name: "Review changes" }).click();
+    await idle(page);
+    await page.clock.runFor(1);
+    await idle(page);
+    assert.deepEqual(await kept(), ["inbox", 51, "approval-1"]);
+    await page.evaluate(() => (window.inbox.summary.approvals = 52));
+    await page.clock.runFor(30_001);
+    await ui
+      .locator(".metric strong")
+      .nth(1)
+      .getByText("52", { exact: true })
+      .waitFor();
+    await idle(page);
+    assert.deepEqual(await kept(), ["inbox", 52, "approval-1"]);
+    const sent = (await contexts()).length;
+    await page.clock.runFor(30_001);
+    await idle(page);
+    assert.equal((await contexts()).length, sent);
+    assert.equal(await ui.locator("aside h2").innerText(), "Software VAT review");
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
 test("tool errors show the API's own message and never a raw URL", async () => {
   const { page, ui, errors } = await fixture();
   try {
