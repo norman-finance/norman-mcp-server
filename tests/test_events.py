@@ -266,6 +266,69 @@ def test_pins_public_destination_without_second_dns_lookup():
         wrap.assert_called_once_with(create.return_value, server_hostname="receiver.example.com")
 
 
+@pytest.mark.parametrize("version", ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"])
+def test_enabled_events_preserve_legacy_initialization_and_tool_calls(setup, version):
+    service, *_ = setup
+    server = MCPServer("events")
+    register_events(server, service)
+
+    @server.tool()
+    def compatibility_probe() -> dict[str, bool]:
+        return {"ok": True}
+
+    with TestClient(
+        server.streamable_http_app(stateless_http=True, json_response=True),
+        base_url="http://localhost:8000",
+    ) as client:
+        headers = {"Accept": "application/json, text/event-stream"}
+        response = client.post(
+            "/mcp",
+            headers=headers,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": version,
+                    "capabilities": {},
+                    "clientInfo": {"name": "legacy-fixture", "version": "1"},
+                },
+            },
+        )
+        assert response.status_code == 200, response.text
+        result = response.json()["result"]
+        assert result["protocolVersion"] == version
+        assert "events" not in result["capabilities"]
+        headers["MCP-Protocol-Version"] = version
+        response = client.post(
+            "/mcp",
+            headers=headers,
+            json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+        )
+        assert response.status_code == 202, response.text
+        response = client.post(
+            "/mcp",
+            headers=headers,
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["result"]["tools"][0]["name"] == "compatibility_probe"
+        response = client.post(
+            "/mcp",
+            headers=headers,
+            json={
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {"name": "compatibility_probe", "arguments": {}},
+            },
+        )
+        assert response.status_code == 200, response.text
+        result = response.json()["result"]
+        assert not result.get("isError")
+        assert json.loads(result["content"][0]["text"]) == {"ok": True}
+
+
 def test_modern_http_discovery_advertises_events_and_methods(setup):
     service, *_ = setup
     server = MCPServer("events")
