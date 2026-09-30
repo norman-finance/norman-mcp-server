@@ -23,6 +23,17 @@ jobs:
       - name: Full MCP suite (SDK 2, tenant isolation, Inbox and Events)
         run: python -m pytest -q
       - run: node --test tests/tax_filing_ui.test.cjs
+
+  # The browser fixtures download Playwright's Chromium (npm, CDN, apt). They
+  # run on every push and PR, but build and deploy do not wait for them, so a
+  # third-party download outage cannot block a production deploy or hotfix.
+  inbox-ui-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Browser fixtures for Inbox decisions
         run: |
           npm install --no-save --package-lock=false playwright@1.62.1
