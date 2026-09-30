@@ -1492,6 +1492,10 @@
             },
             "*",
           );
+          // A context sent through window.openai before a late answer never
+          // reached the bridge.
+          state.context = "";
+          void syncContext();
         }
         function adoptToolOutput() {
           if (state.data || !window.openai?.toolOutput) return;

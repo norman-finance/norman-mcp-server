@@ -955,7 +955,11 @@ test("host without ui/initialize renders window.openai tool output and polls thr
     await flush(page);
     assert.deepEqual(
       await page.evaluate(() => window.calls.map((call) => call.method)),
-      ["ui/initialize", "ui/notifications/initialized"],
+      [
+        "ui/initialize",
+        "ui/notifications/initialized",
+        "ui/update-model-context",
+      ],
     );
     assert.deepEqual(errors, []);
   } finally {
