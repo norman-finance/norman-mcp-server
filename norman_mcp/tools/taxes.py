@@ -176,7 +176,7 @@ def register_tax_tools(mcp):
         try:
             result = api._make_request("POST", preview_url)
             if not result.get("downloadUrl"):
-                raise ValueError("Preview generation failed: no download URL returned")
+                raise ToolError("Preview generation failed: no download URL returned")
 
             content: list = []
             preview_b64 = result.get("previewImage")
@@ -194,14 +194,19 @@ def register_tax_tools(mcp):
             ))
 
             return CallToolResult(content=content)
+        except ToolError:
+            # Deliberate failures remain useful to clients on both protocol eras.
+            raise
         except requests.exceptions.RequestException as e:
             logger.error("Failed to generate tax report preview: %s", e)
             if hasattr(e, "response") and e.response is not None:
                 logger.error("Response: %s", e.response.text)
-            raise ValueError(f"Failed to generate tax report preview: {e}")
+            raise ToolError("Could not generate the tax preview. Please try again.") from e
         except Exception as e:
             logger.error("Error generating tax report preview: %s", e)
-            raise ValueError(f"Error generating tax report preview: {e}")
+            raise ToolError(
+                "Could not generate the tax preview. Please try again or contact Norman support."
+            ) from e
 
     @mcp.tool(
         title="Submit Tax Report to Finanzamt",

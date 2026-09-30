@@ -19,6 +19,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.apps import Apps
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.auth.routes import validate_issuer_url
 
@@ -308,6 +309,7 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
         lifespan=lifespan,
         auth_server_provider=oauth_provider,
         auth=auth_settings,
+        extensions=[Apps()],
         debug=True,
     )
     
