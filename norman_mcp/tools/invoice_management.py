@@ -65,7 +65,7 @@ def _register_email_tools(mcp):  # noqa: ANN001, ANN202
 
         Each email has its kind (document or reminder), level, recipients (to, cc),
         status (scheduled, queued, sent, delivered, delayed, bounced, complained,
-        failed, cancelled) and viewedAt, the moment the client opened the page.
+        failed, cancelled).
         nextReminder is what the company's reminder rule sends next, or null. The invoice's
         remindersActive says whether Norman reminds by itself at all right now.
         viewUrl is the page the client opens. Check this before sending a reminder

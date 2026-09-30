@@ -31,7 +31,7 @@
 
 **Invoicing** — Create and edit invoices, quotes, and recurring schedules, including document templates, line discounts, units, service dates, payment links, and ZUGFeRD e-invoices; cancel an issued invoice with a Stornorechnung, credit part of it with a Rechnungskorrektur, or make a delivery note (Lieferschein) from an invoice or an approved quote
 
-**Client emails and reminders** — Send invoices with the company's own email wording and CC recipients, see whether the client opened them, switch automatic payment reminders on for an invoice, and set the reminder rule (days and dunning fees per level)
+**Client emails and reminders** — Send invoices with the company's own email wording and CC recipients, see their delivery status, switch automatic payment reminders on for an invoice, and set the reminder rule (days and dunning fees per level)
 
 **Bookkeeping** — Categorize transactions, match receipts, and verify entries
 
@@ -90,7 +90,7 @@ Use `cancel_invoice`, `create_credit_note` and `create_delivery_note` for docume
 
 #### Client emails and payment reminders
 
-`send_invoice` and `send_invoice_overdue_reminder` use the company's email template when `subject` and `body` are left out; `additional_emails` go out as CC, and the company's own copy follows its setting unless `is_send_to_company` is given. `list_invoice_emails` returns every email about a document with its delivery status, the moment the client opened it, and the reminder the rule sends next. A send that fails at once returns an error with the reason; otherwise `email.status` is `sent`, or `queued` while Norman retries. A dunning fee is shown in the reminder with the total and is paid by bank transfer: a reminder with a fee has no online payment button.
+`send_invoice` and `send_invoice_overdue_reminder` use the company's email template when `subject` and `body` are left out; `additional_emails` go out as CC, and the company's own copy follows its setting unless `is_send_to_company` is given. `list_invoice_emails` returns every email about a document with its delivery status and the reminder the rule sends next. A send that fails at once returns an error with the reason; otherwise `email.status` is `sent`, or `queued` while Norman retries. A dunning fee is shown in the reminder with the total and is paid by bank transfer: a reminder with a fee has no online payment button.
 
 Automatic reminders are off until `autoReminders` is true on the invoice (`create_invoice`, `create_recurring_invoice`, or `update_invoice`, also after the invoice was issued); `remindersPaused` stops them for one invoice and `skip_invoice_reminder` stops one planned reminder. `remindersActive` on an invoice says whether Norman reminds by itself right now. The company's rule and wording live in `get_invoice_email_settings` / `update_invoice_email_settings` and `list_invoice_email_templates` / `save_invoice_email_template` / `reset_invoice_email_template`. `settings_on_overdue` is kept for older integrations and sends nothing. These tools need the invoice email endpoints of the API to be live before this MCP version is deployed.
 

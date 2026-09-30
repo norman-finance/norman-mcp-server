@@ -45,7 +45,7 @@ Invoice appearance and edits:
 - For services, provide the requested service start/end dates. For goods, provide the delivery date. A recurring invoice takes `interval`, `interval_count`, `starts_on` (the first invoice date), `payment_due_days` and `billing_in_advance`; Norman sets the dates of each invoice from them.
 - Creation and edits accept payment links, QR codes, bank details, discounts, VAT notes, recipient/sender snapshots, and email/reminder settings. Use an empty VAT note only when the user requests no note; omission lets the API choose it.
 - Payment reminders are off unless the user asks for them. `auto_reminders` / `autoReminders` true on `create_invoice`, `create_recurring_invoice` or `update_invoice` makes Norman remind the client by the company's rule (paid plans). `settings_on_overdue` is an older field and sends nothing.
-- `list_invoice_emails` shows every email to the client with its delivery status and whether the client opened it. Email wording lives in `list_invoice_email_templates` / `save_invoice_email_template`; the reminder rule in `get_invoice_email_settings` / `update_invoice_email_settings`.
+- `list_invoice_emails` shows every email to the client with its delivery status. Email wording lives in `list_invoice_email_templates` / `save_invoice_email_template`; the reminder rule in `get_invoice_email_settings` / `update_invoice_email_settings`.
 - Set `is_to_send` / `isToSend` only when sending is requested or already authorized. Otherwise save the document without sending it. The same applies to `mode` "send" on a recurring invoice; the default "draft" sends nothing.
 
 Corrections and delivery notes (documents made from an existing document):
