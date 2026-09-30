@@ -1559,6 +1559,53 @@ test("the page returned by the server becomes the current page", async () => {
   }
 });
 
+test("an expired Norman session stops polling until the user interacts", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    const expired =
+      "Your Norman session expired. Please disconnect and reconnect the Norman connector in your AI client to re-authenticate.";
+    const reads = async () =>
+      (await toolCalls(page, "get_norman_inbox_data")).length;
+    await page.evaluate(
+      (error) =>
+        (window.hooks.get_norman_inbox_data = () => ({
+          error,
+          reconnect: true,
+        })),
+      expired,
+    );
+    await page.clock.runFor(30_001);
+    await until(page, quiet, undefined, "the failed poll");
+    assert.equal((await view(page)).status, expired);
+    assert.match(
+      await ui.locator("#freshness").innerText(),
+      /Auto refresh paused until you use the Inbox again/,
+    );
+    assert.equal(await reads(), 2);
+    // No polls, focus or visibility wake-ups while the session is expired.
+    await page.clock.runFor(600_000);
+    await page
+      .frames()[1]
+      .evaluate(() => window.dispatchEvent(new Event("focus")));
+    await setShown(page, false);
+    await setShown(page, true);
+    await page.clock.runFor(1);
+    await flush(page);
+    assert.equal(await reads(), 2);
+    // After reconnecting, the user refreshes and polling resumes.
+    await page.evaluate(() => delete window.hooks.get_norman_inbox_data);
+    await ui.getByRole("button", { name: "Refresh", exact: true }).click();
+    await idle(page);
+    assert.equal((await view(page)).status, "Updated from Norman.");
+    await page.clock.runFor(30_001);
+    await idle(page);
+    assert.equal(await reads(), 4);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
 test("tool errors show the API's own message and never a raw URL", async () => {
   const { page, ui, errors } = await fixture();
   try {

@@ -416,6 +416,7 @@
           pollTimer: null,
           pollDue: 0,
           quiet: 0,
+          halted: false,
           markup: "",
           refreshPromise: null,
           refreshWanted: false,
@@ -529,9 +530,11 @@
             : "";
           freshness.textContent =
             checked +
-            (state.visible && !state.disposed
-              ? "Auto refresh every 30s while visible, slower while nothing changes"
-              : "Auto refresh paused");
+            (!state.visible || state.disposed
+              ? "Auto refresh paused"
+              : state.halted
+                ? "Auto refresh paused until you use the Inbox again"
+                : "Auto refresh every 30s while visible, slower while nothing changes");
         }
         function stopPolling() {
           clearTimeout(state.pollTimer);
@@ -543,7 +546,8 @@
             !state.initialized ||
             state.disposed ||
             !state.visible ||
-            state.busy
+            state.busy ||
+            state.halted
           )
             return;
           state.pollDue = Date.now() + delay;
@@ -650,7 +654,12 @@
             "Norman could not complete the request."
           );
         }
-        const problem = (d) => Error(explain(d));
+        function problem(d) {
+          const error = Error(explain(d));
+          // The Norman session expired: nothing works until reconnecting.
+          if (d?.reconnect === true) error.reconnect = true;
+          return error;
+        }
         const object = (x) => {
           if (x?.isError) {
             const text = x.content?.find?.((v) => v.type === "text")?.text;
@@ -743,6 +752,20 @@
           throw Error("Conversation messaging is unavailable in this host.");
         }
         // kind: load, refresh, open, approve, dismiss, undo, answer or ask.
+        function unloaded() {
+          if (!state.data)
+            content.innerHTML =
+              '<div class="empty">The Inbox could not be loaded.</div>';
+        }
+        // Stop polling until the user interacts with the Inbox again.
+        function halt(message) {
+          state.halted = true;
+          state.refreshWanted = false;
+          stopPolling();
+          say(message, true);
+          unloaded();
+          updateFreshness();
+        }
         async function action(fn, { kind = "refresh" } = {}) {
           if (state.busy || state.disposed) return;
           const revision = ++state.revision,
@@ -754,6 +777,7 @@
             };
           state.busy = true;
           state.quiet = 0;
+          state.halted = false;
           state.warning = "";
           stopPolling();
           syncControls();
@@ -766,11 +790,10 @@
           } catch (e) {
             if (state.disposed) return;
             if (e.name === "StaleResponse") await superseded(job);
+            else if (e.reconnect) halt(e.message);
             else {
               say(e.message, true);
-              if (!state.data)
-                content.innerHTML =
-                  '<div class="empty">The Inbox could not be loaded.</div>';
+              unloaded();
             }
           } finally {
             state.busy = false;
@@ -944,8 +967,9 @@
             if (state.resume) say("Updated from Norman.");
             state.resume = false;
           } catch (error) {
-            if (error.name !== "StaleResponse" && !state.disposed)
-              say(`Could not refresh: ${error.message}`, true);
+            if (error.name === "StaleResponse" || state.disposed) return;
+            if (error.reconnect) halt(error.message);
+            else say(`Could not refresh: ${error.message}`, true);
           } finally {
             // Back off while nothing on screen changes.
             if (checked) state.quiet = state.markup === shown ? state.quiet + 1 : 0;
@@ -1333,6 +1357,7 @@
             // everything when the company changes.
             const shown = state.markup;
             setInbox(d);
+            state.halted = false;
             render();
             updateFreshness();
             // A pushed result is a fresh check: it never triggers a re-read,
@@ -1340,7 +1365,8 @@
             if (state.markup !== shown) state.quiet = 0;
             if (!state.busy && !state.refreshPromise) schedulePolling();
           } catch (err) {
-            say(err.message, true);
+            if (err.reconnect) halt(err.message);
+            else say(err.message, true);
           }
         }
         const reply = (id, body) =>
@@ -1382,7 +1408,13 @@
             refresh(state.data?.pagination.page || 1, revision),
           );
         function wake() {
-          if (!state.initialized || !state.visible || state.disposed) return;
+          if (
+            !state.initialized ||
+            !state.visible ||
+            state.disposed ||
+            state.halted
+          )
+            return;
           // Restoring a focused input during a render may also focus the iframe.
           // The active read/action already refreshes it, so do not queue a loop.
           if (state.busy || state.refreshPromise) return;
@@ -1396,10 +1428,18 @@
           if (state.pollTimer === null || state.pollDue > Date.now() + wait)
             schedulePolling(wait);
         }
-        // Interaction brings polling back to every 30 s.
+        // Interaction brings polling back to every 30 s and resumes it after
+        // an expired session.
         function touch() {
           state.quiet = 0;
-          if (state.pollTimer !== null && state.pollDue > Date.now() + POLL_MS)
+          if (state.halted) {
+            state.halted = false;
+            if (!state.refreshPromise) schedulePolling(POLL_MS);
+            updateFreshness();
+          } else if (
+            state.pollTimer !== null &&
+            state.pollDue > Date.now() + POLL_MS
+          )
             schedulePolling(POLL_MS);
         }
         function visibilityChanged() {
