@@ -101,18 +101,23 @@ def _flexible_validate_redirect_uri(self, redirect_uri):
     Note: we deliberately do NOT trust the client's own registered redirect_uris
     here — with open Dynamic Client Registration an attacker controls that list,
     so the only meaningful check is the server-level allow-list above.
+
+    That includes the RFC 6749 fallback for a request that omits redirect_uri:
+    the client's single registered URI is attacker-controlled too, so it gets
+    exactly the same allow-list check as an explicit one. Returning it unchecked
+    let a self-registered client receive a victim's authorization code.
     """
-    if redirect_uri is not None:
-        uri_str = str(redirect_uri)
-        if is_allowed_redirect_uri(uri_str):
-            return redirect_uri
-        raise InvalidRedirectUriError(f"redirect_uri not allowed: {uri_str}")
-    elif self.redirect_uris is not None and len(self.redirect_uris) == 1:
-        return self.redirect_uris[0]
-    else:
-        raise InvalidRedirectUriError(
-            "redirect_uri must be specified when client has multiple registered URIs"
-        )
+    if redirect_uri is None:
+        if self.redirect_uris is not None and len(self.redirect_uris) == 1:
+            redirect_uri = self.redirect_uris[0]
+        else:
+            raise InvalidRedirectUriError(
+                "redirect_uri must be specified when client has multiple registered URIs"
+            )
+    uri_str = str(redirect_uri)
+    if is_allowed_redirect_uri(uri_str):
+        return redirect_uri
+    raise InvalidRedirectUriError(f"redirect_uri not allowed: {uri_str}")
 
 OAuthClientInformationFull.validate_redirect_uri = _flexible_validate_redirect_uri
 
@@ -304,7 +309,9 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
         auth=auth_settings,
         host=host,
         port=port,
-        debug=True,
+        # Starlette debug mode returns full tracebacks to HTTP clients; keep it
+        # opt-in for local debugging only.
+        debug=os.environ.get("NORMAN_MCP_DEBUG") == "1",
         stateless_http=streamable_http_options.get("stateless", False),
         json_response=streamable_http_options.get("json_response", True),
     )
