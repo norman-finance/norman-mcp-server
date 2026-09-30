@@ -77,6 +77,7 @@ async function fixture(
           blockedReason: "user_input",
           title: "Monthly close",
           blockedDetail: "What was this purchase for?",
+          canChat: true,
         },
       ],
       runs: [],
@@ -1312,6 +1313,41 @@ test("sending re-reads the question and blocks a draft written for another one",
     await ui.getByRole("button", { name: "Send answer to Norman" }).click();
     await idle(page);
     assert.deepEqual(await sentAnswers(page), ["No, it is a business expense"]);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("only the person who started a workflow gets an answer box", async () => {
+  const { page, ui, errors } = await fixture();
+  try {
+    const note = "Only the person who started this workflow can answer it here.";
+    const aside = ui.locator("aside");
+    for (const canChat of ["false", "missing"]) {
+      await page.evaluate((canChat) => {
+        if (canChat === "missing") delete window.inbox.questions[0].canChat;
+        else window.inbox.questions[0].canChat = false;
+      }, canChat);
+      await ui.getByRole("button", { name: "Review question" }).click();
+      await settled(page);
+      assert.equal(await ui.locator("#answer").count(), 0, canChat);
+      assert.equal(await aside.getByText(note, { exact: true }).count(), 1);
+      assert.equal(
+        await aside.getByRole("button", { name: "Discuss in chat" }).count(),
+        1,
+      );
+    }
+    // Revoked between showing the answer box and sending.
+    await page.evaluate(() => (window.inbox.questions[0].canChat = true));
+    await ui.getByRole("button", { name: "Review question" }).click();
+    await settled(page);
+    await ui.locator("#answer").fill("Annual software license");
+    await page.evaluate(() => (window.inbox.questions[0].canChat = false));
+    await ui.getByRole("button", { name: "Send answer to Norman" }).click();
+    assert.equal(await settled(page), note);
+    assert.equal(await ui.locator("#answer").count(), 0);
+    assert.equal((await mutations(page)).length, 0);
     assert.deepEqual(errors, []);
   } finally {
     await page.close();

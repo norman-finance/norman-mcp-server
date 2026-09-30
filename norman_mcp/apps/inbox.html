@@ -430,7 +430,9 @@
         const REVIEW_CHANGED =
             "This approval changed. Review the current values and confirm again.",
           QUESTION_CHANGED =
-            "This workflow question changed. Review your answer before sending.";
+            "This workflow question changed. Review your answer before sending.",
+          STARTER_ONLY =
+            "Only the person who started this workflow can answer it here.";
         const stable = (x) =>
           JSON.stringify(x, (_, value) =>
             value && typeof value === "object" && !Array.isArray(value)
@@ -961,8 +963,9 @@
           if (!d)
             return '<h2>Review a decision</h2><p class="muted">Select an approval to see the current values and every planned action.</p>';
           if (d.kind === "workflow") {
-            const r = d.run;
-            return `<h2>${esc(r.title)}</h2><div class="tag">${esc(human(r.blockedReason || r.state))}</div><p>${esc(r.blockedDetail)}</p>${r.state === "active" && r.blockedReason === "user_input" ? `${draftChanged() ? `<p class="error">The question changed after you started your answer. You wrote it for: “${esc(state.answerQuestion)}”</p><div class="row"><button id="answer-keep">Use my answer for this question</button></div>` : ""}<label for="answer">Your answer</label><textarea id="answer" placeholder="Provide the missing information">${esc(state.answer)}</textarea><button class="primary" id="answer-send">Send answer to Norman</button>` : '<button id="workflow-ask">Discuss in chat</button>'}`;
+            const r = d.run,
+              asking = r.state === "active" && r.blockedReason === "user_input";
+            return `<h2>${esc(r.title)}</h2><div class="tag">${esc(human(r.blockedReason || r.state))}</div><p>${esc(r.blockedDetail)}</p>${asking && r.canChat === true ? `${draftChanged() ? `<p class="error">The question changed after you started your answer. You wrote it for: “${esc(state.answerQuestion)}”</p><div class="row"><button id="answer-keep">Use my answer for this question</button></div>` : ""}<label for="answer">Your answer</label><textarea id="answer" placeholder="Provide the missing information">${esc(state.answer)}</textarea><button class="primary" id="answer-send">Send answer to Norman</button>` : `${asking ? `<p class="notice">${STARTER_ONLY}</p>` : ""}<button id="workflow-ask">Discuss in chat</button>`}`;
           }
           const e = d.execution,
             actions = e.actionsPlanned || [],
@@ -1222,6 +1225,7 @@
                 if (
                   fresh.state !== "active" ||
                   fresh.blockedReason !== "user_input" ||
+                  fresh.canChat !== true ||
                   questionKey(fresh) !== bound
                 ) {
                   setDetail({
@@ -1230,7 +1234,9 @@
                     run: fresh,
                   });
                   render();
-                  throw Error(QUESTION_CHANGED);
+                  throw Error(
+                    fresh.canChat === true ? QUESTION_CHANGED : STARTER_ONLY,
+                  );
                 }
                 job.sent = { runId: run.publicId };
                 await tool("answer_workflow_question", {
