@@ -1,0 +1,4 @@
+# Applied to the production image and CI (pip -c constraints.txt), so tests run
+# against the SDK that ships. server.py patches SDK 2 internals (the redirect
+# allow-list among them): move to a new minor deliberately, with the full suite.
+mcp>=2.2.0,<2.3
