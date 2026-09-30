@@ -200,7 +200,17 @@ def register_inbox(mcp: Any) -> None:
         name="norman-inbox",
         title="Norman Inbox",
         mime_type="text/html;profile=mcp-app",
-        meta={"ui": {"prefersBorder": False, "csp": {"connectDomains": [], "resourceDomains": []}}},
+        meta={
+            "ui": {"prefersBorder": False, "csp": {"connectDomains": [], "resourceDomains": []}},
+            # The same hints the other Norman widgets give ChatGPT.
+            "openai/widgetDescription": (
+                "Norman's Inbox for the selected company: workflows waiting for an answer, "
+                "pending automation approvals and tax reviews. Nothing is approved without "
+                "explicit user consent."
+            ),
+            "openai/widgetPrefersBorder": False,
+            "openai/widgetCSP": {"connect_domains": [], "resource_domains": []},
+        },
     )
     async def inbox_resource() -> str:
         return Path(__file__).with_name("inbox.html").read_text(encoding="utf-8")
