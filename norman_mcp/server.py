@@ -236,8 +236,10 @@ async def lifespan(app):
     if transport == "stdio":
         await authenticate_with_credentials(api_client)
     else:
-        # SDK 2 runs lifespan once per server, outside an authenticated request.
-        # Identity must be resolved when tools run, never from startup state.
+        # Streamable HTTP enters this lifespan once per process, outside any
+        # request; SSE enters it once per connection. Either way identity must
+        # be resolved when tools run, never from startup state, and nothing
+        # process-wide may be started or stopped here without a transport check.
         api_client.token_source = "oauth"
         from norman_mcp.context import get_api_token
         token = get_api_token()
@@ -313,6 +315,10 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
         debug=True,
     )
     
+    # SDK 2 bounds subscriptions/listen only process-wide; bound it per connection.
+    from norman_mcp.security.listen_limits import ListenLimits
+    server.middleware.append(ListenLimits())
+
     server._transport = transport_type
     server._http_options = {
         "host": host,
