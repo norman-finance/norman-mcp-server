@@ -92,6 +92,10 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         # `NormanAPI.company_id` attribute, which was shared process-wide and was
         # both how switch_company "persisted" and how companies leaked.
         self.token_to_company_id: Dict[str, str] = {}
+        # MCP access/refresh token -> grant id. Every token minted from one
+        # authorization (refreshes included) shares the id, so per-connection
+        # limits cannot be multiplied by refreshing.
+        self.token_grants: Dict[str, str] = {}
         # Persisted records this version could not load, keyed by section. They
         # are written back verbatim so a partial load never erases them from disk.
         self._unloaded_state: Dict[str, Dict[str, Any]] = {}
@@ -146,6 +150,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                     "tokens": {**unloaded.get("tokens", {}), **tokens_ser},
                     "token_mapping": self.token_mapping,
                     "token_to_company_id": self.token_to_company_id,
+                    "token_grants": getattr(self, "token_grants", {}),
                 }
 
                 tmp = path.with_suffix(".tmp")
@@ -251,6 +256,8 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
 
         self.token_mapping = section("token_mapping")
         self.token_to_company_id = section("token_to_company_id")
+        live = set(self.tokens) | set(self.refresh_tokens)
+        self.token_grants = {t: g for t, g in section("token_grants").items() if t in live}
         logger.info(
             "Restored OAuth state: %d clients, %d refresh tokens, %d access tokens (%d unreadable kept)",
             len(self.clients), len(self.refresh_tokens), len(self.tokens), skipped,
@@ -551,6 +558,8 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         
         # Map MCP token to Norman token
         self.token_mapping[mcp_token] = norman_token
+        grant = f"grant_{secrets.token_hex(16)}"
+        self.token_grants[mcp_token] = grant
         
         # Check for refresh token
         norman_refresh = self.token_mapping.get(f"refresh_{authorization_code.code}")
@@ -565,6 +574,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 expires_at=int(time.time()) + 30 * 86400,  # 30 days
             )
             self.token_mapping[refresh_token_id] = norman_refresh
+            self.token_grants[refresh_token_id] = grant
             # Also index by access token so we can transparently refresh the
             # Norman access token when it expires mid-session (see
             # NormanAPI._make_request 401 handler).
@@ -661,6 +671,11 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 )
                 self.token_mapping[new_mcp_token] = norman_token
                 self.token_mapping[f"refresh_for_{new_mcp_token}"] = norman_refresh
+                # The refresh token is not rotated, so it identifies the grant even
+                # for grants issued before grant ids were recorded.
+                self.token_grants[new_mcp_token] = self.token_grants.get(
+                    refresh_token.token, refresh_token.token
+                )
             self._save_state()
 
             return OAuthToken(
@@ -670,6 +685,10 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 scope=" ".join(scopes or refresh_token.scopes),
                 refresh_token=refresh_token.token,
             )
+
+    def grant_for_token(self, token: str) -> str:
+        """The authorization a token belongs to; unknown tokens stand for themselves."""
+        return getattr(self, "token_grants", {}).get(token, token)
 
     async def revoke_token(self, token: str, token_type_hint: Optional[str] = None) -> None:
         """Revoke a token."""
@@ -689,6 +708,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             logger.info(f"Revoked refresh token: {token[:10]}...")
             changed = True
         if changed:
+            getattr(self, "token_grants", {}).pop(token, None)
             self._save_state()
 
     def get_norman_token(self, mcp_token: str) -> Optional[str]:
