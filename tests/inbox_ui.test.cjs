@@ -1451,6 +1451,68 @@ test("approval review shows names, amount and date instead of raw ids", async ()
   }
 });
 
+test("a warning raised by a user refresh is not replaced by its success status", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    const refreshNow = async () => {
+      await ui.getByRole("button", { name: "Refresh", exact: true }).click();
+      await idle(page);
+      return (await view(page)).status;
+    };
+    await drafted(page, ui);
+    await page.evaluate(
+      (question) => (window.inbox.questions[0].blockedDetail = question),
+      QUESTION_B,
+    );
+    assert.equal(
+      await refreshNow(),
+      "This workflow question changed. Review your answer before sending.",
+    );
+    // Consent on one approval; opening another one is not a change to it.
+    await page.evaluate(() => {
+      window.inbox.approvals.push({
+        publicId: "approval-2",
+        ruleName: "Client payments",
+        transaction: { description: "Invoice 2026-041" },
+      });
+      window.hooks.get_norman_approval_data = ({ execution_id }) =>
+        execution_id === "approval-2"
+          ? {
+              ...window.detail,
+              execution: {
+                ...window.detail.execution,
+                publicId: "approval-2",
+                ruleName: "Client payments",
+              },
+            }
+          : window.detail;
+    });
+    await refreshNow();
+    await ui.getByRole("button", { name: "Review changes" }).first().click();
+    await idle(page);
+    await ui.locator("#confirm").check();
+    await ui.getByRole("button", { name: "Review changes" }).nth(1).click();
+    await idle(page);
+    assert.equal((await view(page)).status, "Updated from Norman.");
+    assert.equal(await ui.locator("aside h2").innerText(), "Client payments");
+    await ui.locator("#confirm").check();
+    await page.evaluate(() => (window.detail.before.vatRate = 0));
+    await ui.getByRole("button", { name: "Review changes" }).first().click();
+    await idle(page);
+    await ui.locator("#confirm").check();
+    await page.evaluate(() => (window.detail.before.vatRate = 19));
+    assert.equal(
+      await refreshNow(),
+      "This approval changed. Review the current values and confirm again.",
+    );
+    assert.equal((await view(page)).confirm, false);
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
 test("tool errors show the API's own message and never a raw URL", async () => {
   const { page, ui, errors } = await fixture();
   try {

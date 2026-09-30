@@ -325,6 +325,9 @@
       #undo {
         margin-top: 8px;
       }
+      #answer-keep {
+        margin-bottom: 16px;
+      }
       #status {
         min-height: 24px;
         margin-top: 12px;
@@ -417,6 +420,7 @@
           refreshPromise: null,
           refreshWanted: false,
           resume: false,
+          warning: "",
           lastCheck: null,
         };
         const content = document.querySelector("#content"),
@@ -430,6 +434,11 @@
         function say(text, error = false) {
           status.textContent = error ? stripUrls(text) : text;
           status.className = error ? "error" : "";
+        }
+        // A warning outlives the success status of the action that raised it.
+        function warn(text) {
+          state.warning = text;
+          say(text);
         }
         const REVIEW_CHANGED =
             "This approval changed. Review the current values and confirm again.",
@@ -547,7 +556,9 @@
           const previousKey = selectionKey(state.detail),
             nextKey = selectionKey(next),
             changedReview =
-              !!state.consent && state.consent !== reviewKey(next),
+              !!state.consent &&
+              previousKey === nextKey &&
+              state.consent !== reviewKey(next),
             draftFitted = !draftChanged();
           if (previousKey !== nextKey) {
             state.answer = "";
@@ -556,8 +567,8 @@
           if (state.consent !== reviewKey(next)) state.consent = "";
           state.detail = next;
           state.reviewStale = false;
-          if (changedReview) say(REVIEW_CHANGED);
-          else if (draftFitted && draftChanged()) say(QUESTION_CHANGED);
+          if (changedReview) warn(REVIEW_CHANGED);
+          else if (draftFitted && draftChanged()) warn(QUESTION_CHANGED);
         }
         function setInbox(next) {
           if (
@@ -582,7 +593,7 @@
             state.answer = "";
             state.answerFor = "";
             state.context = "";
-            say("Company changed. Select a decision to review.");
+            warn("Company changed. Select a decision to review.");
           }
           state.data = next;
           state.lastCheck = Date.now();
@@ -740,6 +751,7 @@
             };
           state.busy = true;
           state.quiet = 0;
+          state.warning = "";
           stopPolling();
           syncControls();
           say("Working…");
@@ -747,7 +759,7 @@
             const message = await fn(revision, job);
             // A chat message was delivered whatever the view did meanwhile.
             if (kind !== "ask") guard(revision);
-            say(message || "Updated from Norman.");
+            say(state.warning || message || "Updated from Norman.");
           } catch (e) {
             if (state.disposed) return;
             if (e.name === "StaleResponse") await superseded(job);
