@@ -1,6 +1,7 @@
 import logging
 from decimal import Decimal
 from typing import Dict, Any, Optional, List
+from typing import Annotated
 from urllib.parse import urljoin
 from datetime import datetime
 from pydantic import Field
@@ -31,6 +32,21 @@ ITEM_TAX_DESCRIPTION = (
     "Read existing items first; omitted fields are preserved by public_id. "
     "Amounts use document orientation: purchases positive, discounts negative; refunds are normalized automatically."
 )
+CATEGORY_METADATA_DESCRIPTION = (
+    "Category-specific tax/deduction metadata. For manual EUR entries of German sole proprietors, "
+    "Norman calculates three flat rates from it and replaces the amount (0% VAT, payment type "
+    "PRIVATE_CONTRIBUTION): 'Travel meal allowance' {trip_meal_allowance: {trip_start_date, "
+    "trip_finish_date, trip_destination (ISO country code), trip_place? (city key from "
+    "get_flat_rates), trip_travel_days? (arrival, departure or over 8 hours away), "
+    "trip_full_days? (24 hours away)}}, one entry per country; 'Home office flat rate' "
+    "{home_office_flat_rate: {home_office_start_date, home_office_finish_date, home_office_days?}}, "
+    "which stops at the yearly maximum across entries; 'Private car usage' {car_usage: "
+    "{car_use_type (BUSINESS_TRIP or DRIVE_TO_WORK), car_usage_start_date, car_usage_finish_date, "
+    "car_usage_distance (km there and back for a trip, one way to work), car_usage_days? "
+    "(DRIVE_TO_WORK), car_usage_method (FLAT_RATE calculates, ACTUAL_COSTS keeps the amount)}}. "
+    "Keep the dates in one calendar year. Without days, the entry keeps the amount passed."
+)
+CategoryMetadata = Annotated[dict | None, Field(description=CATEGORY_METADATA_DESCRIPTION)]
 
 
 def _build_items_payload(items: List[dict], *, negate: bool) -> List[dict]:
@@ -207,6 +223,50 @@ def register_transaction_tools(mcp):
         return await api.arequest("GET", url)
 
     @mcp.tool(
+        title="Get Flat Rates",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def get_flat_rates(
+        ctx: Context,
+        year: int = Field(description="Tax year, e.g. 2026"),
+        country: str | None = Field(
+            default=None,
+            description="ISO country code of a trip destination; omit for every country",
+        ),
+        exclude_transaction_id: str | None = Field(
+            default=None,
+            description="Public ID of the home office entry being edited: its own amount does not count as booked",
+        ),
+    ) -> dict[str, Any]:
+        """Official flat rates Norman uses for the travel meal allowance and the home office flat rate.
+
+        mealAllowance gives per country the fullDay and travelDay rates, and city rates with the key
+        to pass as trip_place. homeOffice gives perDay, mostPerYear and what the year's other home
+        office entries already use (booked). Null means Norman has no rate for that year.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+        url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/accounting/transactions/flat-rates/",
+        )
+        params: dict[str, Any] = {"year": year}
+        if exclude_transaction_id:
+            params["exclude"] = exclude_transaction_id
+        rates = await api.arequest("GET", url, params=params)
+        meal = rates.get("mealAllowance") if isinstance(rates, dict) else None
+        if country and isinstance(meal, dict):
+            rates["mealAllowance"] = {country.upper(): meal.get(country.upper())}
+        return rates
+
+    @mcp.tool(
         title="Create Transaction",
         annotations=ToolAnnotations(
             readOnlyHint=False,
@@ -278,10 +338,7 @@ def register_transaction_tools(mcp):
             default=None,
             description="Optional cash/bank/card/PayPal Ledger account override for the payment side",
         ),
-        category_metadata: Optional[dict] = Field(
-            default=None,
-            description="Optional category-specific metadata used by Norman tax and deduction treatments",
-        ),
+        category_metadata: CategoryMetadata = None,
         items: Optional[List[dict]] = Field(
             default=None,
             description=(
@@ -325,7 +382,7 @@ def register_transaction_tools(mcp):
         }
 
         if category_id:
-            transaction_data["category_id"] = category_id
+            transaction_data["category"] = category_id
         if company_category_id:
             transaction_data["companyCategory"] = company_category_id
         if payment_date:
@@ -356,7 +413,7 @@ def register_transaction_tools(mcp):
             )
             transaction_data.pop("amount", None)
             transaction_data.pop("vatRate", None)
-            transaction_data.pop("category_id", None)
+            transaction_data.pop("category", None)
             transaction_data.pop("companyCategory", None)
 
         return await api.arequest("POST", transactions_url, json_data=transaction_data)
@@ -439,9 +496,7 @@ def register_transaction_tools(mcp):
         ledger_payment_account_code: Optional[str] = Field(
             default=None, description="Payment-side Ledger account override"
         ),
-        category_metadata: Optional[dict] = Field(
-            default=None, description="Category-specific tax/deduction metadata"
-        ),
+        category_metadata: CategoryMetadata = None,
         document_not_required: Optional[bool] = Field(
             default=None, description="Whether no receipt/invoice is required"
         ),
