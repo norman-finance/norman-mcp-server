@@ -37,7 +37,7 @@ INTERVAL = 30
 MAX_WATCHES = 128
 MAX_PER_GRANT = 4
 MAX_LISTENERS = 128
-# Interactive snapshot reads per access token, so one caller cannot occupy every slot.
+# Interactive snapshot reads per grant, so one caller cannot occupy every slot.
 MAX_READS_PER_TOKEN = 2
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,8 @@ class Watch:
     expires: float
     digest: str
     listeners: int = 0
+    # client + OAuth grant: tokens refreshed from one authorization share it.
+    grant: str = ""
 
 
 class PinnedAPI(NormanAPI):
@@ -129,6 +131,11 @@ class InboxLive:
         # One connection pool for every observer and snapshot read; set by run().
         self.http: httpx.AsyncClient | None = None
 
+    def grant_of(self, access: Any) -> str:
+        grant_for_token = getattr(self.provider, "grant_for_token", None)
+        grant = grant_for_token(access.token) if grant_for_token else access.token
+        return f"{access.client_id}:{grant}"
+
     def valid(self, watch: Watch) -> bool:
         access = self.provider.tokens.get(watch.token)
         return bool(
@@ -189,6 +196,7 @@ class InboxLive:
         if not access or not company:
             raise ToolError("Inbox watches require an authenticated Norman connection.")
         company = str(company)
+        grant = self.grant_of(access)
         self.prune()
         # Idempotent within the lease; no extra watchers on tool retries.
         for watch in self.watches.values():
@@ -197,14 +205,14 @@ class InboxLive:
                 return self.description(watch)
         if (
             len(self.watches) >= MAX_WATCHES
-            or sum(watch.token == access.token for watch in self.watches.values()) >= MAX_PER_GRANT
+            or sum(watch.grant == grant for watch in self.watches.values()) >= MAX_PER_GRANT
         ):
             raise ToolError("Inbox watch limit reached. Retry after the current lease expires.")
         selection = self.provider.get_company_for_token(access.token)
         provisional = Watch("", access.token, access.client_id, company, selection, page, 0, "")
         try:
             data, denied = await self.snapshot(
-                PinnedAPI(self.provider, provisional, self.http), page, reader=access.token
+                PinnedAPI(self.provider, provisional, self.http), page, reader=grant
             )
         except TimeoutError:
             raise ToolError("Inbox is busy. Retry opening the watch shortly.") from None
@@ -217,6 +225,7 @@ class InboxLive:
             page=page,
             expires=min(time.time() + TTL, access.expires_at or float("inf")),
             digest=fingerprint(data),
+            grant=grant,
         )
         # Re-check after awaited reads, and re-check quotas for concurrent opens.
         self.prune()
@@ -224,7 +233,7 @@ class InboxLive:
             raise ToolError(DENIED)
         if (
             len(self.watches) >= MAX_WATCHES
-            or sum(w.token == access.token for w in self.watches.values()) >= MAX_PER_GRANT
+            or sum(w.grant == grant for w in self.watches.values()) >= MAX_PER_GRANT
         ):
             raise ToolError("Inbox watch limit reached. Retry after the current lease expires.")
         for existing in self.watches.values():
@@ -264,7 +273,7 @@ class InboxLive:
         watch = self.permitted(uri, company)
         try:
             data, denied = await self.snapshot(
-                PinnedAPI(self.provider, watch, self.http), watch.page, reader=watch.token
+                PinnedAPI(self.provider, watch, self.http), watch.page, reader=watch.grant or watch.token
             )
         except TimeoutError:
             raise MCPError(-32603, "Inbox is busy. Retry shortly.") from None

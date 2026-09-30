@@ -487,3 +487,22 @@ def test_live_inbox_only_runs_on_streamable_http(monkeypatch, tmp_path, transpor
     # SSE enters the lifespan once per connection; a process-wide observer there
     # would multiply per client and close for everyone on the first disconnect.
     assert (getattr(server, "_inbox_live", None) is not None) is enabled
+
+
+@pytest.mark.asyncio
+async def test_refreshed_tokens_of_one_grant_share_the_lease_limit(setup, monkeypatch):
+    service, provider, current, api = setup
+    provider.tokens["alice-refreshed"] = provider.tokens["alice"].model_copy(
+        update={"token": "alice-refreshed"}
+    )
+    provider.mapping["alice-refreshed"] = "norman-alice-2"
+    provider.companies["alice-refreshed"] = "company-a"
+    provider.grant_for_token = lambda token: {"alice": "g1", "alice-refreshed": "g1"}.get(token, token)
+    monkeypatch.setattr(inbox_live, "MAX_PER_GRANT", 1)
+
+    await service.open(api, 1)
+    current[0] = provider.tokens["alice-refreshed"]
+    with pytest.raises(ToolError, match="limit"):
+        await service.open(api, 2)  # a refresh does not buy another lease
+    current[0] = provider.tokens["bob"]
+    assert (await service.open(api, 2))["page"] == 2  # a different grant still can

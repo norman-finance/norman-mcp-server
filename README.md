@@ -487,10 +487,9 @@ connected, with 30 seconds between observation cycles. Each watch observes one
 approval page, workflow state and bounded tax reviews; it is not a complete
 company event log and may miss intermediate changes. Financial snapshots are
 never cached in the change bus. There are at most 128 leases/streams, four leases
-and four open streams per access token, four concurrent snapshot reads (three API
-sources per snapshot) and two per access token. Limits count access tokens: a
-client that keeps refreshing holds several at once, so one account can still use
-a larger share until those tokens expire.
+and four open streams per OAuth grant, four concurrent snapshot reads (three API
+sources per snapshot) and two per grant. Tokens refreshed from one authorization
+share its grant, so refreshing does not raise these limits.
 
 Leases and the SDK subscription bus are in memory. Use one process/replica;
 multiple replicas require shared lease state, OAuth state and a distributed
