@@ -393,6 +393,7 @@
           ready: false,
           pending: new Map(),
           id: 1,
+          initId: null,
           revision: 0,
           consent: "",
           answer: "",
@@ -572,7 +573,7 @@
           if (d?.error) throw Error(d.error);
           return d;
         };
-        function rpc(method, params) {
+        function rpc(method, params, timeout = 30000) {
           const id = state.id++;
           return new Promise((resolve, reject) => {
             const timer = setTimeout(() => {
@@ -580,7 +581,7 @@
               reject(
                 Error("Request timed out. Refresh before retrying an action."),
               );
-            }, 30000);
+            }, timeout);
             state.pending.set(id, { resolve, reject, timer });
             parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
           });
@@ -1071,7 +1072,12 @@
           // is a response to one of our requests.
           if (m.method === undefined) {
             const p = m.id !== undefined && state.pending.get(m.id);
-            if (!p) return;
+            if (!p) {
+              // A host that answers ui/initialize after our 5 s wait still
+              // gets the initialized notification it waits for.
+              if (m.id === state.initId && m.result && !m.error) connected();
+              return;
+            }
             clearTimeout(p.timer);
             state.pending.delete(m.id);
             m.error ? p.reject(Error(m.error.message)) : p.resolve(m.result);
@@ -1139,36 +1145,53 @@
           updateFreshness();
         }
         window.addEventListener("pagehide", dispose, { once: true });
-        updateFreshness();
-        (async () => {
+        function connected() {
+          if (state.ready || state.disposed) return;
+          state.ready = true;
+          parent.postMessage(
+            {
+              jsonrpc: "2.0",
+              method: "ui/notifications/initialized",
+              params: {},
+            },
+            "*",
+          );
+        }
+        function adoptToolOutput() {
+          if (state.data || !window.openai?.toolOutput) return;
           try {
-            await rpc("ui/initialize", {
-              protocolVersion: "2026-01-26",
-              appInfo: { name: "Norman Inbox", version: "1.0.0" },
-              appCapabilities: {
-                availableDisplayModes: ["inline", "fullscreen"],
-              },
-            });
-            state.ready = true;
-            parent.postMessage(
-              {
-                jsonrpc: "2.0",
-                method: "ui/notifications/initialized",
-                params: {},
-              },
-              "*",
-            );
+            setInbox(object(window.openai.toolOutput));
+            render();
           } catch {}
-          if (!state.data && window.openai?.toolOutput) {
-            try {
-              setInbox(object(window.openai.toolOutput));
-              render();
-            } catch {}
-          }
+        }
+        updateFreshness();
+        // Hosts with only the window.openai bridge never answer ui/initialize.
+        // Show their tool output at once and wait at most 5 s for the bridge.
+        adoptToolOutput();
+        (async () => {
+          state.initId = state.id;
+          try {
+            await rpc(
+              "ui/initialize",
+              {
+                protocolVersion: "2026-01-26",
+                appInfo: { name: "Norman Inbox", version: "1.0.0" },
+                appCapabilities: {
+                  availableDisplayModes: ["inline", "fullscreen"],
+                },
+              },
+              5000,
+            );
+            connected();
+          } catch {}
+          if (state.disposed) return;
+          adoptToolOutput();
           state.initialized = true;
           if (!state.data && state.visible)
             await action((revision) => refresh(1, revision));
-          schedulePolling();
+          // Keep an immediate re-read the initial load asked for.
+          if (state.pollTimer === null)
+            schedulePolling(state.refreshWanted ? 0 : POLL_MS);
           updateFreshness();
         })();
       })();

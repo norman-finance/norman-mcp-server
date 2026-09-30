@@ -225,6 +225,49 @@ async function mutations(page) {
     ),
   );
 }
+// A host with only the window.openai bridge: it never answers postMessage
+// JSON-RPC, so ui/initialize stays unanswered.
+async function bridgeless(width = 1100) {
+  const page = await browser.newPage({ viewport: { width, height: 1000 } });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.clock.install({ time: new Date("2026-09-30T10:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-09-30T10:00:01Z"));
+  await page.setContent(
+    '<iframe title="Norman Inbox" style="border:0;width:100%;height:960px"></iframe>',
+  );
+  await page.evaluate(() => {
+    window.calls = [];
+    window.addEventListener("message", (e) => window.calls.push(e.data));
+  });
+  const inbox = {
+    companyId: "11111111-1111-4111-8111-111111111111",
+    view: "inbox",
+    summary: { questions: 0, approvals: 3, taxReviewsShown: 0 },
+    questions: [],
+    runs: [],
+    approvals: [],
+    taxReviews: [],
+    unavailable: [],
+    pagination: { page: 1, hasNext: false },
+  };
+  const shim = `<script>window.openaiCalls = []; window.openai = { toolOutput: ${JSON.stringify(
+    inbox,
+  )}, callTool: async (name, args) => { window.openaiCalls.push({ name, args }); return { structuredContent: ${JSON.stringify(
+    inbox,
+  )} }; }, setWidgetState() {} };</script>`;
+  const html = readFileSync(
+    join(__dirname, "../norman_mcp/apps/inbox.html"),
+    "utf8",
+  )
+    .replace("<head>", `<head>${shim}`)
+    .replace("const state = {", "const state = window.__inboxTestState = {");
+  await page
+    .locator("iframe")
+    .evaluate((frame, html) => (frame.srcdoc = html), html);
+  await page.frameLocator("iframe").locator("#content").waitFor();
+  return { page, ui: page.frameLocator("iframe"), errors };
+}
 
 test("approval requires consent, shows every action, executes once and reads actual result", async () => {
   const { page, ui, errors } = await fixture();
@@ -770,6 +813,63 @@ test("host requests are answered and never consume a pending response id", async
     assert.doesNotMatch(
       await ui.locator("#status").innerText(),
       /Could not refresh/,
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("host without ui/initialize renders window.openai tool output and polls through it", async () => {
+  const { page, errors } = await bridgeless();
+  try {
+    const view = page.frames()[1];
+    const shown = () =>
+      view.evaluate(() => ({
+        approvals: document.querySelectorAll(".metric strong")[1]?.textContent,
+        content: document.querySelector("#content").innerText,
+      }));
+    await flush(page);
+    await page.clock.runFor(1_000);
+    await flush(page);
+    assert.equal((await shown()).approvals, "3");
+    assert.doesNotMatch((await shown()).content, /Connecting to Norman/);
+    // ui/initialize is abandoned after 5 s, then polling runs through
+    // window.openai.callTool.
+    await page.clock.runFor(4_001);
+    await flush(page);
+    assert.deepEqual(
+      await view.evaluate(() => {
+        const state = window.__inboxTestState;
+        return [state.initialized, state.ready, state.pollTimer !== null];
+      }),
+      [true, false, true],
+    );
+    await page.clock.runFor(30_001);
+    await flush(page);
+    assert.deepEqual(
+      await view.evaluate(() => window.openaiCalls.map((call) => call.name)),
+      ["get_norman_inbox_data"],
+    );
+    assert.deepEqual(
+      await page.evaluate(() => window.calls.map((call) => call.method)),
+      ["ui/initialize"],
+    );
+    // A host that answers ui/initialize late still completes the handshake.
+    await page.evaluate(() =>
+      document.querySelector("iframe").contentWindow.postMessage(
+        {
+          jsonrpc: "2.0",
+          id: window.calls.find((call) => call.method === "ui/initialize").id,
+          result: {},
+        },
+        "*",
+      ),
+    );
+    await flush(page);
+    assert.deepEqual(
+      await page.evaluate(() => window.calls.map((call) => call.method)),
+      ["ui/initialize", "ui/notifications/initialized"],
     );
     assert.deepEqual(errors, []);
   } finally {
