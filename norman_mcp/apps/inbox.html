@@ -397,6 +397,8 @@
           revision: 0,
           consent: "",
           answer: "",
+          answerFor: "",
+          answerQuestion: "",
           reviewStale: false,
           renderedSelection: "",
           context: "",
@@ -426,7 +428,9 @@
           status.className = error ? "error" : "";
         }
         const REVIEW_CHANGED =
-          "This approval changed. Review the current values and confirm again.";
+            "This approval changed. Review the current values and confirm again.",
+          QUESTION_CHANGED =
+            "This workflow question changed. Review your answer before sending.";
         const stable = (x) =>
           JSON.stringify(x, (_, value) =>
             value && typeof value === "object" && !Array.isArray(value)
@@ -459,6 +463,19 @@
             canApprove: d.canApprove,
           });
         }
+        const questionKey = (run) =>
+          stable({
+            run: run.publicId,
+            reason: run.blockedReason,
+            question: run.blockedDetail || "",
+            step: run.steps?.find((step) => step.active)?.key ?? null,
+          });
+        // A draft belongs to the question it was written for.
+        const draftChanged = () =>
+          state.detail?.kind === "workflow" &&
+          !!state.answer.trim() &&
+          !!state.answerFor &&
+          state.answerFor !== questionKey(state.detail.run);
         function stale() {
           const error = Error(
             "A newer Inbox request superseded this response.",
@@ -488,6 +505,8 @@
           if (approve)
             approve.disabled =
               state.busy || state.reviewStale || !confirm?.checked;
+          const send = document.querySelector("#answer-send");
+          if (send) send.disabled = state.busy || draftChanged();
         }
         function updateFreshness() {
           const checked = state.lastCheck
@@ -522,12 +541,17 @@
           const previousKey = selectionKey(state.detail),
             nextKey = selectionKey(next),
             changedReview =
-              !!state.consent && state.consent !== reviewKey(next);
-          if (previousKey !== nextKey) state.answer = "";
+              !!state.consent && state.consent !== reviewKey(next),
+            draftFitted = !draftChanged();
+          if (previousKey !== nextKey) {
+            state.answer = "";
+            state.answerFor = "";
+          }
           if (state.consent !== reviewKey(next)) state.consent = "";
           state.detail = next;
           state.reviewStale = false;
           if (changedReview) say(REVIEW_CHANGED);
+          else if (draftFitted && draftChanged()) say(QUESTION_CHANGED);
         }
         function setInbox(next) {
           if (
@@ -550,6 +574,7 @@
             setDetail(null);
             state.consent = "";
             state.answer = "";
+            state.answerFor = "";
             state.context = "";
             say("Company changed. Select a decision to review.");
           }
@@ -937,7 +962,7 @@
             return '<h2>Review a decision</h2><p class="muted">Select an approval to see the current values and every planned action.</p>';
           if (d.kind === "workflow") {
             const r = d.run;
-            return `<h2>${esc(r.title)}</h2><div class="tag">${esc(human(r.blockedReason || r.state))}</div><p>${esc(r.blockedDetail)}</p>${r.state === "active" && r.blockedReason === "user_input" ? `<label for="answer">Your answer</label><textarea id="answer" placeholder="Provide the missing information">${esc(state.answer)}</textarea><button class="primary" id="answer-send">Send answer to Norman</button>` : '<button id="workflow-ask">Discuss in chat</button>'}`;
+            return `<h2>${esc(r.title)}</h2><div class="tag">${esc(human(r.blockedReason || r.state))}</div><p>${esc(r.blockedDetail)}</p>${r.state === "active" && r.blockedReason === "user_input" ? `${draftChanged() ? `<p class="error">The question changed after you started your answer. You wrote it for: “${esc(state.answerQuestion)}”</p><div class="row"><button id="answer-keep">Use my answer for this question</button></div>` : ""}<label for="answer">Your answer</label><textarea id="answer" placeholder="Provide the missing information">${esc(state.answer)}</textarea><button class="primary" id="answer-send">Send answer to Norman</button>` : '<button id="workflow-ask">Discuss in chat</button>'}`;
           }
           const e = d.execution,
             actions = e.actionsPlanned || [],
@@ -1160,13 +1185,36 @@
               );
           const answer = document.querySelector("#answer-send");
           const input = document.querySelector("#answer");
-          if (input) input.oninput = () => (state.answer = input.value);
+          const bindDraft = () => {
+            state.answerFor = questionKey(state.detail.run);
+            state.answerQuestion = state.detail.run.blockedDetail || "";
+          };
+          if (input)
+            input.oninput = () => {
+              const changed = draftChanged();
+              if (!state.answer.trim()) bindDraft();
+              state.answer = input.value;
+              if (!state.answer.trim()) state.answerFor = "";
+              if (draftChanged() !== changed) render();
+              else syncControls();
+            };
+          const keep = document.querySelector("#answer-keep");
+          if (keep)
+            keep.onclick = () => {
+              bindDraft();
+              say("");
+              render();
+              document.getElementById("answer")?.focus();
+            };
           if (answer)
             answer.onclick = () =>
               action(async (revision, job) => {
                 const text = state.answer.trim(),
-                  run = state.detail.run;
+                  run = state.detail.run,
+                  // The question this draft was written or confirmed for.
+                  bound = state.answerFor || questionKey(run);
                 if (!text) throw Error("Please enter your answer.");
+                if (draftChanged()) throw Error(QUESTION_CHANGED);
                 const fresh = await tool("get_workflow_run", {
                   run_id: run.publicId,
                 });
@@ -1174,7 +1222,7 @@
                 if (
                   fresh.state !== "active" ||
                   fresh.blockedReason !== "user_input" ||
-                  fresh.blockedDetail !== run.blockedDetail
+                  questionKey(fresh) !== bound
                 ) {
                   setDetail({
                     kind: "workflow",
@@ -1182,9 +1230,7 @@
                     run: fresh,
                   });
                   render();
-                  throw Error(
-                    "This workflow question changed. Review your answer before sending.",
-                  );
+                  throw Error(QUESTION_CHANGED);
                 }
                 job.sent = { runId: run.publicId };
                 await tool("answer_workflow_question", {

@@ -1232,6 +1232,92 @@ test("host-pushed results never trigger an immediate re-read loop", async () => 
   }
 });
 
+const QUESTION_B =
+  "Should transaction 2026-09-12 (EUR 4,800) be booked as private?";
+const DRAFT = "It was the annual Adobe licence";
+async function drafted(page, ui) {
+  await ui.getByRole("button", { name: "Review question" }).click();
+  await idle(page);
+  await page.clock.runFor(1);
+  await idle(page);
+  await ui.locator("#answer").fill(DRAFT);
+}
+const sentAnswers = async (page) =>
+  (await mutations(page)).map((call) => call.params.arguments.answer);
+
+test("a poll that changes the question keeps the draft bound to the old one", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    await drafted(page, ui);
+    // Answered elsewhere; the same run now asks something else.
+    await page.evaluate(
+      (question) => (window.inbox.questions[0].blockedDetail = question),
+      QUESTION_B,
+    );
+    await page.clock.runFor(30_001);
+    await ui.locator("aside").getByText(QUESTION_B, { exact: true }).waitFor();
+    await idle(page);
+    assert.equal(
+      await ui.locator("#status").innerText(),
+      "This workflow question changed. Review your answer before sending.",
+    );
+    assert.match(
+      await ui.locator("aside p.error").innerText(),
+      /You wrote it for: “What was this purchase for\?”/,
+    );
+    assert.equal(await ui.locator("#answer").inputValue(), DRAFT);
+    assert.equal(await ui.locator("#answer-send").isDisabled(), true);
+    // Even a direct send is checked against the draft's own question.
+    await page
+      .frames()[1]
+      .evaluate(() => document.querySelector("#answer-send").onclick());
+    await idle(page);
+    assert.deepEqual(await sentAnswers(page), []);
+    // Confirming binds the draft to the question now shown.
+    await ui
+      .getByRole("button", { name: "Use my answer for this question" })
+      .click();
+    assert.equal(await ui.locator("aside p.error").count(), 0);
+    await ui.getByRole("button", { name: "Send answer to Norman" }).click();
+    await idle(page);
+    assert.deepEqual(await sentAnswers(page), [DRAFT]);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("sending re-reads the question and blocks a draft written for another one", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    await drafted(page, ui);
+    await page.evaluate(
+      (question) => (window.inbox.questions[0].blockedDetail = question),
+      QUESTION_B,
+    );
+    await ui.getByRole("button", { name: "Send answer to Norman" }).click();
+    await ui.locator("aside").getByText(QUESTION_B, { exact: true }).waitFor();
+    await idle(page);
+    assert.equal(
+      await ui.locator("#status").innerText(),
+      "This workflow question changed. Review your answer before sending.",
+    );
+    assert.equal(await ui.locator("aside p.error").count(), 1);
+    assert.equal(await ui.locator("#answer").inputValue(), DRAFT);
+    assert.equal(await ui.locator("#answer-send").isDisabled(), true);
+    // Clearing the draft releases it; a new draft belongs to the new question.
+    await ui.locator("#answer").fill("");
+    assert.equal(await ui.locator("aside p.error").count(), 0);
+    await ui.locator("#answer").fill("No, it is a business expense");
+    await ui.getByRole("button", { name: "Send answer to Norman" }).click();
+    await idle(page);
+    assert.deepEqual(await sentAnswers(page), ["No, it is a business expense"]);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
 test("tool errors show the API's own message and never a raw URL", async () => {
   const { page, ui, errors } = await fixture();
   try {
