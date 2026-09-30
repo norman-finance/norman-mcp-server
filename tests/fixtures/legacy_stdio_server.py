@@ -10,8 +10,9 @@ os.environ["NORMAN_MCP_EVENTS_DB"] = ""
 os.environ["NORMAN_MCP_EVENTS_KEY"] = ""
 os.environ["NORMAN_OAUTH_CLIENT_ID"] = ""
 
-from norman_mcp.context import set_api_client
-from norman_mcp.server import mcp
+# These imports must follow the isolated environment and source-path setup.
+from norman_mcp.context import set_api_client  # isort: skip
+from norman_mcp.server import mcp  # isort: skip
 
 
 class OfflineAPI:

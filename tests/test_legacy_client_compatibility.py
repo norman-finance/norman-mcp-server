@@ -3,6 +3,9 @@
 The inventory oracle was captured from origin/main (6b2cec4) with SDK 1.26.
 These tests deliberately use raw JSON-RPC instead of the new SDK's client, so
 SDK 2 client/server changes cannot hide a wire incompatibility from the test.
+New tools may be added freely. Intentional changes to an existing wire contract
+must update its oracle signature after compatibility review; never regenerate
+every signature simply to accept an SDK upgrade.
 """
 
 import asyncio
@@ -17,14 +20,29 @@ import pytest
 from mcp.server.auth.provider import AccessToken
 from starlette.testclient import TestClient
 
-from norman_mcp.context import set_api_client
+from norman_mcp.context import (
+    get_api_client,
+    get_oauth_provider,
+    set_api_client,
+    set_oauth_provider,
+)
 from norman_mcp.server import create_app, create_cors_app
-
 
 VERSIONS = ("2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25")
 FIXTURES = Path(__file__).parent / "fixtures"
 ORACLE = json.loads((FIXTURES / "sdk1_legacy_inventory.json").read_text())
 COMPANY = {"publicId": "company-compat-fixture", "name": "Compatibility Fixture", "isSme": False}
+
+
+@pytest.fixture(autouse=True)
+def restore_process_context():
+    """Offline lifespans and create_app must not replace another test's globals."""
+    api, provider = get_api_client(), get_oauth_provider()
+    try:
+        yield
+    finally:
+        set_api_client(api)
+        set_oauth_provider(provider)
 
 
 class OfflineAPI:
