@@ -37,6 +37,9 @@ def test_shared_startup_client_resolves_oauth_identity_per_http_request(monkeypa
             }
         if url.endswith("rule-executions/"):
             return {"results": [], "count": 0, "next": None}
+        if url.endswith("autofiling/runs/"):
+            assert url.endswith(f"companies/{company}/autofiling/runs/")
+            return []
         return {"items": []}
 
     monkeypatch.setattr(NormanAPI, "arequest", source)
@@ -78,7 +81,8 @@ def test_shared_startup_client_resolves_oauth_identity_per_http_request(monkeypa
                 text = result["content"][0]["text"]
                 assert "1 workflows awaiting your answer" in text
                 assert "0 pending automation approvals" in text
-                assert "0 tax reviews shown (bounded list)" in text
+                assert "0 tax reviews." in text
+                assert "do not claim that a screen opened" in text
 
         with ThreadPoolExecutor(max_workers=4) as pool:
             list(
