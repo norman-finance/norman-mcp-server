@@ -158,6 +158,8 @@ async function idle(page) {
         const state = window.__inboxTestState;
         return (
           state.initialized &&
+          state.visible &&
+          state.intersecting &&
           !state.busy &&
           !state.refreshPromise &&
           state.pending.size === 0 &&
@@ -178,6 +180,7 @@ async function idle(page) {
           pending: [...state.pending.keys()],
           pollTimer: state.pollTimer,
           visible: state.visible,
+          intersecting: state.intersecting,
           wanted: state.refreshWanted,
           status: document.querySelector("#status").textContent,
         };
@@ -532,9 +535,15 @@ test("hidden iframe pauses polling and visibility/focus resume with a fresh read
     await page
       .locator("iframe")
       .evaluate((frame) => (frame.style.display = ""));
+    // IntersectionObserver uses browser rendering, not the virtual timer clock.
+    // Wait for visibility to arm the immediate read before advancing that clock.
+    await idle(page);
+    assert.equal(
+      (await toolCalls(page, "get_norman_inbox_data")).length,
+      before,
+    );
     await page.clock.runFor(1);
-    await flush(page);
-    await page.clock.runFor(1);
+    await idle(page);
     await ui
       .locator(".metric strong")
       .nth(1)
@@ -713,17 +722,15 @@ for (const lifecycle of ["pagehide", "ui/resource-teardown"])
           .evaluate(() => window.dispatchEvent(new Event("pagehide")));
       else
         await page.evaluate(() =>
-          document
-            .querySelector("iframe")
-            .contentWindow.postMessage(
-              {
-                jsonrpc: "2.0",
-                id: 900,
-                method: "ui/resource-teardown",
-                params: {},
-              },
-              "*",
-            ),
+          document.querySelector("iframe").contentWindow.postMessage(
+            {
+              jsonrpc: "2.0",
+              id: 900,
+              method: "ui/resource-teardown",
+              params: {},
+            },
+            "*",
+          ),
         );
       await ui.getByText(/Auto refresh paused/).waitFor();
       const before = (await toolCalls(page, "get_norman_inbox_data")).length;
