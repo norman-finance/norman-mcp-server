@@ -405,6 +405,9 @@
           intersecting: true,
           visible: document.visibilityState !== "hidden",
           pollTimer: null,
+          pollDue: 0,
+          quiet: 0,
+          markup: "",
           refreshPromise: null,
           refreshWanted: false,
           resume: false,
@@ -413,7 +416,11 @@
         const content = document.querySelector("#content"),
           status = document.querySelector("#status"),
           freshness = document.querySelector("#freshness");
-        const POLL_MS = 30000;
+        // Every 30 s while something changes; back off while nothing does.
+        const POLL_STEPS = [30000, 60000, 120000, 300000],
+          POLL_MS = POLL_STEPS[0];
+        const interval = () =>
+          POLL_STEPS[Math.min(state.quiet, POLL_STEPS.length - 1)];
         function say(text, error = false) {
           status.textContent = error ? stripUrls(text) : text;
           status.className = error ? "error" : "";
@@ -489,14 +496,14 @@
           freshness.textContent =
             checked +
             (state.visible && !state.disposed
-              ? "Auto refresh every 30s while visible"
+              ? "Auto refresh every 30s while visible, slower while nothing changes"
               : "Auto refresh paused");
         }
         function stopPolling() {
           clearTimeout(state.pollTimer);
           state.pollTimer = null;
         }
-        function schedulePolling(delay = POLL_MS) {
+        function schedulePolling(delay = interval()) {
           stopPolling();
           if (
             !state.initialized ||
@@ -505,6 +512,7 @@
             state.busy
           )
             return;
+          state.pollDue = Date.now() + delay;
           state.pollTimer = setTimeout(() => {
             state.pollTimer = null;
             void autoRefresh();
@@ -700,6 +708,7 @@
               data: state.data,
             };
           state.busy = true;
+          state.quiet = 0;
           stopPolling();
           syncControls();
           say("Working…");
@@ -720,7 +729,7 @@
           } finally {
             state.busy = false;
             syncControls();
-            schedulePolling(state.refreshWanted ? 0 : POLL_MS);
+            schedulePolling(state.refreshWanted ? 0 : interval());
             updateFreshness();
           }
         }
@@ -874,24 +883,27 @@
           }
         }
         async function autoRefresh() {
-          if (!state.visible || state.disposed || state.busy) {
-            schedulePolling();
-            return;
-          }
+          // Hidden, busy or disposed: visibility, the action or nothing re-arms.
+          if (!state.visible || state.disposed || state.busy) return;
           if (state.refreshPromise) {
             state.refreshWanted = true;
             return;
           }
           state.refreshWanted = false;
+          const shown = state.markup;
+          let checked = false;
           try {
             await refresh();
+            checked = true;
             if (state.resume) say("Updated from Norman.");
             state.resume = false;
           } catch (error) {
             if (error.name !== "StaleResponse" && !state.disposed)
               say(`Could not refresh: ${error.message}`, true);
           } finally {
-            schedulePolling(state.refreshWanted ? 0 : POLL_MS);
+            // Back off while nothing on screen changes.
+            if (checked) state.quiet = state.markup === shown ? state.quiet + 1 : 0;
+            schedulePolling(state.refreshWanted ? 0 : interval());
           }
         }
         const human = (x) =>
@@ -993,7 +1005,8 @@
               keepFocus && focused.tagName === "TEXTAREA"
                 ? [focused.selectionStart, focused.selectionEnd]
                 : null;
-          content.innerHTML = `<div class="metrics"><div class="metric"><strong>${display(d.summary.questions)}</strong><span>Workflows need you</span></div><div class="metric"><strong>${display(d.summary.approvals)}</strong><span>Pending approvals</span></div><div class="metric"><strong>${display(d.summary.taxReviewsShown)}</strong><span>Tax reviews shown</span></div></div>${d.unavailable.length ? `<p class="error">Unavailable: ${esc(d.unavailable.join(", "))}. Refresh to retry.</p>` : ""}<div class="layout"><div><h2>Needs your attention</h2>${d.questions.map((r) => `<article class="card"><div class="tag">Workflow · ${esc(human(r.blockedReason))}</div><strong>${esc(r.title)}</strong><p>${esc(r.blockedDetail || r.steps?.find((s) => s.active)?.title || "Review the current step.")}</p><button data-run="${esc(r.publicId)}">Review question</button></article>`).join("")}${d.approvals.map((e) => `<article class="card"><div class="tag">Automation approval</div><strong>${esc(e.ruleName || e.rule?.name || "Automation")}</strong><p>${esc(e.transaction?.description || "Review planned actions")}</p><button data-execution="${esc(e.publicId)}">Review changes</button></article>`).join("")}${d.taxReviews.map((t) => `<article class="card"><div class="tag">Tax review</div><strong>${esc(t.title)}</strong><p>${esc(t.detail)}</p><button data-tax="${esc(t.key)}">Discuss in chat</button></article>`).join("")}${!d.questions.length && !d.approvals.length && !d.taxReviews.length ? '<div class="empty">No items returned by the available sources.</div>' : ""}<div class="row">${d.pagination.page > 1 ? '<button id="previous">Previous approvals</button>' : ""}${d.pagination.hasNext ? '<button id="next">More approvals</button>' : ""}</div><p class="muted notice">Tax reviews are a bounded list. Approval totals include all pages.</p><h2>In progress</h2>${
+          // What is on screen; polls back off while it stays the same.
+          state.markup = `<div class="metrics"><div class="metric"><strong>${display(d.summary.questions)}</strong><span>Workflows need you</span></div><div class="metric"><strong>${display(d.summary.approvals)}</strong><span>Pending approvals</span></div><div class="metric"><strong>${display(d.summary.taxReviewsShown)}</strong><span>Tax reviews shown</span></div></div>${d.unavailable.length ? `<p class="error">Unavailable: ${esc(d.unavailable.join(", "))}. Refresh to retry.</p>` : ""}<div class="layout"><div><h2>Needs your attention</h2>${d.questions.map((r) => `<article class="card"><div class="tag">Workflow · ${esc(human(r.blockedReason))}</div><strong>${esc(r.title)}</strong><p>${esc(r.blockedDetail || r.steps?.find((s) => s.active)?.title || "Review the current step.")}</p><button data-run="${esc(r.publicId)}">Review question</button></article>`).join("")}${d.approvals.map((e) => `<article class="card"><div class="tag">Automation approval</div><strong>${esc(e.ruleName || e.rule?.name || "Automation")}</strong><p>${esc(e.transaction?.description || "Review planned actions")}</p><button data-execution="${esc(e.publicId)}">Review changes</button></article>`).join("")}${d.taxReviews.map((t) => `<article class="card"><div class="tag">Tax review</div><strong>${esc(t.title)}</strong><p>${esc(t.detail)}</p><button data-tax="${esc(t.key)}">Discuss in chat</button></article>`).join("")}${!d.questions.length && !d.approvals.length && !d.taxReviews.length ? '<div class="empty">No items returned by the available sources.</div>' : ""}<div class="row">${d.pagination.page > 1 ? '<button id="previous">Previous approvals</button>' : ""}${d.pagination.hasNext ? '<button id="next">More approvals</button>' : ""}</div><p class="muted notice">Tax reviews are a bounded list. Approval totals include all pages.</p><h2>In progress</h2>${
             d.runs
               .filter((r) => !r.blockedReason)
               .map(
@@ -1002,6 +1015,7 @@
               )
               .join("") || '<div class="empty">No other active workflows.</div>'
           }</div><aside class="detail">${review()}</aside></div>`;
+          content.innerHTML = state.markup;
           content.querySelectorAll("[data-execution]").forEach(
             (b) =>
               (b.onclick = () =>
@@ -1204,11 +1218,14 @@
             // Same-company data does not invalidate reads or actions in flight:
             // refresh() drops an older read by asOf, and setInbox() invalidates
             // everything when the company changes.
+            const shown = state.markup;
             setInbox(d);
             render();
             updateFreshness();
-            state.refreshWanted = true;
-            schedulePolling(0);
+            // A pushed result is a fresh check: it never triggers a re-read,
+            // so a host that echoes our reads cannot start a loop.
+            if (state.markup !== shown) state.quiet = 0;
+            if (!state.busy && !state.refreshPromise) schedulePolling();
           } catch (err) {
             say(err.message, true);
           }
@@ -1256,18 +1273,29 @@
           // Restoring a focused input during a render may also focus the iframe.
           // The active read/action already refreshes it, so do not queue a loop.
           if (state.busy || state.refreshPromise) return;
-          state.refreshWanted = true;
-          schedulePolling(0);
+          // Focus and visibility re-read only data older than half the interval.
+          const age =
+              state.lastCheck === null ? Infinity : Date.now() - state.lastCheck,
+            wait =
+              state.refreshWanted || age >= interval() / 2
+                ? 0
+                : interval() - age;
+          if (state.pollTimer === null || state.pollDue > Date.now() + wait)
+            schedulePolling(wait);
+        }
+        // Interaction brings polling back to every 30 s.
+        function touch() {
+          state.quiet = 0;
+          if (state.pollTimer !== null && state.pollDue > Date.now() + POLL_MS)
+            schedulePolling(POLL_MS);
         }
         function visibilityChanged() {
           const visible =
             document.visibilityState !== "hidden" && state.intersecting;
           if (visible === state.visible) return;
           state.visible = visible;
-          if (visible) {
-            state.refreshWanted = true;
-            wake();
-          } else {
+          if (visible) wake();
+          else {
             stopPolling();
             state.revision++;
           }
@@ -1280,6 +1308,8 @@
         observer.observe(document.querySelector("main"));
         document.addEventListener("visibilitychange", visibilityChanged);
         window.addEventListener("focus", wake);
+        document.addEventListener("pointerdown", touch, true);
+        document.addEventListener("keydown", touch, true);
         function dispose() {
           if (state.disposed) return;
           state.disposed = true;
@@ -1288,6 +1318,8 @@
           observer.disconnect();
           document.removeEventListener("visibilitychange", visibilityChanged);
           window.removeEventListener("focus", wake);
+          document.removeEventListener("pointerdown", touch, true);
+          document.removeEventListener("keydown", touch, true);
           for (const pending of state.pending.values()) {
             clearTimeout(pending.timer);
             pending.reject(stale());
@@ -1343,7 +1375,7 @@
           else void syncContext();
           // Keep an immediate re-read the initial load asked for.
           if (state.pollTimer === null)
-            schedulePolling(state.refreshWanted ? 0 : POLL_MS);
+            schedulePolling(state.refreshWanted ? 0 : interval());
           updateFreshness();
         })();
       })();

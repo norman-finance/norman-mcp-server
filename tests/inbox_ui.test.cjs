@@ -498,8 +498,9 @@ test("visible Inbox refreshes without writes or repeated unchanged model context
         window.calls.filter((call) => call.method === "ui/update-model-context")
           .length,
     );
-    for (let i = 0; i < 2; i++) {
-      await page.clock.runFor(30_001);
+    // Unchanged checks back off: the next two come 30 s and 60 s apart.
+    for (const wait of [30_001, 60_001]) {
+      await page.clock.runFor(wait);
       await idle(page);
     }
     assert.equal((await count("get_norman_inbox_data")).length, 4);
@@ -670,15 +671,22 @@ test("hidden iframe pauses polling and visibility/focus resume with a fresh read
       .waitFor();
     await idle(page);
     const resumed = (await toolCalls(page, "get_norman_inbox_data")).length;
-    await page
-      .frames()[1]
-      .evaluate(() => window.dispatchEvent(new Event("focus")));
-    await page.clock.runFor(1);
-    await idle(page);
-    assert.equal(
-      (await toolCalls(page, "get_norman_inbox_data")).length,
-      resumed + 1,
-    );
+    // Focus re-reads only data older than half the poll interval.
+    for (const [wait, reads] of [
+      [0, resumed],
+      [15_000, resumed + 1],
+    ]) {
+      await page.clock.runFor(wait);
+      await page
+        .frames()[1]
+        .evaluate(() => window.dispatchEvent(new Event("focus")));
+      await page.clock.runFor(1);
+      await idle(page);
+      assert.equal(
+        (await toolCalls(page, "get_norman_inbox_data")).length,
+        reads,
+      );
+    }
     assert.equal((await mutations(page)).length, 0);
     assert.deepEqual(errors, []);
   } finally {
@@ -702,7 +710,9 @@ test("polls never overlap and next interval starts after the read completes", as
       window.release();
     });
     await idle(page);
-    await page.clock.runFor(29_999);
+    // The held read returned unchanged data, so the next check backs off to
+    // 60 s, counted from when that read completed.
+    await page.clock.runFor(59_999);
     assert.equal((await toolCalls(page, "get_norman_inbox_data")).length, 2);
     await page.clock.runFor(2);
     await ui
@@ -1096,6 +1106,126 @@ test("startup on a host that pushes the tool result ends in a normal status", as
     await page.clock.runFor(1);
     await idle(page);
     assert.equal((await view(page)).status, "Updated from Norman.");
+    // The push does not cost an extra read or schedule an immediate one.
+    assert.equal((await toolCalls(page, "get_norman_inbox_data")).length, 1);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("idle polling backs off to five minutes and resets on change or interaction", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    const reads = async () =>
+      (await toolCalls(page, "get_norman_inbox_data")).length;
+    const check = async (wait, expected) => {
+      await page.clock.runFor(wait);
+      await idle(page);
+      assert.equal(await reads(), expected, `after ${wait} ms`);
+    };
+    // Unchanged checks come 30 s, 60 s, 120 s, then 300 s apart.
+    await check(30_001, 2);
+    for (const [gap, expected] of [
+      [60_000, 3],
+      [120_000, 4],
+      [300_000, 5],
+      [300_000, 6],
+    ]) {
+      await check(gap - 1, expected - 1);
+      await check(2, expected);
+    }
+    // A check that finds a change returns to 30 s.
+    await page.evaluate(() => (window.inbox.summary.approvals = 60));
+    await check(300_001, 7);
+    await check(30_001, 8);
+    // Unchanged again (next in 60 s); interaction brings it back to 30 s.
+    await ui.locator("h1").click();
+    await check(30_001, 9);
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("focus and visibility re-read only data older than half the interval", async () => {
+  const { page, errors } = await fixture(1100, { clock: true });
+  try {
+    const reads = async () =>
+      (await toolCalls(page, "get_norman_inbox_data")).length;
+    const focus = async () => {
+      await page
+        .frames()[1]
+        .evaluate(() => window.dispatchEvent(new Event("focus")));
+      await page.clock.runFor(1);
+      await idle(page);
+    };
+    await focus();
+    assert.equal(await reads(), 1);
+    await setShown(page, false);
+    await setShown(page, true);
+    await page.clock.runFor(1);
+    await idle(page);
+    assert.equal(await reads(), 1);
+    await page.clock.runFor(15_000);
+    await focus();
+    assert.equal(await reads(), 2);
+    // The wake-up read restarts the interval.
+    await page.clock.runFor(29_998);
+    await idle(page);
+    assert.equal(await reads(), 2);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("host-pushed results never trigger an immediate re-read loop", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    const reads = async () =>
+      (await toolCalls(page, "get_norman_inbox_data")).length;
+    // A pushed change is shown and counts as a check.
+    await page.evaluate(() => {
+      window.inbox.summary.approvals = 57;
+      window.pushInbox();
+    });
+    await ui
+      .locator(".metric strong")
+      .nth(1)
+      .getByText("57", { exact: true })
+      .waitFor();
+    await page.clock.runFor(1);
+    await idle(page);
+    assert.equal(await reads(), 1);
+    // A host that echoes every read as a tool-result while a running
+    // workflow changes updatedAt on each read.
+    await page.evaluate(() => {
+      let n = 0;
+      window.inbox.runs = [
+        {
+          publicId: "run-2",
+          state: "active",
+          title: "Month-end close",
+          isRunning: true,
+          updatedAt: "t0",
+          steps: [],
+        },
+      ];
+      window.hooks.get_norman_inbox_data = () => {
+        window.inbox.runs[0].updatedAt = `t${++n}`;
+        window.pushInbox();
+        return window.inbox;
+      };
+    });
+    await page.clock.runFor(30_001);
+    for (let i = 0; i < 40; i++) {
+      await page.clock.runFor(25);
+      await flush(page);
+    }
+    await idle(page);
+    assert.equal(await reads(), 2);
     assert.deepEqual(errors, []);
   } finally {
     await page.close();
