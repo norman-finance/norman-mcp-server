@@ -76,7 +76,7 @@ def oauth_server(monkeypatch, tmp_path):
     monkeypatch.setattr("norman_mcp.auth.provider.httpx.AsyncClient", async_client)
     monkeypatch.setattr(requests, "post", refresh)
 
-    def make(persisted=None):
+    def make(persisted=None, client_secret_expiry_seconds=None):
         if persisted is not None:
             state_file.write_text(json.dumps(persisted))
         server = create_app(
@@ -84,6 +84,10 @@ def oauth_server(monkeypatch, tmp_path):
             transport="streamable-http",
             streamable_http_options={"stateless": True},
         )
+        if client_secret_expiry_seconds is not None:
+            server.settings.auth.client_registration_options.client_secret_expiry_seconds = (
+                client_secret_expiry_seconds
+            )
 
         @server.tool()
         async def oauth_identity_probe(ctx: Context) -> dict[str, str]:
@@ -328,3 +332,51 @@ def test_pre_sdk2_persisted_client_and_tokens_still_work(oauth_server):
         assert response.json()["refresh_token"] == "mcp_saved_refresh"
         assert provider.get_norman_token(response.json()["access_token"]) == "norman-access-rotated"
         assert len(upstream) == 1
+
+
+@pytest.mark.parametrize("application_type", ["native", "web"])
+def test_complete_dcr_metadata_and_secret_expiry_survive_restart(
+    oauth_server, monkeypatch, application_type
+):
+    client, provider, upstream = oauth_server(client_secret_expiry_seconds=60)
+    redirect = "http://127.0.0.1:49152/callback"
+    with client:
+        response = client.post(
+            "/register",
+            json={
+                "client_name": "Restart fixture",
+                "client_uri": "https://client.example.test",
+                "application_type": application_type,
+                "software_version": "fixture-1",
+                "redirect_uris": [redirect],
+                "token_endpoint_auth_method": "client_secret_basic",
+                "grant_types": ["authorization_code", "refresh_token"],
+                "response_types": ["code"],
+                "scope": "read",
+            },
+        )
+        assert response.status_code == 201, response.text
+        registration = response.json()
+        assert registration["application_type"] == application_type
+        assert registration["client_secret_expires_at"] > time.time()
+        expected = provider.clients[registration["client_id"]].model_dump(
+            mode="json", exclude_none=True
+        )
+
+    # Simulate a restart after the server-issued secret lifetime has elapsed.
+    monkeypatch.setattr(time, "time", lambda: registration["client_secret_expires_at"] + 1)
+    restarted, restored, _ = oauth_server()
+    with restarted:
+        assert (
+            restored.clients[registration["client_id"]].model_dump(mode="json", exclude_none=True)
+            == expected
+        )
+        response = restarted.post(
+            "/token",
+            headers=basic(registration),
+            data=code_payload("unused-fixture-code", redirect),
+        )
+        assert response.status_code == 401
+        assert response.json()["error"] == "invalid_client"
+        assert response.json()["error_description"] == "Client secret has expired"
+        assert upstream == []

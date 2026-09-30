@@ -114,16 +114,9 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
 
                 clients_ser = {}
                 for cid, c in self.clients.items():
-                    clients_ser[cid] = {
-                        "client_id": c.client_id,
-                        "client_name": c.client_name,
-                        "client_secret": c.client_secret,
-                        "redirect_uris": [str(u) for u in c.redirect_uris],
-                        "token_endpoint_auth_method": c.token_endpoint_auth_method,
-                        "grant_types": c.grant_types,
-                        "response_types": c.response_types,
-                        "scope": c.scope,
-                    }
+                    # Preserve the complete SDK record, including application type,
+                    # issued-at timestamps and client secret expiry across restarts.
+                    clients_ser[cid] = c.model_dump(mode="json", exclude_none=True)
 
                 refresh_ser = {}
                 for rid, r in self.refresh_tokens.items():
@@ -182,15 +175,17 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                     logger.info("Migrating public client %s... — dropping stale client_secret", cid[:12])
                     stored_secret = None
                     migrated = True
-                self.clients[cid] = OAuthClientInformationFull(
-                    client_id=c["client_id"],
-                    client_name=c.get("client_name"),
-                    client_secret=stored_secret,
-                    redirect_uris=c.get("redirect_uris", []),
-                    token_endpoint_auth_method=auth_method,
-                    grant_types=c.get("grant_types", ["authorization_code", "refresh_token"]),
-                    response_types=c.get("response_types", ["code"]),
-                    scope=c.get("scope", DEFAULT_SCOPE),
+                self.clients[cid] = OAuthClientInformationFull.model_validate(
+                    {
+                        # Legacy state omitted these fields; keep its established defaults.
+                        "redirect_uris": [],
+                        "token_endpoint_auth_method": "none",
+                        "grant_types": ["authorization_code", "refresh_token"],
+                        "response_types": ["code"],
+                        "scope": DEFAULT_SCOPE,
+                        **c,
+                        "client_secret": stored_secret,
+                    }
                 )
 
             for rid, r in data.get("refresh_tokens", {}).items():
