@@ -2,7 +2,7 @@
 
 from contextlib import asynccontextmanager
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from starlette.testclient import TestClient
 
 from norman_mcp.server import create_cors_app, mcp
@@ -33,7 +33,8 @@ def test_shared_http_transport_keeps_the_original_lifespan():
     async def lifespan(_):
         yield {}
 
-    primary = FastMCP(lifespan=lifespan, stateless_http=True, json_response=True)
+    primary = MCPServer(lifespan=lifespan)
+    primary._http_options = {"stateless_http": True, "json_response": True}
 
     @primary.tool()
     async def example() -> dict[str, bool]:

@@ -18,7 +18,7 @@ import httpx
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.auth.routes import validate_issuer_url
 
@@ -235,15 +235,21 @@ async def lifespan(app):
     if transport == "stdio":
         await authenticate_with_credentials(api_client)
     else:
-        from norman_mcp.context import set_api_client, get_api_token
+        # SDK 2 runs lifespan once per server, outside an authenticated request.
+        # Identity must be resolved when tools run, never from startup state.
+        api_client.token_source = "oauth"
+        from norman_mcp.context import get_api_token
         token = get_api_token()
         if token:
             api_client.set_token(token)
-        set_api_client(api_client)
         logger.info(f"Using {transport} transport with OAuth")
+
+    # SDK 2 static resources have no injected Context on any transport.
+    from norman_mcp.context import set_api_client
+    set_api_client(api_client)
     
     yield {"api": api_client}
-    
+
     logger.info("Shutting down Norman MCP server")
 
 
@@ -296,20 +302,21 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
             scopes_supported=SUPPORTED_SCOPES,
         )
     
-    server = FastMCP(
+    server = MCPServer(
         "Norman Finance API", 
         instructions="Norman Finance MCP Server - Access your financial data",
         lifespan=lifespan,
         auth_server_provider=oauth_provider,
         auth=auth_settings,
-        host=host,
-        port=port,
         debug=True,
-        stateless_http=streamable_http_options.get("stateless", False),
-        json_response=streamable_http_options.get("json_response", True),
     )
     
     server._transport = transport_type
+    server._http_options = {
+        "host": host,
+        "stateless_http": streamable_http_options.get("stateless", False),
+        "json_response": streamable_http_options.get("json_response", True),
+    }
     
     # Register OAuth callback route
     if use_oauth:
@@ -377,17 +384,17 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
     register_prompts(server)
     register_resources(server)
     register_public_apps(server)
-    
+
     return server
 
 
-def create_cors_app(server: FastMCP):
+def create_cors_app(server: MCPServer):
     """Wrap FastMCP app with CORS middleware for browser clients."""
     from starlette.applications import Starlette
     from starlette.routing import Mount
     
     # Get the underlying ASGI app
-    app = server.streamable_http_app()
+    app = server.streamable_http_app(**getattr(server, "_http_options", {}))
 
     # Wrap with CORS
     cors_app = CORSMiddleware(

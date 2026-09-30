@@ -1,3 +1,4 @@
+from norman_mcp.context import Context, get_api_client
 from typing import Dict, Any, List
 from urllib.parse import urljoin
 from norman_mcp import config
@@ -9,8 +10,7 @@ def register_resources(mcp):
     @mcp.resource("company://current")
     async def get_company() -> str:
         """Get details about the current company including SME status and Chart of Accounts."""
-        ctx = mcp.get_context()
-        api = ctx.request_context.lifespan_context["api"]
+        api = get_api_client()
 
         company_id = api.company_id
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
@@ -60,9 +60,8 @@ def register_resources(mcp):
             return f"Error getting company details: {str(e)}"
 
     @mcp.resource("transactions://list/{page}/{page_size}")
-    async def list_transactions(page: int = 1, page_size: int = 100) -> str:
+    async def list_transactions(ctx: Context, page: int = 1, page_size: int = 100) -> str:
         """List transactions with pagination."""
-        ctx = mcp.get_context()
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -82,9 +81,8 @@ def register_resources(mcp):
         return api._make_request("GET", transactions_url, params=params)
 
     @mcp.resource("invoices://list/{page}/{page_size}")
-    async def list_invoices(page: int = 1, page_size: int = 100) -> str:
+    async def list_invoices(ctx: Context, page: int = 1, page_size: int = 100) -> str:
         """List invoices with pagination."""
-        ctx = mcp.get_context()
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -104,7 +102,7 @@ def register_resources(mcp):
         return api._make_request("GET", invoices_url, params=params)
 
     @mcp.resource("clients://list/{page}/{page_size}")
-    async def list_clients(page: int = 1, page_size: int = 100) -> List[Dict[str, Any]]:
+    async def list_clients(ctx: Context, page: int = 1, page_size: int = 100) -> List[Dict[str, Any]]:
         """
         List clients with optional filtering.
         
@@ -116,7 +114,6 @@ def register_resources(mcp):
         Returns:
             List of client records matching the criteria
         """
-        ctx = mcp.get_context()
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -136,9 +133,8 @@ def register_resources(mcp):
         return api._make_request("GET", clients_url, params=params)
 
     @mcp.resource("taxes://list/{page}/{page_size}")
-    async def list_taxes(page: int = 1, page_size: int = 100) -> str:
+    async def list_taxes(ctx: Context, page: int = 1, page_size: int = 100) -> str:
         """List tax reports available for the user's company."""
-        ctx = mcp.get_context()
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -158,8 +154,7 @@ def register_resources(mcp):
     @mcp.resource("categories://list")
     async def list_categories() -> str:
         """List freelance transaction categories (used for non-SME companies)."""
-        ctx = mcp.get_context()
-        api = ctx.request_context.lifespan_context["api"]
+        api = get_api_client()
         company_id = api.company_id
         
         if not company_id:
@@ -183,8 +178,7 @@ def register_resources(mcp):
         and number of transactions missing receipts. Use the company IDs with the
         switch_company tool to change the active company context.
         """
-        ctx = mcp.get_context()
-        api = ctx.request_context.lifespan_context["api"]
+        api = get_api_client()
 
         clients_url = urljoin(config.api_base_url, "api/v1/tax-advisor/clients/")
 
@@ -215,7 +209,7 @@ def register_resources(mcp):
         return "\n".join(lines)
 
     @mcp.resource("skr-catalog://search/{query}")
-    async def search_skr_catalog(query: str) -> str:
+    async def search_skr_catalog(ctx: Context, query: str) -> str:
         """Search the full SKR chart of accounts (SKR03/SKR04) by code or name.
         
         SME only — this resource is for GmbH/UG companies that use a DATEV
@@ -227,7 +221,6 @@ def register_resources(mcp):
         Args:
             query: Account code prefix (e.g. '42', '6') or name keyword (e.g. 'rent')
         """
-        ctx = mcp.get_context()
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
 
@@ -270,8 +263,7 @@ def register_resources(mcp):
         of accounts (SKR03 or SKR04). Each category has a numeric code, name, 
         cashflow type, and optional metadata for amortization rules.
         """
-        ctx = mcp.get_context()
-        api = ctx.request_context.lifespan_context["api"]
+        api = get_api_client()
         company_id = api.company_id
         
         if not company_id:

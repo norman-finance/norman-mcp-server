@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 from typing import List, Optional
-from mcp.server.fastmcp.prompts import base
+from mcp.server.mcpserver.prompts import base
 
 import yaml
 

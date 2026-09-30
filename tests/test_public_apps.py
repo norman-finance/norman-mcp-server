@@ -6,8 +6,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from mcp.server.fastmcp import FastMCP
-from mcp.shared.memory import create_connected_server_and_client_session
+from mcp.server.mcpserver import MCPServer
+from mcp.client import Client
 from mcp.types import CallToolResult
 
 from norman_mcp.apps.public import (
@@ -217,11 +217,11 @@ def test_preview_tools_disclose_saved_pdf_side_effects() -> None:
     mcp, _api = _registered()
     for name in ("get_tax_filing_data", "render_tax_preview", "render_tax_submission"):
         annotations = mcp.tool_options[name]["annotations"]
-        assert annotations.readOnlyHint is False
-        assert annotations.idempotentHint is False
-        assert annotations.destructiveHint is False
-        assert annotations.openWorldHint is False
-    assert mcp.tool_options["get_tax_submission_status_data"]["annotations"].readOnlyHint is True
+        assert annotations.read_only_hint is False
+        assert annotations.idempotent_hint is False
+        assert annotations.destructive_hint is False
+        assert annotations.open_world_hint is False
+    assert mcp.tool_options["get_tax_submission_status_data"]["annotations"].read_only_hint is True
 
 
 def test_reconciliation_sends_supported_date_and_page_filters() -> None:
@@ -424,8 +424,8 @@ def test_tax_rendering_never_calls_the_submission_endpoint() -> None:
     preview = asyncio.run(mcp.tools["render_tax_preview"](ctx, "report-1"))
     submission = asyncio.run(mcp.tools["render_tax_submission"](ctx, "report-1"))
 
-    assert preview.structuredContent["section"] == "preview"
-    assert submission.structuredContent["section"] == "submission"
+    assert preview.structured_content["section"] == "preview"
+    assert submission.structured_content["section"] == "submission"
     assert preview.meta == {
         "norman/view": "tax-filing",
         "norman/previewImage": "dGVzdC1wcmV2aWV3",
@@ -450,7 +450,7 @@ def test_tax_preview_remains_available_with_pdf_but_no_thumbnail(thumbnail) -> N
 
     api.arequest = request
     result = asyncio.run(mcp.tools["render_tax_preview"](_context(api), "report-1"))
-    data = result.structuredContent
+    data = result.structured_content
 
     assert data["preview"]["available"] is True
     assert data["preview"]["downloadUrl"].endswith("/report-1.pdf")
@@ -479,7 +479,7 @@ def test_tax_preview_requires_a_successful_pdf_response(response) -> None:
 
     api.arequest = request
     result = asyncio.run(mcp.tools["render_tax_preview"](_context(api), "report-1"))
-    data = result.structuredContent
+    data = result.structured_content
 
     assert data["preview"]["available"] is False
     assert data["preview"]["error"]
@@ -497,7 +497,7 @@ def test_render_tools_return_structured_content_and_widget_only_meta() -> None:
     )
 
     assert isinstance(result, CallToolResult)
-    assert result.structuredContent["view"] == "documents"
+    assert result.structured_content["view"] == "documents"
     assert result.meta == {"norman/view": "documents"}
     assert "data is ready" in result.content[0].text
     assert "Opened" not in result.content[0].text
@@ -505,12 +505,10 @@ def test_render_tools_return_structured_content_and_widget_only_meta() -> None:
 
 def test_app_contract_survives_real_mcp_protocol_serialization() -> None:
     async def exercise_protocol() -> None:
-        mcp = FastMCP("public-app-contract")
+        mcp = MCPServer("public-app-contract")
         register_public_apps(mcp)
 
-        async with create_connected_server_and_client_session(
-            mcp, raise_exceptions=True
-        ) as session:
+        async with Client(mcp, mode="legacy", raise_exceptions=True) as session:
             tools = await session.list_tools()
             render_tools = {
                 tool.name: tool for tool in tools.tools if tool.name.startswith("render_")
@@ -540,10 +538,10 @@ def test_app_contract_survives_real_mcp_protocol_serialization() -> None:
                 app_resource = next(
                     resource for resource in resources.resources if str(resource.uri) == uri
                 )
-                assert app_resource.mimeType == APP_MIME_TYPE
+                assert app_resource.mime_type == APP_MIME_TYPE
 
                 content = await session.read_resource(uri)
-                assert content.contents[0].mimeType == APP_MIME_TYPE
+                assert content.contents[0].mime_type == APP_MIME_TYPE
                 assert "ui/notifications/tool-result" in content.contents[0].text
 
     asyncio.run(exercise_protocol())

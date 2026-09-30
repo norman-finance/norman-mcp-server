@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional
 from urllib.parse import urljoin
 from pydantic import Field
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
+from mcp.server.mcpserver.exceptions import ToolError
 
 from norman_mcp.context import Context
 from norman_mcp import config
@@ -165,11 +166,11 @@ def register_tax_tools(mcp):
         api = ctx.request_context.lifespan_context["api"]
 
         if not report_id or not isinstance(report_id, str) or not report_id.strip():
-            raise ValueError("Invalid report ID")
+            raise ToolError("Invalid report ID")
 
         company_id = api.company_id
         if not company_id:
-            raise ValueError(NO_COMPANY_ERROR["error"])
+            raise ToolError(NO_COMPANY_ERROR["error"])
         preview_url = reports_url(company_id, f"{report_id}/generate-preview-url/")
 
         try:
