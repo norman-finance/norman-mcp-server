@@ -14,8 +14,8 @@ RUN pip install --upgrade pip
 COPY . /app/
 
 # Install the package and additional dependencies
-RUN pip install -e . && \
-    pip install fastapi uvicorn pydantic pdf2image pillow requests sentry-sdk && \
+RUN pip install -e . -c constraints.txt && \
+    pip install fastapi uvicorn pydantic pdf2image pillow requests sentry-sdk -c constraints.txt && \
     python -c "import norman_mcp.server"
 
 # Set environment variables

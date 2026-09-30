@@ -10,19 +10,18 @@ jobs:
   tax-preview-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - run: pip install '.[dev,sse]'
-      - run: python -m pytest -q tests/test_public_apps.py tests/test_tax_preview.py
-      - name: Invoice tool contracts and permissions
-        run: python -m pytest -q tests/test_invoice_parameter_parity.py tests/test_offer_invoice_parameters.py tests/test_contract_invoice_tools.py tests/test_submission_annotations.py tests/test_document_design_catalog.py
-      - name: Workflow tools
-        run: python -m pytest -q tests/test_workflow_tools.py
+      # sentry-sdk ships in the production image; without it the Sentry
+      # scrubbing tests in tests/test_observability.py are skipped.
+      - run: pip install '.[dev,sse]' sentry-sdk -c constraints.txt
+      - name: Full MCP suite (SDK 2 and tenant isolation)
+        run: python -m pytest -q
       - run: node --test tests/tax_filing_ui.test.cjs
 
   build-docker-image:
@@ -33,22 +32,22 @@ jobs:
         packages: write
       steps:
         - name: checkout
-          uses: actions/checkout@v3
+          uses: actions/checkout@v7
 
         - name: set up qemu
-          uses: docker/setup-qemu-action@v2
+          uses: docker/setup-qemu-action@v4
 
         - name: set up buildx
-          uses: docker/setup-buildx-action@v2
+          uses: docker/setup-buildx-action@v4
 
         - name: generate image identifier
           id: image
-          uses: ASzc/change-string-case-action@v5
-          with:
-            string: ${{ github.repository_owner }}
+          env:
+            OWNER: ${{ github.repository_owner }}
+          run: echo "lowercase=${OWNER,,}" >> "$GITHUB_OUTPUT"
 
         - name: login to ghcr
-          uses: docker/login-action@v2
+          uses: docker/login-action@v4
           if: ${{ github.ref == 'refs/heads/main'}}
           with:
             registry: ghcr.io
@@ -56,7 +55,7 @@ jobs:
             password: ${{ secrets.GITHUB_TOKEN }}
 
         - name: build web image (production)
-          uses: docker/build-push-action@v3
+          uses: docker/build-push-action@v7
           if: ${{ github.ref == 'refs/heads/main'}}
           with:
             context: .
@@ -76,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       # Release bookkeeping must never gate the deploy. A transient Sentry API
       # error (SSL reset, 5xx) used to skip "update mcp server image" entirely,
@@ -95,9 +94,9 @@ jobs:
 
       - name: read image identifiers
         id: image
-        uses: ASzc/change-string-case-action@v5
-        with:
-          string: ${{ github.repository_owner }}
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "lowercase=${OWNER,,}" >> "$GITHUB_OUTPUT"
 
       - name: update mcp server image
         uses: appleboy/ssh-action@v0.1.7

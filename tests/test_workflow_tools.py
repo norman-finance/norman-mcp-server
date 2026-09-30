@@ -225,11 +225,11 @@ def test_annotations_tell_reads_from_runs_that_can_reach_clients():
     settings = ["stop_workflow", "schedule_workflow", "unschedule_workflow"]
 
     for name in reads:
-        assert tools[name].annotations.readOnlyHint is True, name
+        assert tools[name].annotations.read_only_hint is True, name
     for name in reaching_out:
-        assert tools[name].annotations.readOnlyHint is False, name
-        assert tools[name].annotations.openWorldHint is True, name
+        assert tools[name].annotations.read_only_hint is False, name
+        assert tools[name].annotations.open_world_hint is True, name
     for name in reaching_out + settings:
-        assert tools[name].annotations.destructiveHint is False, name
+        assert tools[name].annotations.destructive_hint is False, name
     for name in settings:
-        assert tools[name].annotations.openWorldHint is False, name
+        assert tools[name].annotations.open_world_hint is False, name

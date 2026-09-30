@@ -12,8 +12,8 @@ import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from mcp import types
-from mcp.server.lowlevel.server import request_ctx
-from mcp.shared.context import RequestContext
+from mcp.server.context import ServerRequestContext
+from norman_mcp.context import set_api_client
 
 from norman_mcp.server import mcp as server
 
@@ -41,14 +41,11 @@ def _in_request(api: Any, request: Any) -> Any:
     """Handle one MCP request with `api` as the lifespan's API client."""
 
     async def run() -> Any:
-        token = request_ctx.set(
-            RequestContext(request_id=1, meta=None, session=None, lifespan_context={"api": api}),
-        )
-        try:
-            handler = server._mcp_server.request_handlers[type(request)]  # noqa: SLF001
-            return (await handler(request)).root
-        finally:
-            request_ctx.reset(token)
+        set_api_client(api)
+        context = ServerRequestContext(request_id=1, meta=None, session=None,
+            lifespan_context={"api": api}, protocol_version="2025-11-25", method=request.method)
+        handler = server._lowlevel_server.get_request_handler(request.method).handler
+        return await handler(context, request.params)
 
     return asyncio.run(run())
 
@@ -78,8 +75,8 @@ def read_resource(uri: str, api: Any) -> str:
 
 def structured(result: types.CallToolResult) -> Dict[str, Any]:
     """The tool's object as the client receives it, unwrapped from FastMCP's envelope."""
-    assert not result.isError, result.content[0].text
-    content = result.structuredContent
+    assert not result.is_error, result.content[0].text
+    content = result.structured_content
     assert content is not None
     # `-> Dict[str, Any]` tools are wrapped as {"result": {...}} by FastMCP.
     return content["result"] if set(content) == {"result"} else content
@@ -87,6 +84,6 @@ def structured(result: types.CallToolResult) -> Dict[str, Any]:
 
 def error_payload(result: types.CallToolResult) -> Dict[str, Any]:
     """The JSON payload of a failed call (isError: true)."""
-    assert result.isError, result
+    assert result.is_error, result
     text = result.content[0].text
     return json.loads(text[text.index("{"):])

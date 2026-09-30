@@ -9,7 +9,7 @@ from unittest.mock import Mock
 
 import pytest
 import requests
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from pydantic.fields import FieldInfo
 from urllib3.exceptions import ReadTimeoutError
 
@@ -45,7 +45,7 @@ def get_response(monkeypatch):
 
 
 def run_tool(name, api, **kwargs):
-    server = FastMCP()
+    server = MCPServer()
     documents.register_document_tools(server)
     fn = server._tool_manager._tools[name].fn
     defaults = {

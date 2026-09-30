@@ -92,6 +92,13 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         # `NormanAPI.company_id` attribute, which was shared process-wide and was
         # both how switch_company "persisted" and how companies leaked.
         self.token_to_company_id: Dict[str, str] = {}
+        # MCP access/refresh token -> grant id. Every token minted from one
+        # authorization (refreshes included) shares the id, so per-connection
+        # limits cannot be multiplied by refreshing.
+        self.token_grants: Dict[str, str] = {}
+        # Persisted records this version could not load, keyed by section. They
+        # are written back verbatim so a partial load never erases them from disk.
+        self._unloaded_state: Dict[str, Dict[str, Any]] = {}
 
         self._persist_lock = threading.Lock()
         self._refresh_locks: Dict[str, threading.Lock] = {}
@@ -114,16 +121,9 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
 
                 clients_ser = {}
                 for cid, c in self.clients.items():
-                    clients_ser[cid] = {
-                        "client_id": c.client_id,
-                        "client_name": c.client_name,
-                        "client_secret": c.client_secret,
-                        "redirect_uris": [str(u) for u in c.redirect_uris],
-                        "token_endpoint_auth_method": c.token_endpoint_auth_method,
-                        "grant_types": c.grant_types,
-                        "response_types": c.response_types,
-                        "scope": c.scope,
-                    }
+                    # Preserve the complete SDK record, including application type,
+                    # issued-at timestamps and client secret expiry across restarts.
+                    clients_ser[cid] = c.model_dump(mode="json", exclude_none=True)
 
                 refresh_ser = {}
                 for rid, r in self.refresh_tokens.items():
@@ -143,12 +143,14 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                         "expires_at": t.expires_at,
                     }
 
+                unloaded = getattr(self, "_unloaded_state", {})
                 data = {
-                    "clients": clients_ser,
-                    "refresh_tokens": refresh_ser,
-                    "tokens": tokens_ser,
+                    "clients": {**unloaded.get("clients", {}), **clients_ser},
+                    "refresh_tokens": {**unloaded.get("refresh_tokens", {}), **refresh_ser},
+                    "tokens": {**unloaded.get("tokens", {}), **tokens_ser},
                     "token_mapping": self.token_mapping,
                     "token_to_company_id": self.token_to_company_id,
+                    "token_grants": getattr(self, "token_grants", {}),
                 }
 
                 tmp = path.with_suffix(".tmp")
@@ -159,17 +161,48 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 logger.warning("Failed to persist OAuth state", exc_info=True)
 
     def _load_state(self) -> None:
-        """Load persisted state from disk on startup."""
+        """Load persisted state from disk on startup.
+
+        Every record is restored on its own. One record this version cannot read
+        (e.g. an empty client_id that SDK 1 auto-registered and SDK 2 rejects)
+        must not abort the rest: the next save would otherwise rewrite the only
+        state file without the other clients, tokens and Norman mappings.
+        Unreadable records are kept verbatim and written back on save.
+        """
         path = self._state_path()
         if not path.exists():
             logger.info("No persisted OAuth state found at %s", path)
             return
         try:
             data = _json.loads(path.read_text())
-            now = time.time()
+            if not isinstance(data, dict):
+                raise ValueError("OAuth state is not a JSON object")
+        except Exception:
+            # Keep the unreadable file: the next save replaces it.
+            backup = path.with_name(f"{path.name}.unreadable-{int(time.time())}")
+            try:
+                backup.write_bytes(path.read_bytes())
+            except OSError:
+                logger.error("Could not back up unreadable OAuth state %s", path, exc_info=True)
+            logger.error("Failed to read OAuth state from %s; kept a copy at %s", path, backup, exc_info=True)
+            return
 
-            migrated = False
-            for cid, c in data.get("clients", {}).items():
+        now = time.time()
+        migrated = False
+        skipped = 0
+
+        def section(name: str) -> Dict[str, Any]:
+            value = data.get(name) or {}
+            return value if isinstance(value, dict) else {}
+
+        def keep_unloaded(name: str, key: str, raw: Any) -> None:
+            nonlocal skipped
+            skipped += 1
+            self.__dict__.setdefault("_unloaded_state", {}).setdefault(name, {})[key] = raw
+            logger.warning("Skipping unreadable OAuth %s record %r", name, str(key)[:12], exc_info=True)
+
+        for cid, c in section("clients").items():
+            try:
                 # Migration: an older version of `get_client` auto-registered
                 # public clients with a random `client_secret` while setting
                 # `token_endpoint_auth_method="none"`. That combination makes
@@ -182,18 +215,23 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                     logger.info("Migrating public client %s... — dropping stale client_secret", cid[:12])
                     stored_secret = None
                     migrated = True
-                self.clients[cid] = OAuthClientInformationFull(
-                    client_id=c["client_id"],
-                    client_name=c.get("client_name"),
-                    client_secret=stored_secret,
-                    redirect_uris=c.get("redirect_uris", []),
-                    token_endpoint_auth_method=auth_method,
-                    grant_types=c.get("grant_types", ["authorization_code", "refresh_token"]),
-                    response_types=c.get("response_types", ["code"]),
-                    scope=c.get("scope", DEFAULT_SCOPE),
+                self.clients[cid] = OAuthClientInformationFull.model_validate(
+                    {
+                        # Legacy state omitted these fields; keep its established defaults.
+                        "redirect_uris": [],
+                        "token_endpoint_auth_method": "none",
+                        "grant_types": ["authorization_code", "refresh_token"],
+                        "response_types": ["code"],
+                        "scope": DEFAULT_SCOPE,
+                        **c,
+                        "client_secret": stored_secret,
+                    }
                 )
+            except Exception:
+                keep_unloaded("clients", cid, c)
 
-            for rid, r in data.get("refresh_tokens", {}).items():
+        for rid, r in section("refresh_tokens").items():
+            try:
                 if r.get("expires_at", 0) > now:
                     self.refresh_tokens[rid] = RefreshToken(
                         token=r["token"],
@@ -201,8 +239,11 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                         scopes=r.get("scopes", []),
                         expires_at=r.get("expires_at", 0),
                     )
+            except Exception:
+                keep_unloaded("refresh_tokens", rid, r)
 
-            for tid, t in data.get("tokens", {}).items():
+        for tid, t in section("tokens").items():
+            try:
                 if t.get("expires_at", 0) > now:
                     self.tokens[tid] = AccessToken(
                         token=t["token"],
@@ -210,18 +251,20 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                         scopes=t.get("scopes", []),
                         expires_at=t.get("expires_at", 0),
                     )
+            except Exception:
+                keep_unloaded("tokens", tid, t)
 
-            self.token_mapping = data.get("token_mapping", {})
-            self.token_to_company_id = data.get("token_to_company_id", {})
-            logger.info(
-                "Restored OAuth state: %d clients, %d refresh tokens, %d access tokens",
-                len(self.clients), len(self.refresh_tokens), len(self.tokens),
-            )
-            if migrated:
-                # Persist the scrubbed secrets so the next restart doesn't log the migration again.
-                self._save_state()
-        except Exception:
-            logger.warning("Failed to load OAuth state from %s", path, exc_info=True)
+        self.token_mapping = section("token_mapping")
+        self.token_to_company_id = section("token_to_company_id")
+        live = set(self.tokens) | set(self.refresh_tokens)
+        self.token_grants = {t: g for t, g in section("token_grants").items() if t in live}
+        logger.info(
+            "Restored OAuth state: %d clients, %d refresh tokens, %d access tokens (%d unreadable kept)",
+            len(self.clients), len(self.refresh_tokens), len(self.tokens), skipped,
+        )
+        if migrated:
+            # Persist the scrubbed secrets so the next restart doesn't log the migration again.
+            self._save_state()
 
     def _register_norman_client(self) -> None:
         """Pre-register the Norman OAuth client from environment variables."""
@@ -310,16 +353,9 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         if client and redirect_uri not in [str(uri) for uri in client.redirect_uris]:
             # Create new client with updated redirect URIs
             new_uris = list(client.redirect_uris) + [AnyUrl(redirect_uri)]
-            self.clients[client_id] = OAuthClientInformationFull(
-                client_id=client.client_id,
-                client_name=client.client_name,
-                client_secret=client.client_secret,
-                redirect_uris=new_uris,
-                token_endpoint_auth_method=client.token_endpoint_auth_method,
-                grant_types=client.grant_types,
-                response_types=client.response_types,
-                scope=client.scope,
-            )
+            # Copy rather than rebuild: a rebuild from a field subset silently
+            # dropped the secret expiry, issue time and application type.
+            self.clients[client_id] = client.model_copy(update={"redirect_uris": new_uris})
             logger.info(f"Added redirect URI for client {client_id[:8]}: {redirect_uri}")
             self._save_state()
 
@@ -331,17 +367,25 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         Redirect trust is enforced authoritatively on every /authorize request
         via validate_redirect_uri, before an authorization code can be issued.
         """
+        updates: Dict[str, Any] = {}
         if not client_info.scope or not any(s in client_info.scope for s in SUPPORTED_SCOPES):
-            client_info = OAuthClientInformationFull(
-                client_id=client_info.client_id,
-                client_name=client_info.client_name,
-                client_secret=client_info.client_secret,
-                redirect_uris=client_info.redirect_uris,
+            updates.update(
                 token_endpoint_auth_method=client_info.token_endpoint_auth_method or "none",
-                grant_types=client_info.grant_types or ["authorization_code", "refresh_token"],
                 response_types=client_info.response_types or ["code"],
                 scope=DEFAULT_SCOPE,
             )
+        # Every authorization-code grant here also issues a refresh token. SDK 1
+        # rejected registrations without refresh_token; SDK 2 accepts them, and
+        # the client would then hold refresh tokens /token refuses to redeem.
+        grant_types = list(client_info.grant_types or ["authorization_code"])
+        if "authorization_code" in grant_types and "refresh_token" not in grant_types:
+            grant_types.append("refresh_token")
+        if grant_types != list(client_info.grant_types or []):
+            updates["grant_types"] = grant_types
+        # In place: the SDK answers the registration with this same object, so the
+        # client sees exactly the grants and scope that are stored.
+        for field, value in updates.items():
+            setattr(client_info, field, value)
         self.clients[client_info.client_id] = client_info
         logger.info(f"Registered client: {client_info.client_id} with scope: {client_info.scope}")
         self._save_state()
@@ -514,6 +558,8 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         
         # Map MCP token to Norman token
         self.token_mapping[mcp_token] = norman_token
+        grant = f"grant_{secrets.token_hex(16)}"
+        self.token_grants[mcp_token] = grant
         
         # Check for refresh token
         norman_refresh = self.token_mapping.get(f"refresh_{authorization_code.code}")
@@ -528,6 +574,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 expires_at=int(time.time()) + 30 * 86400,  # 30 days
             )
             self.token_mapping[refresh_token_id] = norman_refresh
+            self.token_grants[refresh_token_id] = grant
             # Also index by access token so we can transparently refresh the
             # Norman access token when it expires mid-session (see
             # NormanAPI._make_request 401 handler).
@@ -624,6 +671,11 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 )
                 self.token_mapping[new_mcp_token] = norman_token
                 self.token_mapping[f"refresh_for_{new_mcp_token}"] = norman_refresh
+                # The refresh token is not rotated, so it identifies the grant even
+                # for grants issued before grant ids were recorded.
+                self.token_grants[new_mcp_token] = self.token_grants.get(
+                    refresh_token.token, refresh_token.token
+                )
             self._save_state()
 
             return OAuthToken(
@@ -633,6 +685,10 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 scope=" ".join(scopes or refresh_token.scopes),
                 refresh_token=refresh_token.token,
             )
+
+    def grant_for_token(self, token: str) -> str:
+        """The authorization a token belongs to; unknown tokens stand for themselves."""
+        return getattr(self, "token_grants", {}).get(token, token)
 
     async def revoke_token(self, token: str, token_type_hint: Optional[str] = None) -> None:
         """Revoke a token."""
@@ -652,6 +708,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             logger.info(f"Revoked refresh token: {token[:10]}...")
             changed = True
         if changed:
+            getattr(self, "token_grants", {}).pop(token, None)
             self._save_state()
 
     def get_norman_token(self, mcp_token: str) -> Optional[str]:

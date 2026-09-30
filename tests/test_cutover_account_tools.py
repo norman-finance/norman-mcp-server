@@ -9,7 +9,7 @@ import asyncio
 import json
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from norman_mcp.tools import accounting
 from norman_mcp.tools.accounting import register_accounting_tools
@@ -42,15 +42,15 @@ def api(monkeypatch):  # noqa: ANN001, ANN201
 
 @pytest.fixture
 def server():  # noqa: ANN201
-    mcp = FastMCP("cutover accounts test")
+    mcp = MCPServer("cutover accounts test")
     register_accounting_tools(mcp)
     return mcp
 
 
 def call(server, name, arguments):  # noqa: ANN001, ANN201
     """Through FastMCP, so argument validation and defaults apply as for a client."""
-    content, structured = asyncio.run(server.call_tool(name, arguments))
-    return structured["result"]
+    result = asyncio.run(server.call_tool(name, arguments))
+    return result.structured_content["result"]
 
 
 def test_new_account_is_created_with_its_manual_assignment(server, api):  # noqa: ANN001

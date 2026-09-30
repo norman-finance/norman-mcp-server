@@ -18,7 +18,8 @@ import httpx
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
+from mcp.server.apps import Apps
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.auth.routes import validate_issuer_url
 
@@ -101,18 +102,23 @@ def _flexible_validate_redirect_uri(self, redirect_uri):
     Note: we deliberately do NOT trust the client's own registered redirect_uris
     here — with open Dynamic Client Registration an attacker controls that list,
     so the only meaningful check is the server-level allow-list above.
+
+    That includes the RFC 6749 fallback for a request that omits redirect_uri:
+    the client's single registered URI is attacker-controlled too, so it gets
+    exactly the same allow-list check as an explicit one. Returning it unchecked
+    let a self-registered client receive a victim's authorization code.
     """
-    if redirect_uri is not None:
-        uri_str = str(redirect_uri)
-        if is_allowed_redirect_uri(uri_str):
-            return redirect_uri
-        raise InvalidRedirectUriError(f"redirect_uri not allowed: {uri_str}")
-    elif self.redirect_uris is not None and len(self.redirect_uris) == 1:
-        return self.redirect_uris[0]
-    else:
-        raise InvalidRedirectUriError(
-            "redirect_uri must be specified when client has multiple registered URIs"
-        )
+    if redirect_uri is None:
+        if self.redirect_uris is not None and len(self.redirect_uris) == 1:
+            redirect_uri = self.redirect_uris[0]
+        else:
+            raise InvalidRedirectUriError(
+                "redirect_uri must be specified when client has multiple registered URIs"
+            )
+    uri_str = str(redirect_uri)
+    if is_allowed_redirect_uri(uri_str):
+        return redirect_uri
+    raise InvalidRedirectUriError(f"redirect_uri not allowed: {uri_str}")
 
 OAuthClientInformationFull.validate_redirect_uri = _flexible_validate_redirect_uri
 
@@ -235,15 +241,23 @@ async def lifespan(app):
     if transport == "stdio":
         await authenticate_with_credentials(api_client)
     else:
-        from norman_mcp.context import set_api_client, get_api_token
+        # Streamable HTTP enters this lifespan once per process, outside any
+        # request; SSE enters it once per connection. Either way identity must
+        # be resolved when tools run, never from startup state, and nothing
+        # process-wide may be started or stopped here without a transport check.
+        api_client.token_source = "oauth"
+        from norman_mcp.context import get_api_token
         token = get_api_token()
         if token:
             api_client.set_token(token)
-        set_api_client(api_client)
         logger.info(f"Using {transport} transport with OAuth")
+
+    # SDK 2 static resources have no injected Context on any transport.
+    from norman_mcp.context import set_api_client
+    set_api_client(api_client)
     
     yield {"api": api_client}
-    
+
     logger.info("Shutting down Norman MCP server")
 
 
@@ -296,20 +310,28 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
             scopes_supported=SUPPORTED_SCOPES,
         )
     
-    server = FastMCP(
+    server = MCPServer(
         "Norman Finance API", 
         instructions="Norman Finance MCP Server - Access your financial data",
         lifespan=lifespan,
         auth_server_provider=oauth_provider,
         auth=auth_settings,
-        host=host,
-        port=port,
-        debug=True,
-        stateless_http=streamable_http_options.get("stateless", False),
-        json_response=streamable_http_options.get("json_response", True),
+        extensions=[Apps()],
+        # Starlette debug mode returns full tracebacks to HTTP clients; keep it
+        # opt-in for local debugging only.
+        debug=os.environ.get("NORMAN_MCP_DEBUG") == "1",
     )
     
+    # SDK 2 bounds subscriptions/listen only process-wide; bound it per connection.
+    from norman_mcp.security.listen_limits import ListenLimits
+    server.middleware.append(ListenLimits())
+
     server._transport = transport_type
+    server._http_options = {
+        "host": host,
+        "stateless_http": streamable_http_options.get("stateless", False),
+        "json_response": streamable_http_options.get("json_response", True),
+    }
     
     # Register OAuth callback route
     if use_oauth:
@@ -377,17 +399,17 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
     register_prompts(server)
     register_resources(server)
     register_public_apps(server)
-    
+
     return server
 
 
-def create_cors_app(server: FastMCP):
+def create_cors_app(server: MCPServer):
     """Wrap FastMCP app with CORS middleware for browser clients."""
     from starlette.applications import Starlette
     from starlette.routing import Mount
     
     # Get the underlying ASGI app
-    app = server.streamable_http_app()
+    app = server.streamable_http_app(**getattr(server, "_http_options", {}))
 
     # Wrap with CORS
     cors_app = CORSMiddleware(

@@ -1,9 +1,9 @@
 from contextvars import ContextVar
 from typing import Optional
 
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 
-# Re-export Context from mcp.server.fastmcp
+# Re-export Context from mcp.server.mcpserver
 # This allows us to use norman_mcp.context.Context throughout the codebase
 # while maintaining a single source of truth
 
@@ -34,8 +34,8 @@ def get_oauth_provider():
     """Get the global OAuth provider reference (may be None before startup)."""
     return oauth_provider
 
-# The API client instance. Stateless HTTP builds a fresh one per request via the
-# lifespan; SSE/stdio reuse one. Either way it must not carry identity state.
+# SDK 2 shares the API client across server requests. OAuth identity is always
+# resolved per request; only stdio may keep single-user credentials on the client.
 _api_client = None
 
 # Per-request identity. Never make these module globals again.

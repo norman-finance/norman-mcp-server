@@ -232,7 +232,7 @@ def test_switch_company_does_not_persist_a_company_it_cannot_reach(provider, fak
     """
     import asyncio
 
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from norman_mcp.tools import tax_advisor as tax_advisor_module
     from norman_mcp.tools.tax_advisor import register_tax_advisor_tools
@@ -242,7 +242,7 @@ def test_switch_company_does_not_persist_a_company_it_cannot_reach(provider, fak
     original = tax_advisor_module.config
     tax_advisor_module.config = monkey_cfg
 
-    srv = FastMCP()
+    srv = MCPServer()
     register_tax_advisor_tools(srv)
     switch_company = srv._tool_manager._tools["switch_company"].fn
 

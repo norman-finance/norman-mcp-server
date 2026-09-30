@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from tests.test_invoice_parameter_parity import INVOICE, LINE, Api, arguments, call
 
@@ -6,7 +6,7 @@ from tests.test_invoice_parameter_parity import INVOICE, LINE, Api, arguments, c
 def test_quote_creation_has_the_same_options_and_inherits_branding():
     from norman_mcp.tools.offers import register_offer_tools
 
-    server = FastMCP()
+    server = MCPServer()
     register_offer_tools(server)
     api = Api()
     kwargs = arguments(INVOICE)
@@ -24,7 +24,7 @@ def test_quote_creation_has_the_same_options_and_inherits_branding():
 def test_create_offer_leaves_the_currency_to_the_company_unless_told():
     from norman_mcp.tools.offers import register_offer_tools
 
-    server = FastMCP()
+    server = MCPServer()
     register_offer_tools(server)
     api = Api()
     call(server, api, "create_offer", client_id="client-1", items=[LINE], offer_number="QUOTE-1")

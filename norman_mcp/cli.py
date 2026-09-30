@@ -108,7 +108,7 @@ def main():
             uvicorn.run(cors_app, host=args.host, port=args.port)
         else:
             # For stdio and sse, use the standard run method
-            mcp.run(transport=args.transport)
+            mcp.run(transport=args.transport, **({"host": args.host, "port": args.port} if args.transport == "sse" else {}))
 
     except KeyboardInterrupt:
         logger.info("Server stopped by user")

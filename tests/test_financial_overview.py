@@ -79,7 +79,7 @@ def test_overview_runs_five_reads_concurrently_and_keeps_source_periods_distinct
             "amount": 100
         }
         assert result["sections"]["next_vat"]["data"]["datePeriodStart"] == "2026-08-01"
-        assert registry.annotations["get_financial_overview"].readOnlyHint is True
+        assert registry.annotations["get_financial_overview"].read_only_hint is True
 
     asyncio.run(run())
 

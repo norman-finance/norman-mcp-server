@@ -4,7 +4,7 @@ from typing import Any
 from urllib.parse import urljoin
 
 from norman_mcp.context import Context
-from mcp.server.fastmcp.utilities.types import Image
+from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 from pydantic import Field
 

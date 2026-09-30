@@ -1,7 +1,7 @@
 import asyncio
 from types import SimpleNamespace
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from norman_mcp.tools.accounting import register_accounting_tools
 from norman_mcp.tools.company import register_company_tools
@@ -28,14 +28,14 @@ def _annotation_tuple(tool):  # noqa: ANN001, ANN202
     annotations = tool.annotations
     assert annotations is not None, f"{tool.name}: all required annotations are missing"
     return (
-        annotations.readOnlyHint,
-        annotations.openWorldHint,
-        annotations.destructiveHint,
+        annotations.read_only_hint,
+        annotations.open_world_hint,
+        annotations.destructive_hint,
     )
 
 
 def test_registration_tools_advertise_truthful_submission_annotations() -> None:
-    server = FastMCP()
+    server = MCPServer()
     register_incorporation_tools(server)
     register_gewerbe_registration_tools(server)
     register_corporate_tax_registration_tools(server)
@@ -86,7 +86,7 @@ def test_registration_tools_advertise_truthful_submission_annotations() -> None:
 
 
 def test_external_actions_and_internal_ai_use_truthful_annotations() -> None:
-    server = FastMCP()
+    server = MCPServer()
     register_invoice_tools(server)
     register_offer_tools(server)
     register_tax_advisor_tools(server)
@@ -123,7 +123,7 @@ def test_every_exposed_tool_sets_all_required_submission_hints() -> None:
 
 
 def test_transaction_item_replacement_is_marked_destructive() -> None:
-    server = FastMCP()
+    server = MCPServer()
     register_transaction_tools(server)
     tool = server._tool_manager._tools["update_transaction"]
     assert _annotation_tuple(tool) == DESTRUCTIVE_WRITE
@@ -131,7 +131,7 @@ def test_transaction_item_replacement_is_marked_destructive() -> None:
 
 
 def test_product_archive_mode_is_marked_destructive() -> None:
-    server = FastMCP()
+    server = MCPServer()
     register_product_tools(server)
     tool = server._tool_manager._tools["update_product"]
     assert _annotation_tuple(tool) == DESTRUCTIVE_WRITE
@@ -139,7 +139,7 @@ def test_product_archive_mode_is_marked_destructive() -> None:
 
 
 def test_account_deactivation_mode_is_marked_destructive() -> None:
-    server = FastMCP()
+    server = MCPServer()
     register_accounting_tools(server)
     tool = server._tool_manager._tools["update_chart_of_accounts_account"]
     assert _annotation_tuple(tool) == DESTRUCTIVE_WRITE
@@ -167,7 +167,7 @@ class _DatevApi:
 
 
 def test_datev_export_uses_live_endpoint_and_saved_company_settings() -> None:
-    server = FastMCP()
+    server = MCPServer()
     register_company_tools(server)
     tool = server._tool_manager._tools["trigger_datev_export"]  # noqa: SLF001
     api = _DatevApi()
@@ -202,7 +202,7 @@ def test_datev_export_uses_live_endpoint_and_saved_company_settings() -> None:
 
 
 def test_datev_export_requires_datev_numbers_before_requesting_export() -> None:
-    server = FastMCP()
+    server = MCPServer()
     register_company_tools(server)
     tool = server._tool_manager._tools["trigger_datev_export"]  # noqa: SLF001
     api = _DatevApi()

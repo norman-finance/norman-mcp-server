@@ -126,6 +126,11 @@ remain separate MCP tool calls with their normal confirmation and permission
 checks. Clients without MCP Apps support receive the same underlying results as
 structured or text tool output.
 
+The SDK 2 HTTP transport limits MCP JSON request bodies to 4 MiB. Send larger
+documents through `file_url` or the upload page's `file_ref`, rather than inline
+base64. The separate multipart upload route keeps its own 50 MiB default,
+configurable with `MCP_UPLOAD_MAX_SIZE`.
+
 <br/>
 
 ### 🏢 Starting a company
