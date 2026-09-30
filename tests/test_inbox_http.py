@@ -42,8 +42,8 @@ def test_shared_startup_client_resolves_oauth_identity_per_http_request(monkeypa
     monkeypatch.setattr(NormanAPI, "arequest", source)
     with TestClient(create_cors_app(server), base_url="http://localhost:3001") as client:
 
-        def call(caller, modern):
-            params = {"name": "get_norman_inbox_data", "arguments": {}}
+        def call(caller, modern, name):
+            params = {"name": name, "arguments": {}}
             headers = {
                 "Accept": "application/json, text/event-stream",
                 "Authorization": "Bearer mcp-" + caller,
@@ -54,7 +54,7 @@ def test_shared_startup_client_resolves_oauth_identity_per_http_request(monkeypa
                     {
                         "MCP-Protocol-Version": "2026-07-28",
                         "MCP-Method": "tools/call",
-                        "MCP-Name": "get_norman_inbox_data",
+                        "MCP-Name": name,
                     }
                 )
                 params["_meta"] = {
@@ -74,12 +74,22 @@ def test_shared_startup_client_resolves_oauth_identity_per_http_request(monkeypa
             data = result.get("structuredContent") or json.loads(result["content"][0]["text"])
             assert data["companyId"] == "company-" + caller
             assert data["questions"][0]["publicId"] == "company-" + caller
+            if name == "open_norman_inbox":
+                text = result["content"][0]["text"]
+                assert "1 workflows awaiting your answer" in text
+                assert "0 pending automation approvals" in text
+                assert "0 tax reviews shown (bounded list)" in text
 
         with ThreadPoolExecutor(max_workers=4) as pool:
             list(
                 pool.map(
                     lambda args: call(*args),
-                    [("alice", False), ("bob", False), ("alice", True), ("bob", True)],
+                    [
+                        ("alice", False, "get_norman_inbox_data"),
+                        ("bob", False, "open_norman_inbox"),
+                        ("alice", True, "open_norman_inbox"),
+                        ("bob", True, "get_norman_inbox_data"),
+                    ],
                 )
             )
 

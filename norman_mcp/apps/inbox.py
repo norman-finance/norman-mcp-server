@@ -115,14 +115,20 @@ def register_inbox(mcp: Any) -> None:
         Load the selected company's current state. Rendering never approves anything.
         """
         data = await load_inbox(ctx.request_context.lifespan_context["api"])
+        summary = data.get("summary", {})
+        counts = {
+            key: "unavailable" if value is None else str(value) for key, value in summary.items()
+        }
+        text = data.get("error") or (
+            f"Norman Inbox: {counts['questions']} workflows awaiting your answer; "
+            f"{counts['approvals']} pending automation approvals; "
+            f"{counts['taxReviewsShown']} tax reviews shown (bounded list)."
+        )
+        if data.get("unavailable"):
+            text += " Unavailable sections: " + ", ".join(data["unavailable"]) + "."
         return CallToolResult(
             structured_content=data,
-            content=[
-                TextContent(
-                    type="text",
-                    text="Norman Inbox data loaded." if not data.get("error") else data["error"],
-                )
-            ],
+            content=[TextContent(type="text", text=text)],
         )
 
     @mcp.tool(title="Review Automation Approval", annotations=READ)
