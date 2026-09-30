@@ -452,11 +452,15 @@ again. The backend remains responsible for atomic execution and permissions.
 Non-transaction approvals whose current target is unavailable can be discussed or
 dismissed; they cannot be approved from this card.
 
-The visible Inbox refreshes through `get_norman_inbox_data` every 30 seconds
-between completed reads. It pauses while hidden/offscreen, during actions, and on
-teardown. It keeps the selected page and typed workflow answer; an unchanged
-approval keeps explicit consent, while changed current values or planned actions
-clear it. This uses the portable Apps `tools/call` bridge: iframe support for
+The visible Inbox refreshes through `get_norman_inbox_data` 30 seconds after a
+completed read and backs off to 60, 120 and at most 300 seconds while nothing on
+screen changes; any interaction or change resets it to 30. Focus or becoming
+visible refreshes only once half the current interval has passed. It pauses while
+hidden/offscreen, during actions, on teardown, and after an expired session until
+the user acts. It keeps the selected page and typed workflow answer (a draft is
+bound to its question; if the question changes, sending needs confirmation); an
+unchanged approval keeps explicit consent, while changed current values or
+planned actions clear it. This uses the portable Apps `tools/call` bridge: iframe support for
 SDK 2 resource subscriptions is not assumed.
 
 Hosted SDK 2 clients can separately opt into resource invalidations by setting
