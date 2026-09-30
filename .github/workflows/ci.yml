@@ -18,9 +18,14 @@ jobs:
         with:
           node-version: '22'
       - run: pip install '.[dev,sse]'
-      - name: Full MCP suite (SDK 2 and tenant isolation)
+      - name: Full MCP suite (SDK 2, tenant isolation, Inbox and Events)
         run: python -m pytest -q
       - run: node --test tests/tax_filing_ui.test.cjs
+      - name: Browser fixtures for Inbox decisions
+        run: |
+          npm install --no-save --package-lock=false playwright@1.62.1
+          npx playwright install --with-deps chromium
+          node --test tests/inbox_ui.test.cjs
 
   build-docker-image:
       needs: tax-preview-tests
