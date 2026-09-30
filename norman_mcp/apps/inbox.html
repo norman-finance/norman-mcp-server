@@ -243,6 +243,10 @@
       .detail > p {
         overflow-wrap: anywhere;
       }
+      .facts {
+        color: var(--n-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
       .empty {
         padding: 20px 0;
         color: var(--n-text-secondary);
@@ -958,6 +962,44 @@
             : typeof x === "object"
               ? esc(x.name || x.code || JSON.stringify(x))
               : esc(x);
+        // A display name sent next to a raw value (id) replaces it.
+        const label = (x) =>
+          typeof x === "string" && x.trim() ? esc(x) : null;
+        const euro = new Intl.NumberFormat("de-DE", {
+          style: "currency",
+          currency: "EUR",
+          signDisplay: "exceptZero",
+        });
+        const money = (x) => {
+          const n = x === null || x === "" ? NaN : Number(x);
+          return Number.isFinite(n) ? euro.format(n) : "";
+        };
+        // Value dates are ISO dates or datetimes; show them as dd.mm.yyyy.
+        const day = (x) => {
+          const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(x || "");
+          if (date) return `${date[3]}.${date[2]}.${date[1]}`;
+          const time = new Date(x || NaN);
+          return Number.isNaN(time.getTime())
+            ? ""
+            : time.toLocaleDateString("de-DE", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              });
+        };
+        const FLOW = { INCOME: "Income", EXPENSE: "Expense" };
+        // Signed amount (money in or out), cashflow type and value date.
+        const facts = (t, flow = false) =>
+          [
+            money(t?.amount),
+            flow ? FLOW[String(t?.cashflowType || "").toUpperCase()] : "",
+            day(t?.valueDate),
+          ]
+            .filter(Boolean)
+            .map(esc)
+            .join(" · ");
+        const described = (description, line) =>
+          `${esc(description)}${description && line ? "<br>" : ""}${line ? `<span class="facts">${line}</span>` : ""}`;
         function review() {
           const d = state.detail;
           if (!d)
@@ -995,11 +1037,15 @@
             paymentType: "Payment type",
             message: "Message",
           };
+          const named = (labels, k) =>
+            label(labels?.[k]) ??
+            label(labels?.[k.replace(/_([a-z])/g, (_, c) => c.toUpperCase())]) ??
+            label(labels?.[k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)]);
           const proposed = (a) =>
             Object.entries(a.params || {})
               .map(
                 ([k, v]) =>
-                  `${esc(params[k] || k.replaceAll("_", " "))}: ${value(v)}`,
+                  `${esc(params[k] || k.replaceAll("_", " "))}: ${named(a.labels, k) ?? value(v)}`,
               )
               .join("<br>") ||
             {
@@ -1019,7 +1065,7 @@
             set_payment_type: ["paymentType"],
             mark_verified: ["userStatus"],
           };
-          return `<h2>${esc(e.ruleName || e.rule?.name || "Automation approval")}</h2><p>${esc(e.transaction?.description || "")}</p><div class="tag">${esc(human(e.status))}</div>${d.currentUnavailable ? '<p class="error">Current transaction values are unavailable. Discuss this in chat before deciding.</p>' : ""}${state.reviewStale ? '<p class="error">Latest review unavailable. Refresh before confirming.</p>' : ""}<table><thead><tr><th>Action</th><th>Current</th><th>Proposed</th></tr></thead><tbody>${actions.map((a) => `<tr><td>${esc(labels[a.type] || a.type.replaceAll("_", " "))}</td><td>${keys[a.type] && before ? keys[a.type].map((k) => value(before[k])).join("<br>") : "—"}</td><td>${proposed(a)}</td></tr>`).join("")}</tbody></table>${!actions.length ? '<p class="muted">No planned actions returned.</p>' : ""}<p class="notice">Approval executes the full action list. Actions may send messages or affect payments when listed above.</p><div class="row"><button id="approval-ask">Explain in chat</button></div>${d.canApprove && actions.length && !d.currentUnavailable ? '<label class="confirm"><input type="checkbox" id="confirm"> <span>I reviewed every listed action and approve this execution.</span></label><div class="row"><button class="primary" id="approve" disabled>Approve execution</button></div>' : ""}${d.canApprove ? '<button id="dismiss">Dismiss</button>' : ""}${["success", "partial"].includes(e.status) && !e.revertedAt ? '<button id="undo">Undo execution</button>' : ""}${e.error ? `<p class="error">${esc(stripUrls(e.error))}</p>` : ""}${e.actionsResult?.length ? `<h3>Actual result</h3><table><tbody>${e.actionsResult.map((a) => `<tr><td>${esc(labels[a.type] || a.type || "Action")}</td><td>${esc(human(a.status) || "Result returned")}${a.detail ? `<br>${esc(stripUrls(a.detail))}` : ""}</td></tr>`).join("")}</tbody></table>` : ""}`;
+          return `<h2>${esc(e.ruleName || e.rule?.name || "Automation approval")}</h2><p>${described(e.transaction?.description || "", facts(e.transaction, true))}</p><div class="tag">${esc(human(e.status))}</div>${d.currentUnavailable ? '<p class="error">Current transaction values are unavailable. Discuss this in chat before deciding.</p>' : ""}${state.reviewStale ? '<p class="error">Latest review unavailable. Refresh before confirming.</p>' : ""}<table><thead><tr><th>Action</th><th>Current</th><th>Proposed</th></tr></thead><tbody>${actions.map((a) => `<tr><td>${esc(labels[a.type] || a.type.replaceAll("_", " "))}</td><td>${keys[a.type] && before ? keys[a.type].map((k) => label(before[`${k}Label`]) ?? value(before[k])).join("<br>") : "—"}</td><td>${proposed(a)}</td></tr>`).join("")}</tbody></table>${!actions.length ? '<p class="muted">No planned actions returned.</p>' : ""}<p class="notice">Approval executes the full action list. Actions may send messages or affect payments when listed above.</p><div class="row"><button id="approval-ask">Explain in chat</button></div>${d.canApprove && actions.length && !d.currentUnavailable ? '<label class="confirm"><input type="checkbox" id="confirm"> <span>I reviewed every listed action and approve this execution.</span></label><div class="row"><button class="primary" id="approve" disabled>Approve execution</button></div>' : ""}${d.canApprove ? '<button id="dismiss">Dismiss</button>' : ""}${["success", "partial"].includes(e.status) && !e.revertedAt ? '<button id="undo">Undo execution</button>' : ""}${e.error ? `<p class="error">${esc(stripUrls(e.error))}</p>` : ""}${e.actionsResult?.length ? `<h3>Actual result</h3><table><tbody>${e.actionsResult.map((a) => `<tr><td>${esc(labels[a.type] || a.type || "Action")}</td><td>${esc(human(a.status) || "Result returned")}${a.detail ? `<br>${esc(stripUrls(a.detail))}` : ""}</td></tr>`).join("")}</tbody></table>` : ""}`;
         }
         function render() {
           const d = state.data;
@@ -1034,7 +1080,7 @@
                 ? [focused.selectionStart, focused.selectionEnd]
                 : null;
           // What is on screen; polls back off while it stays the same.
-          state.markup = `<div class="metrics"><div class="metric"><strong>${display(d.summary.questions)}</strong><span>Workflows need you</span></div><div class="metric"><strong>${display(d.summary.approvals)}</strong><span>Pending approvals</span></div><div class="metric"><strong>${display(d.summary.taxReviewsShown)}</strong><span>Tax reviews shown</span></div></div>${d.unavailable.length ? `<p class="error">Unavailable: ${esc(d.unavailable.join(", "))}. Refresh to retry.</p>` : ""}<div class="layout"><div><h2>Needs your attention</h2>${d.questions.map((r) => `<article class="card"><div class="tag">Workflow · ${esc(human(r.blockedReason))}</div><strong>${esc(r.title)}</strong><p>${esc(r.blockedDetail || r.steps?.find((s) => s.active)?.title || "Review the current step.")}</p><button data-run="${esc(r.publicId)}">Review question</button></article>`).join("")}${d.approvals.map((e) => `<article class="card"><div class="tag">Automation approval</div><strong>${esc(e.ruleName || e.rule?.name || "Automation")}</strong><p>${esc(e.transaction?.description || "Review planned actions")}</p><button data-execution="${esc(e.publicId)}">Review changes</button></article>`).join("")}${d.taxReviews.map((t) => `<article class="card"><div class="tag">Tax review</div><strong>${esc(t.title)}</strong><p>${esc(t.detail)}</p><button data-tax="${esc(t.key)}">Discuss in chat</button></article>`).join("")}${!d.questions.length && !d.approvals.length && !d.taxReviews.length ? '<div class="empty">No items returned by the available sources.</div>' : ""}<div class="row">${d.pagination.page > 1 ? '<button id="previous">Previous approvals</button>' : ""}${d.pagination.hasNext ? '<button id="next">More approvals</button>' : ""}</div><p class="muted notice">Tax reviews are a bounded list. Approval totals include all pages.</p><h2>In progress</h2>${
+          state.markup = `<div class="metrics"><div class="metric"><strong>${display(d.summary.questions)}</strong><span>Workflows need you</span></div><div class="metric"><strong>${display(d.summary.approvals)}</strong><span>Pending approvals</span></div><div class="metric"><strong>${display(d.summary.taxReviewsShown)}</strong><span>Tax reviews shown</span></div></div>${d.unavailable.length ? `<p class="error">Unavailable: ${esc(d.unavailable.join(", "))}. Refresh to retry.</p>` : ""}<div class="layout"><div><h2>Needs your attention</h2>${d.questions.map((r) => `<article class="card"><div class="tag">Workflow · ${esc(human(r.blockedReason))}</div><strong>${esc(r.title)}</strong><p>${esc(r.blockedDetail || r.steps?.find((s) => s.active)?.title || "Review the current step.")}</p><button data-run="${esc(r.publicId)}">Review question</button></article>`).join("")}${d.approvals.map((e) => `<article class="card"><div class="tag">Automation approval</div><strong>${esc(e.ruleName || e.rule?.name || "Automation")}</strong><p>${described(e.transaction?.description || "Review planned actions", facts(e.transaction))}</p><button data-execution="${esc(e.publicId)}">Review changes</button></article>`).join("")}${d.taxReviews.map((t) => `<article class="card"><div class="tag">Tax review</div><strong>${esc(t.title)}</strong><p>${esc(t.detail)}</p><button data-tax="${esc(t.key)}">Discuss in chat</button></article>`).join("")}${!d.questions.length && !d.approvals.length && !d.taxReviews.length ? '<div class="empty">No items returned by the available sources.</div>' : ""}<div class="row">${d.pagination.page > 1 ? '<button id="previous">Previous approvals</button>' : ""}${d.pagination.hasNext ? '<button id="next">More approvals</button>' : ""}</div><p class="muted notice">Tax reviews are a bounded list. Approval totals include all pages.</p><h2>In progress</h2>${
             d.runs
               .filter((r) => !r.blockedReason)
               .map(

@@ -1354,6 +1354,103 @@ test("only the person who started a workflow gets an answer box", async () => {
   }
 });
 
+test("approval review shows names, amount and date instead of raw ids", async () => {
+  const { page, ui, errors } = await fixture();
+  try {
+    const ids = {
+      companyCategory: "6b1f0c2e-4d7a-4f55-9d7e-0c1d2e3f4a5b",
+      vendor: "0f9e8d7c-6b5a-4c3d-9e2f-1a2b3c4d5e6f",
+      currentVendor: "9d2c1b0a-8f7e-4d6c-9b5a-493827160504",
+      client: "5e4d3c2b-1a09-4f8e-8d7c-6b5a49382716",
+    };
+    await page.evaluate((ids) => {
+      // Shapes of RuleExecutionSerializer.transaction and the labelled plan.
+      const transaction = {
+        publicId: "7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d",
+        description: "Adobe subscription",
+        amount: "-59.49",
+        cashflowType: "EXPENSE",
+        valueDate: "2026-09-12T10:00:00+00:00",
+      };
+      window.inbox.approvals[0].transaction = transaction;
+      window.inbox.approvals.push({
+        publicId: "approval-2",
+        ruleName: "Client payments",
+        transaction: {
+          description: "Invoice 2026-041",
+          amount: "1200.00",
+          cashflowType: "INCOME",
+          valueDate: "2026-08-31",
+        },
+      });
+      window.detail.before = {
+        category: null,
+        companyCategory: { name: "Office supplies" },
+        companyCategoryLabel: "4930 Office supplies",
+        vendor: ids.currentVendor,
+        vendorLabel: "Adobe Inc.",
+        client: null,
+      };
+      Object.assign(window.detail.execution, {
+        transaction,
+        actionsPlanned: [
+          {
+            type: "set_category",
+            params: { category: null, companyCategory: ids.companyCategory },
+            labels: { companyCategory: "4964 Software & SaaS" },
+          },
+          {
+            type: "assign_vendor",
+            params: { vendor: ids.vendor },
+            labels: { vendor: "Adobe Systems Software Ireland" },
+          },
+          // Without a label the raw value stays visible.
+          { type: "assign_client", params: { client: ids.client } },
+        ],
+      });
+    }, ids);
+    await ui.getByRole("button", { name: "Refresh", exact: true }).click();
+    await settled(page);
+    const rows = await page
+      .frames()[1]
+      .evaluate(() =>
+        [...document.querySelectorAll("article")]
+          .filter((card) => card.querySelector("[data-execution]"))
+          .map((card) => card.querySelector("p").innerText),
+      );
+    assert.equal(rows.length, 2);
+    assert.match(rows[0], /^Adobe subscription\n-59,49\s€ · 12\.09\.2026$/);
+    assert.match(rows[1], /^Invoice 2026-041\n\+1\.200,00\s€ · 31\.08\.2026$/);
+    await ui.getByRole("button", { name: "Review changes" }).first().click();
+    await settled(page);
+    const detail = await page.frames()[1].evaluate(() => ({
+      header: document.querySelector("aside h2 + p").innerText,
+      table: [...document.querySelectorAll("aside tbody tr")].map((row) =>
+        [...row.cells].map((cell) => cell.innerText),
+      ),
+      text: document.querySelector("aside").innerText,
+    }));
+    assert.match(
+      detail.header,
+      /^Adobe subscription\n-59,49\s€ · Expense · 12\.09\.2026$/,
+    );
+    assert.deepEqual(detail.table, [
+      [
+        "Set category",
+        "—\n4930 Office supplies",
+        "Category: —\nCompany category: 4964 Software & SaaS",
+      ],
+      ["Assign vendor", "Adobe Inc.", "Vendor: Adobe Systems Software Ireland"],
+      ["Assign client", "—", `Client: ${ids.client}`],
+    ]);
+    for (const id of [ids.companyCategory, ids.vendor, ids.currentVendor])
+      assert.equal(detail.text.includes(id), false, id);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
 test("tool errors show the API's own message and never a raw URL", async () => {
   const { page, ui, errors } = await fixture();
   try {
