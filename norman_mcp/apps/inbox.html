@@ -243,6 +243,10 @@
       .detail > p {
         overflow-wrap: anywhere;
       }
+      .facts {
+        color: var(--n-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
       .empty {
         padding: 20px 0;
         color: var(--n-text-secondary);
@@ -321,6 +325,9 @@
       #undo {
         margin-top: 8px;
       }
+      #answer-keep {
+        margin-bottom: 16px;
+      }
       #status {
         min-height: 24px;
         margin-top: 12px;
@@ -379,6 +386,7 @@
         <button id="refresh">Refresh</button>
       </header>
       <div id="status" role="status" aria-live="polite"></div>
+      <div id="freshness" class="muted notice"></div>
       <section id="content">
         <div class="empty">Connecting to Norman…</div>
       </section>
@@ -392,9 +400,218 @@
           ready: false,
           pending: new Map(),
           id: 1,
+          initId: null,
+          revision: 0,
+          consent: "",
+          answer: "",
+          answerFor: "",
+          answerQuestion: "",
+          reviewStale: false,
+          renderedSelection: "",
+          context: "",
+          initialized: false,
+          disposed: false,
+          intersecting: true,
+          visible: document.visibilityState !== "hidden",
+          pollTimer: null,
+          pollDue: 0,
+          quiet: 0,
+          halted: false,
+          markup: "",
+          refreshPromise: null,
+          refreshWanted: false,
+          resume: false,
+          warning: "",
+          lastCheck: null,
         };
         const content = document.querySelector("#content"),
-          status = document.querySelector("#status");
+          status = document.querySelector("#status"),
+          freshness = document.querySelector("#freshness");
+        // Every 30 s while something changes; back off while nothing does.
+        const POLL_STEPS = [30000, 60000, 120000, 300000],
+          POLL_MS = POLL_STEPS[0];
+        const interval = () =>
+          POLL_STEPS[Math.min(state.quiet, POLL_STEPS.length - 1)];
+        function say(text, error = false) {
+          status.textContent = error ? stripUrls(text) : text;
+          status.className = error ? "error" : "";
+        }
+        // A warning outlives the success status of the action that raised it.
+        function warn(text) {
+          state.warning = text;
+          say(text);
+        }
+        const REVIEW_CHANGED =
+            "This approval changed. Review the current values and confirm again.",
+          QUESTION_CHANGED =
+            "This workflow question changed. Review your answer before sending.",
+          STARTER_ONLY =
+            "Only the person who started this workflow can answer it here.";
+        const stable = (x) =>
+          JSON.stringify(x, (_, value) =>
+            value && typeof value === "object" && !Array.isArray(value)
+              ? Object.fromEntries(
+                  Object.entries(value).sort(([a], [b]) => a.localeCompare(b)),
+                )
+              : value,
+          );
+        const selectionKey = (d) =>
+          d
+            ? `${d.companyId}:${d.kind === "workflow" ? "workflow:" + d.run.publicId : "approval:" + d.execution.publicId}`
+            : "";
+        function reviewKey(d) {
+          if (!d?.execution) return "";
+          const e = d.execution;
+          return stable({
+            companyId: d.companyId,
+            execution: {
+              publicId: e.publicId,
+              ruleName: e.ruleName || e.rule?.name,
+              transaction: e.transaction,
+              status: e.status,
+              actionsPlanned: e.actionsPlanned,
+              actionsResult: e.actionsResult,
+              error: e.error,
+              revertedAt: e.revertedAt,
+            },
+            before: d.before,
+            currentUnavailable: d.currentUnavailable,
+            canApprove: d.canApprove,
+          });
+        }
+        const questionKey = (run) =>
+          stable({
+            run: run.publicId,
+            reason: run.blockedReason,
+            question: run.blockedDetail || "",
+            step: run.steps?.find((step) => step.active)?.key ?? null,
+          });
+        // A draft belongs to the question it was written for.
+        const draftChanged = () =>
+          state.detail?.kind === "workflow" &&
+          !!state.answer.trim() &&
+          !!state.answerFor &&
+          state.answerFor !== questionKey(state.detail.run);
+        function stale() {
+          const error = Error(
+            "A newer Inbox request superseded this response.",
+          );
+          error.name = "StaleResponse";
+          return error;
+        }
+        function guard(revision) {
+          if (state.disposed || revision !== state.revision) throw stale();
+        }
+        const older = (next, current) => {
+          const a = Date.parse(next?.asOf),
+            b = Date.parse(current?.asOf);
+          return Number.isFinite(a) && Number.isFinite(b) && a < b;
+        };
+        function syncControls() {
+          document
+            .querySelectorAll("button")
+            .forEach((button) => (button.disabled = state.busy));
+          const confirm = document.querySelector("#confirm"),
+            approve = document.querySelector("#approve");
+          if (confirm) {
+            confirm.checked =
+              !!state.consent && state.consent === reviewKey(state.detail);
+            confirm.disabled = state.busy || state.reviewStale;
+          }
+          if (approve)
+            approve.disabled =
+              state.busy || state.reviewStale || !confirm?.checked;
+          const send = document.querySelector("#answer-send");
+          if (send) send.disabled = state.busy || draftChanged();
+        }
+        function updateFreshness() {
+          const checked = state.lastCheck
+            ? `Checked ${new Date(state.lastCheck).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · `
+            : "";
+          freshness.textContent =
+            checked +
+            (!state.visible || state.disposed
+              ? "Auto refresh paused"
+              : state.halted
+                ? "Auto refresh paused until you use the Inbox again"
+                : "Auto refresh every 30s while visible, slower while nothing changes");
+        }
+        function stopPolling() {
+          clearTimeout(state.pollTimer);
+          state.pollTimer = null;
+        }
+        function schedulePolling(delay = interval()) {
+          stopPolling();
+          if (
+            !state.initialized ||
+            state.disposed ||
+            !state.visible ||
+            state.busy ||
+            state.halted
+          )
+            return;
+          state.pollDue = Date.now() + delay;
+          state.pollTimer = setTimeout(() => {
+            state.pollTimer = null;
+            void autoRefresh();
+          }, delay);
+        }
+        function setDetail(next) {
+          const previousKey = selectionKey(state.detail),
+            nextKey = selectionKey(next),
+            changedReview =
+              !!state.consent &&
+              previousKey === nextKey &&
+              state.consent !== reviewKey(next),
+            draftFitted = !draftChanged();
+          if (previousKey !== nextKey) {
+            state.answer = "";
+            state.answerFor = "";
+          }
+          if (state.consent !== reviewKey(next)) state.consent = "";
+          state.detail = next;
+          state.reviewStale = false;
+          if (changedReview) warn(REVIEW_CHANGED);
+          else if (draftFitted && draftChanged()) warn(QUESTION_CHANGED);
+        }
+        function setInbox(next) {
+          if (
+            next.view !== "inbox" ||
+            !next.summary ||
+            !next.pagination ||
+            ![
+              "questions",
+              "runs",
+              "approvals",
+              "taxReviews",
+              "unavailable",
+            ].every((key) => Array.isArray(next[key]))
+          )
+            throw Error(
+              "Norman returned unavailable Inbox data. Refresh to retry.",
+            );
+          // The server clamps a page that no longer exists: always adopt it.
+          // Copy rather than write into host-owned data (window.openai).
+          const page = Number(next.pagination.page);
+          next = {
+            ...next,
+            pagination: {
+              ...next.pagination,
+              page: Number.isInteger(page) && page > 0 ? page : 1,
+            },
+          };
+          if (state.data && state.data.companyId !== next.companyId) {
+            state.revision++;
+            setDetail(null);
+            state.consent = "";
+            state.answer = "";
+            state.answerFor = "";
+            state.context = "";
+            warn("Company changed. Select a decision to review.");
+          }
+          state.data = next;
+          state.lastCheck = Date.now();
+        }
         const esc = (x) =>
           String(x ?? "").replace(
             /[&<>"']/g,
@@ -407,11 +624,58 @@
                 "'": "&#39;",
               })[c],
           );
-        const object = (x) => {
-          if (x?.isError)
-            throw Error(
-              x.content?.[0]?.text || "Norman could not complete the request.",
+        // Error text may embed the API URL ("... for url: https://...").
+        const stripUrls = (text) =>
+          String(text ?? "")
+            .replace(/\s*\b(?:for|with) url\b:?\s*['"]?[^\s'"]*['"]?/gi, "")
+            .replace(
+              /\s*(?:\(\s*https?:\/\/[^\s)]*\s*\)|https?:\/\/[^\s)'"]*)/gi,
+              "",
+            )
+            .replace(/\s*For more information check:?/gi, "")
+            .replace(/\s+([.,;:!?])/g, "$1")
+            .replace(/\s{2,}/g, " ")
+            .trim();
+        const words = (x) =>
+          typeof x === "string"
+            ? x
+            : Array.isArray(x) &&
+                x.length &&
+                x.every((v) => typeof v === "string")
+              ? x.join(" ")
+              : "";
+        // Tool errors are {error, detail?: string | {detail?, message?, code?}}.
+        // Prefer the API's own words; skip markup such as proxy error pages.
+        function explain(d) {
+          const detail = d?.detail,
+            specific = stripUrls(
+              detail && typeof detail === "object" && !Array.isArray(detail)
+                ? words(detail.detail) || words(detail.message)
+                : words(detail),
             );
+          return (
+            (specific.length <= 300 && !/<[a-z!/]/i.test(specific)
+              ? specific
+              : "") ||
+            stripUrls(words(d?.error)) ||
+            "Norman could not complete the request."
+          );
+        }
+        function problem(d) {
+          const error = Error(explain(d));
+          // The Norman session expired: nothing works until reconnecting.
+          if (d?.reconnect === true) error.reconnect = true;
+          return error;
+        }
+        const object = (x) => {
+          if (x?.isError) {
+            const text = x.content?.find?.((v) => v.type === "text")?.text;
+            let d = null;
+            try {
+              d = JSON.parse(text);
+            } catch {}
+            throw problem(d?.error ? d : { error: text });
+          }
           let d = x?.structuredContent;
           if (!d) {
             const t = x?.content?.find((v) => v.type === "text")?.text;
@@ -422,10 +686,10 @@
             }
           }
           if (d?.result && Object.keys(d).length === 1) d = d.result;
-          if (d?.error) throw Error(d.error);
+          if (d?.error) throw problem(d);
           return d;
         };
-        function rpc(method, params) {
+        function rpc(method, params, timeout = 30000) {
           const id = state.id++;
           return new Promise((resolve, reject) => {
             const timer = setTimeout(() => {
@@ -433,7 +697,7 @@
               reject(
                 Error("Request timed out. Refresh before retrying an action."),
               );
-            }, 30000);
+            }, timeout);
             state.pending.set(id, { resolve, reject, timer });
             parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
           });
@@ -447,10 +711,42 @@
                 : rpc("tools/call", { name, arguments: args })),
           );
         }
-        async function context(data) {
-          if (state.ready)
-            await rpc("ui/update-model-context", { structuredContent: data });
-          else window.openai?.setWidgetState?.(data);
+        function modelContext() {
+          const d = state.data,
+            s = state.detail;
+          return {
+            companyId: d.companyId,
+            view: "inbox",
+            summary: d.summary,
+            selected: !s
+              ? null
+              : s.kind === "workflow"
+                ? { kind: "workflow", workflow: s.run }
+                : {
+                    kind: "approval",
+                    execution: s.execution,
+                    before: s.before,
+                    currentUnavailable: s.currentUnavailable,
+                    canApprove: s.canApprove,
+                  },
+          };
+        }
+        // Each ui/update-model-context replaces the previous one, so every
+        // update carries the summary and the current selection together.
+        async function syncContext() {
+          if (!state.initialized || state.disposed || !state.data) return;
+          if (!state.ready && !window.openai?.setWidgetState) return;
+          const data = modelContext(),
+            fingerprint = stable(data);
+          if (state.context === fingerprint) return;
+          state.context = fingerprint;
+          try {
+            if (state.ready)
+              await rpc("ui/update-model-context", { structuredContent: data });
+            else window.openai.setWidgetState(data);
+          } catch {
+            if (state.context === fingerprint) state.context = "";
+          }
         }
         async function ask(text) {
           if (state.ready)
@@ -462,40 +758,230 @@
             return window.openai.sendFollowUpMessage({ prompt: text });
           throw Error("Conversation messaging is unavailable in this host.");
         }
-        async function action(fn) {
-          if (state.busy) return;
+        function unloaded() {
+          if (!state.data)
+            content.innerHTML =
+              '<div class="empty">The Inbox could not be loaded.</div>';
+        }
+        // Stop polling until the user interacts with the Inbox again.
+        function halt(message) {
+          state.halted = true;
+          state.refreshWanted = false;
+          stopPolling();
+          say(message, true);
+          unloaded();
+          updateFreshness();
+        }
+        // kind: load, refresh, open, approve, dismiss, undo, answer or ask.
+        async function action(fn, { kind = "refresh" } = {}) {
+          if (state.busy || state.disposed) return;
+          const revision = ++state.revision,
+            job = {
+              kind,
+              sent: null,
+              company: state.data?.companyId,
+              data: state.data,
+            };
           state.busy = true;
-          document
-            .querySelectorAll("button")
-            .forEach((b) => (b.disabled = true));
-          status.className = "";
-          status.textContent = "Working…";
+          state.quiet = 0;
+          state.halted = false;
+          state.warning = "";
+          stopPolling();
+          syncControls();
+          say("Working…");
           try {
-            await fn();
-            status.textContent = "Updated from Norman.";
+            const message = await fn(revision, job);
+            // A chat message was delivered whatever the view did meanwhile.
+            if (kind !== "ask") guard(revision);
+            say(state.warning || message || "Updated from Norman.");
           } catch (e) {
-            status.textContent = e.message;
-            status.className = "error";
+            if (state.disposed) return;
+            if (e.name === "StaleResponse") await superseded(job);
+            else if (e.reconnect) halt(e.message);
+            else {
+              say(e.message, true);
+              unloaded();
+            }
           } finally {
             state.busy = false;
-            document
-              .querySelectorAll("button")
-              .forEach((b) => (b.disabled = false));
-            const approve = document.querySelector("#approve");
-            if (approve)
-              approve.disabled = !document.querySelector("#confirm")?.checked;
+            syncControls();
+            schedulePolling(state.refreshWanted ? 0 : interval());
+            updateFreshness();
           }
         }
-        async function refresh(page = 1) {
-          const next = await tool("get_norman_inbox_data", { page });
-          if (state.data?.companyId !== next.companyId) state.detail = null;
-          state.data = next;
-          render();
-          await context({
-            companyId: next.companyId,
-            view: "inbox",
-            summary: next.summary,
-          });
+        const SENT = {
+          approve: "Approval sent",
+          dismiss: "Dismissal sent",
+          undo: "Undo sent",
+          answer: "Answer sent",
+        };
+        // The response to an action was discarded because the view changed
+        // meanwhile (hidden frame, company switch). Say what happened to it.
+        async function superseded(job) {
+          if (job.sent) return reportSent(job);
+          const companyChanged =
+            !!job.company && state.data?.companyId !== job.company;
+          if (job.kind === "approve") {
+            // Consent was given for the review this re-read was checking.
+            state.consent = "";
+            render();
+            return say(
+              companyChanged
+                ? "Nothing was approved. Company changed. Select a decision to review."
+                : "Nothing was approved. Review the current values and confirm again.",
+            );
+          }
+          if (job.kind === "answer")
+            return say(
+              companyChanged
+                ? "Your answer was not sent. Company changed."
+                : "Your answer was not sent. Check the current question and send it again.",
+            );
+          if (companyChanged)
+            return say("Company changed. Select a decision to review.");
+          if (
+            !state.visible &&
+            (job.kind === "load" || job.kind === "refresh")
+          ) {
+            // Read again as soon as the Inbox is visible.
+            state.refreshWanted = true;
+            state.resume = true;
+            return say("Paused while the Inbox is hidden.");
+          }
+          say(
+            state.data !== job.data && job.kind !== "open"
+              ? "Updated from Norman."
+              : "Interrupted. Try again.",
+          );
+        }
+        // The mutation reached Norman but its response was discarded: read
+        // the actual result instead of leaving the outcome unknown.
+        async function reportSent(job) {
+          const done = SENT[job.kind];
+          if (job.company && state.data?.companyId !== job.company)
+            return say(
+              `${done} before the company changed. Switch back to that company to see the result.`,
+            );
+          const revision = state.revision;
+          try {
+            let result;
+            if (job.sent.executionId) {
+              const fresh = await tool("get_norman_approval_data", {
+                execution_id: job.sent.executionId,
+              });
+              guard(revision);
+              if (fresh.companyId !== state.data.companyId) throw stale();
+              setDetail(fresh);
+              result = fresh.execution?.revertedAt
+                ? "Undone"
+                : human(fresh.execution?.status);
+            } else {
+              const run = await tool("get_workflow_run", {
+                run_id: job.sent.runId,
+              });
+              guard(revision);
+              setDetail(null);
+              result = human(run.blockedReason || run.state);
+            }
+            await refresh(state.data.pagination.page, revision);
+            say(result ? `${done}. Norman now reports: ${result}.` : `${done}.`);
+          } catch {
+            if (!state.disposed)
+              say(
+                `${done}, but its result could not be loaded. Refresh to check it.`,
+                true,
+              );
+          }
+        }
+        async function refresh(
+          page = state.data?.pagination.page || 1,
+          revision = state.revision,
+        ) {
+          if (state.refreshPromise) {
+            await state.refreshPromise.catch(() => {});
+            guard(revision);
+          }
+          const request = (async () => {
+            guard(revision);
+            const selected = state.detail,
+              next = await tool("get_norman_inbox_data", { page });
+            guard(revision);
+            // A result pushed by the host meanwhile may be newer than ours.
+            if (
+              older(next, state.data) &&
+              next.pagination?.page === state.data.pagination.page
+            )
+              return;
+            let latestDetail = null,
+              detailError = null;
+            if (selected && next.companyId === state.data?.companyId) {
+              try {
+                if (selected.kind === "workflow") {
+                  const run = await tool("get_workflow_run", {
+                    run_id: selected.run.publicId,
+                  });
+                  latestDetail = {
+                    kind: "workflow",
+                    companyId: next.companyId,
+                    run,
+                  };
+                } else {
+                  latestDetail = await tool("get_norman_approval_data", {
+                    execution_id: selected.execution.publicId,
+                  });
+                }
+                guard(revision);
+                if (latestDetail.companyId !== next.companyId) {
+                  setDetail(null);
+                  state.revision++;
+                  state.refreshWanted = true;
+                  throw stale();
+                }
+              } catch (error) {
+                guard(revision);
+                detailError = error;
+                state.consent = "";
+                state.reviewStale = true;
+              }
+            }
+            guard(revision);
+            setInbox(next);
+            if (latestDetail) setDetail(latestDetail);
+            render();
+            updateFreshness();
+            if (detailError) throw detailError;
+          })();
+          state.refreshPromise = request;
+          try {
+            await request;
+          } finally {
+            if (state.refreshPromise === request) state.refreshPromise = null;
+          }
+        }
+        async function autoRefresh() {
+          // Hidden, busy or disposed: visibility, the action or nothing re-arms.
+          if (!state.visible || state.disposed || state.busy) return;
+          if (state.refreshPromise) {
+            state.refreshWanted = true;
+            return;
+          }
+          state.refreshWanted = false;
+          const shown = state.markup;
+          let checked = false;
+          try {
+            await refresh();
+            checked = true;
+            if (state.resume) say("Updated from Norman.");
+            state.resume = false;
+          } catch (error) {
+            if (error.name === "StaleResponse" || state.disposed) return;
+            if (error.reconnect) halt(error.message);
+            else say(`Could not refresh: ${error.message}`, true);
+          } finally {
+            // Back off while nothing on screen changes.
+            if (checked) state.quiet = state.markup === shown ? state.quiet + 1 : 0;
+            schedulePolling(state.refreshWanted ? 0 : interval());
+          }
         }
         const human = (x) =>
           ({
@@ -522,13 +1008,52 @@
             : typeof x === "object"
               ? esc(x.name || x.code || JSON.stringify(x))
               : esc(x);
+        // A display name sent next to a raw value (id) replaces it.
+        const label = (x) =>
+          typeof x === "string" && x.trim() ? esc(x) : null;
+        const euro = new Intl.NumberFormat("de-DE", {
+          style: "currency",
+          currency: "EUR",
+          signDisplay: "exceptZero",
+        });
+        const money = (x) => {
+          const n = x === null || x === "" ? NaN : Number(x);
+          return Number.isFinite(n) ? euro.format(n) : "";
+        };
+        // Value dates are ISO dates or datetimes; show them as dd.mm.yyyy.
+        const day = (x) => {
+          const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(x || "");
+          if (date) return `${date[3]}.${date[2]}.${date[1]}`;
+          const time = new Date(x || NaN);
+          return Number.isNaN(time.getTime())
+            ? ""
+            : time.toLocaleDateString("de-DE", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              });
+        };
+        const FLOW = { INCOME: "Income", EXPENSE: "Expense" };
+        // Signed amount (money in or out), cashflow type and value date.
+        const facts = (t, flow = false) =>
+          [
+            money(t?.amount),
+            flow ? FLOW[String(t?.cashflowType || "").toUpperCase()] : "",
+            day(t?.valueDate),
+          ]
+            .filter(Boolean)
+            .map(esc)
+            .join(" · ");
+        const described = (description, line) =>
+          `${esc(description)}${description && line ? "<br>" : ""}${line ? `<span class="facts">${line}</span>` : ""}`;
         function review() {
           const d = state.detail;
           if (!d)
             return '<h2>Review a decision</h2><p class="muted">Select an approval to see the current values and every planned action.</p>';
           if (d.kind === "workflow") {
-            const r = d.run;
-            return `<h2>${esc(r.title)}</h2><div class="tag">${esc(human(r.blockedReason))}</div><p>${esc(r.blockedDetail)}</p>${r.blockedReason === "user_input" ? '<label for="answer">Your answer</label><textarea id="answer" placeholder="Provide the missing information"></textarea><button class="primary" id="answer-send">Send answer to Norman</button>' : '<button id="workflow-ask">Discuss in chat</button>'}`;
+            const r = d.run,
+              asking = r.state === "active" && r.blockedReason === "user_input";
+            return `<h2>${esc(r.title)}</h2><div class="tag">${esc(human(r.blockedReason || r.state))}</div><p>${esc(r.blockedDetail)}</p>${asking && r.canChat === true ? `${draftChanged() ? `<p class="error">The question changed after you started your answer. You wrote it for: “${esc(state.answerQuestion)}”</p><div class="row"><button id="answer-keep">Use my answer for this question</button></div>` : ""}<label for="answer">Your answer</label><textarea id="answer" placeholder="Provide the missing information">${esc(state.answer)}</textarea><button class="primary" id="answer-send">Send answer to Norman</button>` : `${asking ? `<p class="notice">${STARTER_ONLY}</p>` : ""}<button id="workflow-ask">Discuss in chat</button>`}`;
           }
           const e = d.execution,
             actions = e.actionsPlanned || [],
@@ -558,11 +1083,15 @@
             paymentType: "Payment type",
             message: "Message",
           };
+          const named = (names, k) =>
+            label(names?.[k]) ??
+            label(names?.[k.replace(/_([a-z])/g, (_, c) => c.toUpperCase())]) ??
+            label(names?.[k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)]);
           const proposed = (a) =>
             Object.entries(a.params || {})
               .map(
                 ([k, v]) =>
-                  `${esc(params[k] || k.replaceAll("_", " "))}: ${value(v)}`,
+                  `${esc(params[k] || k.replaceAll("_", " "))}: ${named(a.labels, k) ?? value(v)}`,
               )
               .join("<br>") ||
             {
@@ -582,12 +1111,22 @@
             set_payment_type: ["paymentType"],
             mark_verified: ["userStatus"],
           };
-          return `<h2>${esc(e.ruleName || e.rule?.name || "Automation approval")}</h2><p>${esc(e.transaction?.description || "")}</p><div class="tag">${esc(human(e.status))}</div>${d.currentUnavailable ? '<p class="error">Current transaction values are unavailable. Discuss this in chat before deciding.</p>' : ""}<table><thead><tr><th>Action</th><th>Current</th><th>Proposed</th></tr></thead><tbody>${actions.map((a) => `<tr><td>${esc(labels[a.type] || a.type.replaceAll("_", " "))}</td><td>${keys[a.type] && before ? keys[a.type].map((k) => value(before[k])).join("<br>") : "—"}</td><td>${proposed(a)}</td></tr>`).join("")}</tbody></table>${!actions.length ? '<p class="muted">No planned actions returned.</p>' : ""}<p class="notice">Approval executes the full action list. Actions may send messages or affect payments when listed above.</p><div class="row"><button id="approval-ask">Explain in chat</button></div>${d.canApprove && actions.length && !d.currentUnavailable ? '<label class="confirm"><input type="checkbox" id="confirm"> <span>I reviewed every listed action and approve this execution.</span></label><div class="row"><button class="primary" id="approve" disabled>Approve execution</button></div>' : ""}${d.canApprove ? '<button id="dismiss">Dismiss</button>' : ""}${["success", "partial"].includes(e.status) && !e.revertedAt ? '<button id="undo">Undo execution</button>' : ""}${e.error ? `<p class="error">${esc(e.error)}</p>` : ""}${e.actionsResult?.length ? `<h3>Actual result</h3><table><tbody>${e.actionsResult.map((a) => `<tr><td>${esc(labels[a.type] || a.type || "Action")}</td><td>${esc(human(a.status) || "Result returned")}${a.detail ? `<br>${esc(a.detail)}` : ""}</td></tr>`).join("")}</tbody></table>` : ""}`;
+          return `<h2>${esc(e.ruleName || e.rule?.name || "Automation approval")}</h2><p>${described(e.transaction?.description || "", facts(e.transaction, true))}</p><div class="tag">${esc(human(e.status))}</div>${d.currentUnavailable ? '<p class="error">Current transaction values are unavailable. Discuss this in chat before deciding.</p>' : ""}${state.reviewStale ? '<p class="error">Latest review unavailable. Refresh before confirming.</p>' : ""}<table><thead><tr><th>Action</th><th>Current</th><th>Proposed</th></tr></thead><tbody>${actions.map((a) => `<tr><td>${esc(labels[a.type] || a.type.replaceAll("_", " "))}</td><td>${keys[a.type] && before ? keys[a.type].map((k) => label(before[`${k}Label`]) ?? value(before[k])).join("<br>") : "—"}</td><td>${proposed(a)}</td></tr>`).join("")}</tbody></table>${!actions.length ? '<p class="muted">No planned actions returned.</p>' : ""}<p class="notice">Approval executes the full action list. Actions may send messages or affect payments when listed above.</p><div class="row"><button id="approval-ask">Explain in chat</button></div>${d.canApprove && actions.length && !d.currentUnavailable ? '<label class="confirm"><input type="checkbox" id="confirm"> <span>I reviewed every listed action and approve this execution.</span></label><div class="row"><button class="primary" id="approve" disabled>Approve execution</button></div>' : ""}${d.canApprove ? '<button id="dismiss">Dismiss</button>' : ""}${["success", "partial"].includes(e.status) && !e.revertedAt ? '<button id="undo">Undo execution</button>' : ""}${e.error ? `<p class="error">${esc(stripUrls(e.error))}</p>` : ""}${e.actionsResult?.length ? `<h3>Actual result</h3><table><tbody>${e.actionsResult.map((a) => `<tr><td>${esc(labels[a.type] || a.type || "Action")}</td><td>${esc(human(a.status) || "Result returned")}${a.detail ? `<br>${esc(stripUrls(a.detail))}` : ""}</td></tr>`).join("")}</tbody></table>` : ""}`;
         }
         function render() {
           const d = state.data;
           if (!d) return;
-          content.innerHTML = `<div class="metrics"><div class="metric"><strong>${display(d.summary.questions)}</strong><span>Workflows need you</span></div><div class="metric"><strong>${display(d.summary.approvals)}</strong><span>Pending approvals</span></div><div class="metric"><strong>${display(d.summary.taxReviewsShown)}</strong><span>Tax reviews shown</span></div></div>${d.unavailable.length ? `<p class="error">Unavailable: ${esc(d.unavailable.join(", "))}. Refresh to retry.</p>` : ""}<div class="layout"><div><h2>Needs your attention</h2>${d.questions.map((r) => `<article class="card"><div class="tag">Workflow · ${esc(human(r.blockedReason))}</div><strong>${esc(r.title)}</strong><p>${esc(r.blockedDetail || r.steps?.find((s) => s.active)?.title || "Review the current step.")}</p><button data-run="${esc(r.publicId)}">Review question</button></article>`).join("")}${d.approvals.map((e) => `<article class="card"><div class="tag">Automation approval</div><strong>${esc(e.ruleName || e.rule?.name || "Automation")}</strong><p>${esc(e.transaction?.description || "Review planned actions")}</p><button data-execution="${esc(e.publicId)}">Review changes</button></article>`).join("")}${d.taxReviews.map((t) => `<article class="card"><div class="tag">Tax review</div><strong>${esc(t.title)}</strong><p>${esc(t.detail)}</p><button data-tax="${esc(t.key)}">Discuss in chat</button></article>`).join("")}${!d.questions.length && !d.approvals.length && !d.taxReviews.length ? '<div class="empty">No items returned by the available sources.</div>' : ""}<div class="row">${d.pagination.page > 1 ? '<button id="previous">Previous approvals</button>' : ""}${d.pagination.hasNext ? '<button id="next">More approvals</button>' : ""}</div><p class="muted notice">Tax reviews are a bounded list. Approval totals include all pages.</p><h2>In progress</h2>${
+          const focused = document.activeElement,
+            keepFocus =
+              state.renderedSelection === selectionKey(state.detail) &&
+              content.contains(focused) &&
+              focused.id,
+            range =
+              keepFocus && focused.tagName === "TEXTAREA"
+                ? [focused.selectionStart, focused.selectionEnd]
+                : null;
+          // What is on screen; polls back off while it stays the same.
+          state.markup = `<div class="metrics"><div class="metric"><strong>${display(d.summary.questions)}</strong><span>Workflows need you</span></div><div class="metric"><strong>${display(d.summary.approvals)}</strong><span>Pending approvals</span></div><div class="metric"><strong>${display(d.summary.taxReviewsShown)}</strong><span>Tax reviews shown</span></div></div>${d.unavailable.length ? `<p class="error">Unavailable: ${esc(d.unavailable.join(", "))}. Refresh to retry.</p>` : ""}<div class="layout"><div><h2>Needs your attention</h2>${d.questions.map((r) => `<article class="card"><div class="tag">Workflow · ${esc(human(r.blockedReason))}</div><strong>${esc(r.title)}</strong><p>${esc(r.blockedDetail || r.steps?.find((s) => s.active)?.title || "Review the current step.")}</p><button data-run="${esc(r.publicId)}">Review question</button></article>`).join("")}${d.approvals.map((e) => `<article class="card"><div class="tag">Automation approval</div><strong>${esc(e.ruleName || e.rule?.name || "Automation")}</strong><p>${described(e.transaction?.description || "Review planned actions", facts(e.transaction))}</p><button data-execution="${esc(e.publicId)}">Review changes</button></article>`).join("")}${d.taxReviews.map((t) => `<article class="card"><div class="tag">Tax review</div><strong>${esc(t.title)}</strong><p>${esc(t.detail)}</p><button data-tax="${esc(t.key)}">Discuss in chat</button></article>`).join("")}${!d.questions.length && !d.approvals.length && !d.taxReviews.length ? '<div class="empty">No items returned by the available sources.</div>' : ""}<div class="row">${d.pagination.page > 1 ? '<button id="previous">Previous approvals</button>' : ""}${d.pagination.hasNext ? '<button id="next">More approvals</button>' : ""}</div><p class="muted notice">Tax reviews are a bounded list. Approval totals include all pages.</p><h2>In progress</h2>${
             d.runs
               .filter((r) => !r.blockedReason)
               .map(
@@ -596,44 +1135,52 @@
               )
               .join("") || '<div class="empty">No other active workflows.</div>'
           }</div><aside class="detail">${review()}</aside></div>`;
+          content.innerHTML = state.markup;
           content.querySelectorAll("[data-execution]").forEach(
             (b) =>
               (b.onclick = () =>
-                action(async () => {
-                  state.detail = await tool("get_norman_approval_data", {
-                    execution_id: b.dataset.execution,
-                  });
+                action(async (revision) => {
+                  const companyId = state.data.companyId,
+                    detail = await tool("get_norman_approval_data", {
+                      execution_id: b.dataset.execution,
+                    });
+                  guard(revision);
+                  if (detail.companyId !== companyId) {
+                    state.refreshWanted = true;
+                    throw Error(
+                      "Company changed. Refresh to load current decisions.",
+                    );
+                  }
+                  setDetail(detail);
                   render();
-                  await context({
-                    companyId: state.data.companyId,
-                    ...state.detail,
-                  });
-                })),
+                }, { kind: "open" })),
           );
           content.querySelectorAll("[data-run]").forEach(
             (b) =>
               (b.onclick = () =>
-                action(async () => {
+                action(async (revision) => {
+                  const companyId = state.data.companyId;
                   const r = await tool("get_workflow_run", {
                     run_id: b.dataset.run,
                   });
-                  state.detail = { kind: "workflow", run: r };
+                  guard(revision);
+                  setDetail({ kind: "workflow", companyId, run: r });
                   render();
-                  await context({
-                    companyId: state.data.companyId,
-                    workflow: r,
-                  });
-                })),
+                }, { kind: "open" })),
           );
           content
             .querySelectorAll("[data-tax]")
             .forEach(
               (b) =>
                 (b.onclick = () =>
-                  action(() =>
-                    ask(
-                      `Review my prepared tax return in Norman. Selected review: ${b.dataset.tax}. Show the preview and what needs my attention.`,
-                    ),
+                  action(
+                    async () => {
+                      await ask(
+                        `Review my prepared tax return in Norman. Selected review: ${b.dataset.tax}. Show the preview and what needs my attention.`,
+                      );
+                      return "Sent to chat.";
+                    },
+                    { kind: "ask" },
                   )),
             );
           for (const [id, page] of [
@@ -641,12 +1188,15 @@
             ["next", d.pagination.page + 1],
           ]) {
             const b = document.getElementById(id);
-            if (b) b.onclick = () => action(() => refresh(page));
+            if (b)
+              b.onclick = () => action((revision) => refresh(page, revision));
           }
           const confirm = document.querySelector("#confirm");
           if (confirm)
-            confirm.onchange = () =>
-              (document.querySelector("#approve").disabled = !confirm.checked);
+            confirm.onchange = () => {
+              state.consent = confirm.checked ? reviewKey(state.detail) : "";
+              syncControls();
+            };
           for (const [id, name] of [
             ["approve", "approve_rule_execution"],
             ["dismiss", "dismiss_rule_execution"],
@@ -655,122 +1205,342 @@
             const b = document.getElementById(id);
             if (b)
               b.onclick = () =>
-                action(async () => {
+                action(async (revision, job) => {
                   if (
                     id === "approve" &&
-                    !document.querySelector("#confirm").checked
+                    (!state.consent ||
+                      state.consent !== reviewKey(state.detail) ||
+                      state.reviewStale)
                   )
-                    return;
-                  const executionId = state.detail.execution.publicId;
+                    return "Confirm that you reviewed every listed action first.";
+                  const executionId = state.detail.execution.publicId,
+                    companyId = state.data.companyId,
+                    reviewed = reviewKey(state.detail);
                   if (id === "approve") {
                     const fresh = await tool("get_norman_approval_data", {
                       execution_id: executionId,
                     });
+                    guard(revision);
                     if (
                       !fresh.canApprove ||
                       fresh.currentUnavailable ||
-                      JSON.stringify(fresh.execution.actionsPlanned) !==
-                        JSON.stringify(state.detail.execution.actionsPlanned) ||
-                      JSON.stringify(fresh.before) !==
-                        JSON.stringify(state.detail.before)
+                      fresh.companyId !== companyId ||
+                      reviewKey(fresh) !== reviewed
                     ) {
-                      state.detail = fresh;
+                      if (fresh.companyId === companyId) setDetail(fresh);
+                      else {
+                        setDetail(null);
+                        state.refreshWanted = true;
+                      }
                       render();
-                      throw Error(
-                        "This approval changed. Review the current values and confirm again.",
-                      );
+                      throw Error(REVIEW_CHANGED);
                     }
                   }
-                  const result = await tool(name, {
+                  guard(revision);
+                  state.consent = "";
+                  job.sent = { executionId };
+                  await tool(name, { execution_id: executionId });
+                  guard(revision);
+                  const fresh = await tool("get_norman_approval_data", {
                     execution_id: executionId,
                   });
-                  state.detail = await tool("get_norman_approval_data", {
-                    execution_id: executionId,
-                  });
-                  await refresh(state.data.pagination.page);
-                  if (result.error) throw Error(result.error);
-                });
+                  guard(revision);
+                  if (fresh.companyId !== companyId) {
+                    setDetail(null);
+                    state.refreshWanted = true;
+                    throw stale();
+                  }
+                  setDetail(fresh);
+                  await refresh(state.data.pagination.page, revision);
+                }, { kind: id });
           }
           const a = document.querySelector("#approval-ask");
           if (a)
             a.onclick = () =>
-              action(() =>
-                ask(
-                  `Explain every planned action for Norman execution ${state.detail.execution.publicId}. Use the current values and flag external effects before I decide.`,
-                ),
+              action(
+                async () => {
+                  await ask(
+                    `Explain every planned action for Norman execution ${state.detail.execution.publicId}. Use the current values and flag external effects before I decide.`,
+                  );
+                  return "Sent to chat.";
+                },
+                { kind: "ask" },
               );
           const w = document.querySelector("#workflow-ask");
           if (w)
             w.onclick = () =>
-              action(() =>
-                ask(
-                  `Help me resolve Norman workflow ${state.detail.run.publicId}. Read its current blocked state first.`,
-                ),
+              action(
+                async () => {
+                  await ask(
+                    `Help me resolve Norman workflow ${state.detail.run.publicId}. Read its current blocked state first.`,
+                  );
+                  return "Sent to chat.";
+                },
+                { kind: "ask" },
               );
           const answer = document.querySelector("#answer-send");
+          const input = document.querySelector("#answer");
+          const bindDraft = () => {
+            state.answerFor = questionKey(state.detail.run);
+            state.answerQuestion = state.detail.run.blockedDetail || "";
+          };
+          if (input)
+            input.oninput = () => {
+              const changed = draftChanged();
+              if (!state.answer.trim()) bindDraft();
+              state.answer = input.value;
+              if (!state.answer.trim()) state.answerFor = "";
+              if (draftChanged() !== changed) render();
+              else syncControls();
+            };
+          const keep = document.querySelector("#answer-keep");
+          if (keep)
+            keep.onclick = () => {
+              bindDraft();
+              say("");
+              render();
+              document.getElementById("answer")?.focus();
+            };
           if (answer)
             answer.onclick = () =>
-              action(async () => {
-                const text = document.querySelector("#answer").value.trim();
+              action(async (revision, job) => {
+                const text = state.answer.trim(),
+                  run = state.detail.run,
+                  // The question this draft was written or confirmed for.
+                  bound = state.answerFor || questionKey(run);
                 if (!text) throw Error("Please enter your answer.");
+                if (draftChanged()) throw Error(QUESTION_CHANGED);
+                const fresh = await tool("get_workflow_run", {
+                  run_id: run.publicId,
+                });
+                guard(revision);
+                if (
+                  fresh.state !== "active" ||
+                  fresh.blockedReason !== "user_input" ||
+                  fresh.canChat !== true ||
+                  questionKey(fresh) !== bound
+                ) {
+                  setDetail({
+                    kind: "workflow",
+                    companyId: state.data.companyId,
+                    run: fresh,
+                  });
+                  render();
+                  throw Error(
+                    fresh.canChat === true ? QUESTION_CHANGED : STARTER_ONLY,
+                  );
+                }
+                job.sent = { runId: run.publicId };
                 await tool("answer_workflow_question", {
-                  run_id: state.detail.run.publicId,
+                  run_id: run.publicId,
                   answer: text,
                 });
-                state.detail = null;
-                await refresh();
-              });
+                guard(revision);
+                setDetail(null);
+                await refresh(state.data.pagination.page, revision);
+              }, { kind: "answer" });
+          state.renderedSelection = selectionKey(state.detail);
+          syncControls();
+          void syncContext();
+          if (keepFocus) {
+            const replacement = document.getElementById(keepFocus);
+            replacement?.focus({ preventScroll: true });
+            if (range && replacement) replacement.setSelectionRange(...range);
+          }
         }
+        function toolResult(params) {
+          try {
+            const d = object(params);
+            if (d.view !== "inbox" || older(d, state.data)) return;
+            // Hosts may also push the result of our own read.
+            if (
+              state.data &&
+              stable({ ...d, asOf: null }) ===
+                stable({ ...state.data, asOf: null })
+            )
+              return;
+            // Same-company data does not invalidate reads or actions in flight:
+            // refresh() drops an older read by asOf, and setInbox() invalidates
+            // everything when the company changes.
+            const shown = state.markup;
+            setInbox(d);
+            state.halted = false;
+            render();
+            updateFreshness();
+            // A pushed result is a fresh check: it never triggers a re-read,
+            // so a host that echoes our reads cannot start a loop.
+            if (state.markup !== shown) state.quiet = 0;
+            if (!state.busy && !state.refreshPromise) schedulePolling();
+          } catch (err) {
+            if (err.reconnect) halt(err.message);
+            else say(err.message, true);
+          }
+        }
+        const reply = (id, body) =>
+          parent.postMessage({ jsonrpc: "2.0", id, ...body }, "*");
         window.addEventListener("message", (e) => {
           if (e.source !== parent) return;
           const m = e.data;
-          if (m?.id && state.pending.has(m.id)) {
-            const p = state.pending.get(m.id);
+          if (m?.jsonrpc !== "2.0" || state.disposed) return;
+          // JSON-RPC ids are per direction: only a message without a method
+          // is a response to one of our requests.
+          if (m.method === undefined) {
+            const p = m.id !== undefined && state.pending.get(m.id);
+            if (!p) {
+              // A host that answers ui/initialize after our 5 s wait still
+              // gets the initialized notification it waits for.
+              if (m.id === state.initId && m.result && !m.error) connected();
+              return;
+            }
             clearTimeout(p.timer);
             state.pending.delete(m.id);
             m.error ? p.reject(Error(m.error.message)) : p.resolve(m.result);
+            return;
           }
-          if (m?.method === "ui/notifications/tool-result") {
-            try {
-              const d = object(m.params);
-              if (d.view === "inbox") {
-                if (state.data?.companyId !== d.companyId) state.detail = null;
-                state.data = d;
-                render();
-              }
-            } catch (err) {
-              status.textContent = err.message;
-            }
-          }
+          const request = m.id !== undefined && m.id !== null;
+          if (m.method === "ui/notifications/tool-result") toolResult(m.params);
+          else if (m.method === "ui/resource-teardown") {
+            dispose();
+            if (request) reply(m.id, { result: {} });
+          } else if (request)
+            reply(
+              m.id,
+              m.method === "ping"
+                ? { result: {} }
+                : { error: { code: -32601, message: "Method not found" } },
+            );
         });
         document.querySelector("#refresh").onclick = () =>
-          action(() => refresh(state.data?.pagination.page || 1));
-        (async () => {
-          try {
-            await rpc("ui/initialize", {
-              protocolVersion: "2026-01-26",
-              appInfo: { name: "Norman Inbox", version: "1.0.0" },
-              appCapabilities: {
-                availableDisplayModes: ["inline", "fullscreen"],
-              },
-            });
-            state.ready = true;
-            parent.postMessage(
-              {
-                jsonrpc: "2.0",
-                method: "ui/notifications/initialized",
-                params: {},
-              },
-              "*",
-            );
-          } catch {}
-          if (window.openai?.toolOutput) {
-            try {
-              state.data = object(window.openai.toolOutput);
-              render();
-            } catch {}
+          action((revision) =>
+            refresh(state.data?.pagination.page || 1, revision),
+          );
+        function wake() {
+          if (
+            !state.initialized ||
+            !state.visible ||
+            state.disposed ||
+            state.halted
+          )
+            return;
+          // Restoring a focused input during a render may also focus the iframe.
+          // The active read/action already refreshes it, so do not queue a loop.
+          if (state.busy || state.refreshPromise) return;
+          // Focus and visibility re-read only data older than half the interval.
+          const age =
+              state.lastCheck === null ? Infinity : Date.now() - state.lastCheck,
+            wait =
+              state.refreshWanted || age >= interval() / 2
+                ? 0
+                : interval() - age;
+          if (state.pollTimer === null || state.pollDue > Date.now() + wait)
+            schedulePolling(wait);
+        }
+        // Interaction brings polling back to every 30 s and resumes it after
+        // an expired session.
+        function touch() {
+          state.quiet = 0;
+          if (state.halted) {
+            state.halted = false;
+            if (!state.refreshPromise) schedulePolling(POLL_MS);
+            updateFreshness();
+          } else if (
+            state.pollTimer !== null &&
+            state.pollDue > Date.now() + POLL_MS
+          )
+            schedulePolling(POLL_MS);
+        }
+        function visibilityChanged() {
+          const visible =
+            document.visibilityState !== "hidden" && state.intersecting;
+          if (visible === state.visible) return;
+          state.visible = visible;
+          if (visible) wake();
+          else {
+            stopPolling();
+            state.revision++;
           }
-          if (!state.data) await action(() => refresh());
+          updateFreshness();
+        }
+        const observer = new IntersectionObserver(([entry]) => {
+          state.intersecting = entry.isIntersecting;
+          visibilityChanged();
+        });
+        observer.observe(document.querySelector("main"));
+        document.addEventListener("visibilitychange", visibilityChanged);
+        window.addEventListener("focus", wake);
+        document.addEventListener("pointerdown", touch, true);
+        document.addEventListener("keydown", touch, true);
+        function dispose() {
+          if (state.disposed) return;
+          state.disposed = true;
+          state.revision++;
+          stopPolling();
+          observer.disconnect();
+          document.removeEventListener("visibilitychange", visibilityChanged);
+          window.removeEventListener("focus", wake);
+          document.removeEventListener("pointerdown", touch, true);
+          document.removeEventListener("keydown", touch, true);
+          for (const pending of state.pending.values()) {
+            clearTimeout(pending.timer);
+            pending.reject(stale());
+          }
+          state.pending.clear();
+          updateFreshness();
+        }
+        window.addEventListener("pagehide", dispose, { once: true });
+        function connected() {
+          if (state.ready || state.disposed) return;
+          state.ready = true;
+          parent.postMessage(
+            {
+              jsonrpc: "2.0",
+              method: "ui/notifications/initialized",
+              params: {},
+            },
+            "*",
+          );
+          // A context sent through window.openai before a late answer never
+          // reached the bridge.
+          state.context = "";
+          void syncContext();
+        }
+        function adoptToolOutput() {
+          if (state.data || !window.openai?.toolOutput) return;
+          try {
+            setInbox(object(window.openai.toolOutput));
+            render();
+          } catch {}
+        }
+        updateFreshness();
+        // Hosts with only the window.openai bridge never answer ui/initialize.
+        // Show their tool output at once and wait at most 5 s for the bridge.
+        adoptToolOutput();
+        (async () => {
+          state.initId = state.id;
+          try {
+            await rpc(
+              "ui/initialize",
+              {
+                protocolVersion: "2026-01-26",
+                appInfo: { name: "Norman Inbox", version: "1.0.0" },
+                appCapabilities: {
+                  availableDisplayModes: ["inline", "fullscreen"],
+                },
+              },
+              5000,
+            );
+            connected();
+          } catch {}
+          if (state.disposed) return;
+          adoptToolOutput();
+          state.initialized = true;
+          if (!state.data && state.visible)
+            await action((revision) => refresh(1, revision), { kind: "load" });
+          else void syncContext();
+          // Keep an immediate re-read the initial load asked for.
+          if (state.pollTimer === null)
+            schedulePolling(state.refreshWanted ? 0 : interval());
+          updateFreshness();
         })();
       })();
     </script>

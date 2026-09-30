@@ -260,12 +260,19 @@ async def lifespan(app):
     set_api_client(api_client)
     
     service = getattr(app, "_event_service", None)
-    worker = TaskContext().run(asyncio.create_task, service.run()) if service else None
+    live = getattr(app, "_inbox_live", None)
+    workers = [
+        TaskContext().run(asyncio.create_task, worker_service.run())
+        for worker_service in (service, live) if worker_service is not None
+    ]
     try:
         yield {"api": api_client}
     finally:
-        if worker:
+        if live:
+            live.close()
+        for worker in workers:
             worker.cancel()
+        for worker in workers:
             try:
                 await worker
             except asyncio.CancelledError:
@@ -323,6 +330,16 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
             scopes_supported=SUPPORTED_SCOPES,
         )
     
+    from mcp.server.subscriptions import InMemorySubscriptionBus
+    live_requested = os.environ.get("NORMAN_MCP_INBOX_LIVE") == "1" and oauth_provider is not None
+    # The observer is process-wide, but SSE enters the lifespan once per
+    # connection: every client would start another observer and the first
+    # disconnect would close the feed for everyone. Streamable HTTP only.
+    live_enabled = live_requested and transport_type == "streamable-http"
+    if live_requested and not live_enabled:
+        logger.warning("NORMAN_MCP_INBOX_LIVE needs the streamable-http transport; live Inbox is off")
+    live_bus = InMemorySubscriptionBus() if live_enabled else None
+
     server = MCPServer(
         "Norman Finance API", 
         instructions="Norman Finance MCP Server - Access your financial data",
@@ -330,6 +347,7 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
         auth_server_provider=oauth_provider,
         auth=auth_settings,
         extensions=[Apps()],
+        subscriptions=live_bus,
         # Starlette debug mode returns full tracebacks to HTTP clients; keep it
         # opt-in for local debugging only.
         debug=os.environ.get("NORMAN_MCP_DEBUG") == "1",
@@ -413,6 +431,10 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
     register_resources(server)
     register_public_apps(server)
     register_inbox(server)
+    if live_enabled:
+        from norman_mcp.apps.inbox_live import InboxLive, register_inbox_live
+        server._inbox_live = InboxLive(oauth_provider, live_bus)
+        register_inbox_live(server, server._inbox_live)
 
     # Explicit persistent storage and encryption are required before advertising events.
     events_path = os.environ.get("NORMAN_MCP_EVENTS_DB")
