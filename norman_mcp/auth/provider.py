@@ -375,8 +375,10 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             grant_types.append("refresh_token")
         if grant_types != list(client_info.grant_types or []):
             updates["grant_types"] = grant_types
-        if updates:
-            client_info = client_info.model_copy(update=updates)
+        # In place: the SDK answers the registration with this same object, so the
+        # client sees exactly the grants and scope that are stored.
+        for field, value in updates.items():
+            setattr(client_info, field, value)
         self.clients[client_info.client_id] = client_info
         logger.info(f"Registered client: {client_info.client_id} with scope: {client_info.scope}")
         self._save_state()
