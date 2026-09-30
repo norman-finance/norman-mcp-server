@@ -98,6 +98,7 @@ def register_invoice_tools(mcp):
         is_to_send: bool = False,
         mailing_data: MailingData | None = None,
         settings_on_overdue: OverdueSettings | None = None,
+        auto_reminders: bool | None = None,
         service_start_date: Optional[str] = None,
         service_end_date: Optional[str] = None,
         delivery_date: Optional[str] = None,
@@ -186,18 +187,17 @@ def register_invoice_tools(mcp):
             color_schema: Invoice style color (hex code). Omit to inherit company branding.
             font: Invoice font. Omit to inherit the company font.
             is_to_send: Whether to send invoice automatically to client
-            mailing_data: Email data if is_to_send is True. Example: {
+            mailing_data: Email data if is_to_send is True. Omit the subject and body to use the company's
+                email template. Example: {
                 "emailSubject": "Invoice No.{invoice_number} for {client_name}",
                 "emailBody": "Dear {client_name},...",
-                "customClientEmail": "client@example.com" // email to send the invoice to, if not provided, it will be sent to the client email address
+                "customClientEmail": "client@example.com", // replaces the client's address for this email
+                "additionalEmails": ["accounting@example.com"] // sent as CC
             }
-            settings_on_overdue: Configuration for overdue notifications. Example: {
-                "isToAutosendNotification": true, // whether to send notification automatically
-                "customEmailSubject": "Reminder: Invoice {invoice_number} is overdue", // custom email subject
-                "customEmailBody": "Dear {client_name},...", // custom email body
-                "notifyAfterDays": [1, 3], // days to notify after the due date
-                "notifyInParticularDays": [] // days to notify in particular dates [2025-05-23", "2025-05-24"]
-            }
+            auto_reminders: Send automatic payment reminders for this invoice by the company's rule. Off unless
+                true; only on paid plans.
+            settings_on_overdue: Older reminder schedule, kept for existing integrations. It sends nothing;
+                use auto_reminders.
             service_start_date: Service period start date (YYYY-MM-DD) by default it's today, should be provided if invoice_type is SERVICES
             service_end_date: Service period end date (YYYY-MM-DD) by default it's one month from today, should be provided if invoice_type is SERVICES
             delivery_date: Delivery date for goods (YYYY-MM-DD) by default it's today, should be provided if invoice_type is GOODS
@@ -278,6 +278,7 @@ def register_invoice_tools(mcp):
             color_schema=color_schema,
             font=font,
             settings_on_overdue=settings_on_overdue,
+            auto_reminders=auto_reminders,
             status=status,
             payment_status=payment_status,
             payment_date=payment_date,
@@ -357,6 +358,7 @@ def register_invoice_tools(mcp):
         font: str | None = None,
         settings_on_overdue: OverdueSettings | None = None,
         online_payment_enabled: bool | None = None,
+        auto_reminders: bool | None = None,
         source_contract_id: str | None = None,
         document_design: DocumentDesign | None = None,
         discount_percents: int | None = None,
@@ -410,8 +412,11 @@ def register_invoice_tools(mcp):
             create_qr: Print a payment QR code (needs the company IBAN)
             color_schema: Hex colour; omit to inherit company branding.
             font: Omit to inherit the company font.
-            settings_on_overdue: Payment reminder settings for each invoice
+            settings_on_overdue: Older reminder schedule, kept for existing integrations. It sends nothing;
+                use auto_reminders.
             online_payment_enabled: Payment links on each invoice; omit for the company setting.
+            auto_reminders: Send automatic payment reminders for each invoice by the company's rule. Off unless
+                true; only on paid plans.
             source_contract_id: Source contract ID in the active company
             document_design: Template and appearance settings; omit to inherit the company design.
             discount_percents: Overall discount percentage
@@ -452,6 +457,7 @@ def register_invoice_tools(mcp):
             "currency": currency,
             "currencyExchanged": currency_exchanged,
             "sourceContract": source_contract_id,
+            "autoReminders": auto_reminders,
         }
         payload.update({key: value for key, value in optional.items() if value is not None})
         apply_invoice_options(
@@ -647,25 +653,26 @@ def register_invoice_tools(mcp):
     async def send_invoice(
         ctx: Context,
         invoice_id: str,
-        subject: str,
-        body: str,
+        subject: str | None = None,
+        body: str | None = None,
         additional_emails: Optional[List[str]] = None,
-        is_send_to_company: bool = False,
+        is_send_to_company: bool | None = None,
         custom_client_email: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Send an invoice via email.
-        
+        Send an invoice or quote to the client by email, with the PDF attached.
+
         Args:
-            invoice_id: ID of the invoice to send
-            subject: Email subject line
-            body: Email body content
-            additional_emails: List of additional email addresses to send to
-            is_send_to_company: Whether to send the copy to the company email (Owner)
-            custom_client_email: Custom email address for the client (By default the email address of the client is used if it is set)
-            
+            invoice_id: ID of the document to send
+            subject: Subject line. Omit to use the company's template, else Norman's default text
+            body: Message text. Omit to use the company's template. The API fills variables such as {client_name}
+            additional_emails: Further addresses, sent as CC
+            is_send_to_company: Send the company its own copy. Omit to follow the company's setting
+            custom_client_email: Replaces the client's address for this email
+
         Returns:
-            Response from the send invoice request
+            The sent text and the email record. email.status is "sent", or "queued" while Norman retries.
+            A send that fails at once returns an error with the reason; nothing reached the client.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -678,17 +685,16 @@ def register_invoice_tools(mcp):
             f"api/v1/companies/{company_id}/invoices/{invoice_id}/send/"
         )
         
-        send_data = {
-            "subject": subject,
-            "body": body,
-            "isSendToCompany": is_send_to_company
-        }
-        
-        if additional_emails:
-            send_data["additionalEmails"] = additional_emails if additional_emails else []
-        if custom_client_email:
-            send_data["customClientEmail"] = custom_client_email
-            
+        send_data: Dict[str, Any] = {}
+        apply_invoice_options(
+            send_data,
+            subject=subject,
+            body=body,
+            additional_emails=additional_emails or None,
+            is_send_to_company=is_send_to_company,
+            custom_client_email=custom_client_email or None,
+        )
+
         return api._make_request("POST", send_url, json_data=send_data)
 
     @mcp.tool(
@@ -706,24 +712,28 @@ def register_invoice_tools(mcp):
         subject: str | None = None,
         body: str | None = None,
         additional_emails: Optional[List[str]] = None,
-        is_send_to_company: bool = False,
+        is_send_to_company: bool | None = None,
         custom_client_email: Optional[str] = None,
         fee: float | None = None,
     ) -> Dict[str, Any]:
         """
-        Send an overdue payment reminder for an invoice via email.
-        
+        Send a payment reminder for an unpaid invoice by hand, one level above the last one.
+
+        Invoices with autoReminders get reminders by the company's rule without this tool.
+        Call list_invoice_emails first: it shows what went out and what is planned.
+
         Args:
             invoice_id: ID of the invoice to send reminder for
             fee: Reminder fee in major currency units, e.g. 2.50 EUR. Omit for no fee.
-            subject: Email subject line; omit for the API default
-            body: Email body content
-            additional_emails: List of additional email addresses to send to
-            is_send_to_company: Whether to send the copy to the company email (Owner)
-            custom_client_email: Custom email address for the client (By default the email address of the client is used if it is set)
-            
+            subject: Subject line. Omit to use the company's template for this reminder level
+            body: Message text. Omit to use the company's template
+            additional_emails: Further addresses, sent as CC
+            is_send_to_company: Send the company its own copy. Omit to follow the company's setting
+            custom_client_email: Replaces the client's address for this email
+
         Returns:
-            Response from the send overdue reminder request
+            The sent text, the reminder level and the email record. email.status is "sent", or "queued" while
+            Norman retries. A send that fails at once returns an error with the reason.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -736,17 +746,17 @@ def register_invoice_tools(mcp):
             f"api/v1/companies/{company_id}/invoices/{invoice_id}/send-on-overdue/"
         )
         
-        send_data = {
-            "isSendToCompany": is_send_to_company
-        }
-        
-        apply_invoice_options(send_data, subject=subject, body=body, fee=fee)
+        send_data: Dict[str, Any] = {}
+        apply_invoice_options(
+            send_data,
+            subject=subject,
+            body=body,
+            fee=fee,
+            additional_emails=additional_emails or None,
+            is_send_to_company=is_send_to_company,
+            custom_client_email=custom_client_email or None,
+        )
 
-        if additional_emails:
-            send_data["additionalEmails"] = additional_emails if additional_emails else []
-        if custom_client_email:
-            send_data["customClientEmail"] = custom_client_email
-            
         return api._make_request("POST", send_url, json_data=send_data)
 
     @mcp.tool(

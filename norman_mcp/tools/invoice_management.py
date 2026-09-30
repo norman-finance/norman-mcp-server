@@ -9,6 +9,8 @@ from mcp.types import ToolAnnotations
 from norman_mcp import config
 from norman_mcp.context import Context
 from norman_mcp.tools.invoice_schemas import (
+    EmailSettings,
+    EmailTemplate,
     InvoiceChanges,
     InvoiceItem,
     InvoiceSettings,
@@ -20,6 +22,8 @@ from norman_mcp.tools.invoice_schemas import (
 READ = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
 EDIT = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=True)
 SETTINGS = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False)
+REPLACE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False)
+EMAIL_LANGUAGE = Literal["de", "en", "pl", "it", "es"]
 
 
 def _company_api(ctx: Context):
@@ -52,6 +56,96 @@ def _derivation_payload(
     return payload
 
 
+def _register_email_tools(mcp):  # noqa: ANN001, ANN202
+    """The emails to clients: what went out, the reminder rule and the company's wording."""
+
+    @mcp.tool(title="List Invoice Emails", annotations=READ)
+    async def list_invoice_emails(ctx: Context, invoice_id: str) -> dict:
+        """List every email to the client about an invoice or quote, newest first.
+
+        Each email has its kind (document or reminder), level, recipients (to, cc),
+        status (scheduled, queued, sent, delivered, delayed, bounced, complained,
+        failed, cancelled).
+        nextReminder is what the company's reminder rule sends next, or null. The invoice's
+        remindersActive says whether Norman reminds by itself at all right now.
+        viewUrl is the page the client opens. Check this before sending a reminder
+        by hand, so the client does not get two.
+        """
+        api, company_url = _company_api(ctx)
+        return await api.arequest("GET", company_url + f"invoices/{quote(invoice_id, safe='')}/emails/")
+
+    @mcp.tool(title="Skip Planned Invoice Reminder", annotations=REPLACE)
+    async def skip_invoice_reminder(ctx: Context, invoice_id: str, email_id: str) -> dict:
+        """Stop a planned reminder: an email with status "scheduled" from list_invoice_emails.
+
+        The reminder is not sent and automatic reminders pause for this invoice.
+        Resume them with update_invoice and remindersPaused false. A reminder that
+        already went out cannot be stopped.
+        """
+        api, company_url = _company_api(ctx)
+        return await api.arequest(
+            "POST",
+            company_url + f"invoices/{quote(invoice_id, safe='')}/emails/{quote(email_id, safe='')}/skip/",
+        )
+
+    @mcp.tool(title="Get Invoice Email Settings", annotations=READ)
+    async def get_invoice_email_settings(ctx: Context) -> dict:
+        """Read the company's reminder rule (steps, days, fees) and whether it gets a copy of client emails."""
+        api, company_url = _company_api(ctx)
+        return await api.arequest("GET", company_url + "invoices/email-settings/")
+
+    @mcp.tool(title="Update Invoice Email Settings", annotations=SETTINGS)
+    async def update_invoice_email_settings(ctx: Context, changes: EmailSettings) -> dict:
+        """Change the company's reminder rule or its own copy of client emails.
+
+        The rule only reminds for invoices with autoReminders true; set that per
+        invoice with create_invoice or update_invoice, also after it was issued.
+        Reminders go out on working days and stop once the invoice is paid or
+        cancelled. Supply reminderSteps as all four levels; read them first and
+        change only what the user asked for. Automatic reminders need a paid plan.
+        A step's fee is shown in the reminder and paid by bank transfer; an email
+        with a fee has no online payment button.
+        """
+        patch = input_payload(changes, EmailSettings)
+        if not patch:
+            raise ValueError("Supply at least one email setting to change.")
+        api, company_url = _company_api(ctx)
+        return await api.arequest("PATCH", company_url + "invoices/email-settings/", json_data=patch)
+
+    @mcp.tool(title="List Invoice Email Templates", annotations=READ)
+    async def list_invoice_email_templates(ctx: Context, language: EMAIL_LANGUAGE = "de") -> dict:
+        """List the email wording for each document type and reminder step in one language.
+
+        source is "company" for the company's saved wording and "norman" for the
+        default text. An email uses the template in the document's language.
+        """
+        api, company_url = _company_api(ctx)
+        templates = await api.arequest(
+            "GET", company_url + "invoices/email-templates/", params={"language": language},
+        )
+        return {"templates": templates} if isinstance(templates, list) else templates
+
+    @mcp.tool(title="Save Invoice Email Template", annotations=SETTINGS)
+    async def save_invoice_email_template(ctx: Context, template: EmailTemplate) -> dict:
+        """Save the company's wording for one kind of email in one language.
+
+        Later emails of that kind start from it, reminders included. Keep the
+        {variables}; the API fills them per document. Emails already sent stay as they are.
+        """
+        api, company_url = _company_api(ctx)
+        return await api.arequest(
+            "PUT", company_url + "invoices/email-templates/", json_data=input_payload(template, EmailTemplate),
+        )
+
+    @mcp.tool(title="Reset Invoice Email Template", annotations=REPLACE)
+    async def reset_invoice_email_template(ctx: Context, key: str, language: EMAIL_LANGUAGE) -> dict:
+        """Delete the company's wording for one email and go back to Norman's default text."""
+        api, company_url = _company_api(ctx)
+        return await api.arequest(
+            "DELETE", company_url + "invoices/email-templates/", params={"key": key, "language": language},
+        )
+
+
 def register_invoice_management_tools(mcp, enrich=None):
     """``enrich`` is each server's async invoice-response hook.
 
@@ -62,6 +156,8 @@ def register_invoice_management_tools(mcp, enrich=None):
 
     async def _result(data: dict, api) -> dict:
         return await enrich(data, api=api, company_id=api.company_id) if enrich else data
+
+    _register_email_tools(mcp)
 
     @mcp.tool(title="List Invoice Templates", annotations=READ)
     async def list_invoice_templates(ctx: Context) -> dict:
