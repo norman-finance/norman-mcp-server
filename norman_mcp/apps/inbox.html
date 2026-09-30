@@ -1031,53 +1031,64 @@
             if (range && replacement) replacement.setSelectionRange(...range);
           }
         }
+        function toolResult(params) {
+          try {
+            const d = object(params);
+            if (d.view !== "inbox") return;
+            const incomingTime = Date.parse(d.asOf),
+              currentTime = Date.parse(state.data?.asOf);
+            if (
+              Number.isFinite(incomingTime) &&
+              Number.isFinite(currentTime) &&
+              incomingTime < currentTime
+            )
+              return;
+            // Hosts may also push the result of our own read. An identical
+            // result must not invalidate that read or an approval preflight.
+            if (
+              state.data &&
+              stable({ ...d, asOf: null }) ===
+                stable({ ...state.data, asOf: null })
+            )
+              return;
+            state.revision++;
+            setInbox(d);
+            render();
+            updateFreshness();
+            state.refreshWanted = true;
+            schedulePolling(0);
+          } catch (err) {
+            status.textContent = err.message;
+          }
+        }
+        const reply = (id, body) =>
+          parent.postMessage({ jsonrpc: "2.0", id, ...body }, "*");
         window.addEventListener("message", (e) => {
           if (e.source !== parent) return;
           const m = e.data;
           if (m?.jsonrpc !== "2.0" || state.disposed) return;
-          if (m.id !== undefined && state.pending.has(m.id)) {
-            const p = state.pending.get(m.id);
+          // JSON-RPC ids are per direction: only a message without a method
+          // is a response to one of our requests.
+          if (m.method === undefined) {
+            const p = m.id !== undefined && state.pending.get(m.id);
+            if (!p) return;
             clearTimeout(p.timer);
             state.pending.delete(m.id);
             m.error ? p.reject(Error(m.error.message)) : p.resolve(m.result);
             return;
           }
-          if (m.method === "ui/resource-teardown") {
+          const request = m.id !== undefined && m.id !== null;
+          if (m.method === "ui/notifications/tool-result") toolResult(m.params);
+          else if (m.method === "ui/resource-teardown") {
             dispose();
-            parent.postMessage({ jsonrpc: "2.0", id: m.id, result: {} }, "*");
-            return;
-          }
-          if (m?.method === "ui/notifications/tool-result") {
-            try {
-              const d = object(m.params);
-              if (d.view === "inbox") {
-                const incomingTime = Date.parse(d.asOf),
-                  currentTime = Date.parse(state.data?.asOf);
-                if (
-                  Number.isFinite(incomingTime) &&
-                  Number.isFinite(currentTime) &&
-                  incomingTime < currentTime
-                )
-                  return;
-                // Hosts may also push the result of our own read. An identical
-                // result must not invalidate that read or an approval preflight.
-                if (
-                  state.data &&
-                  stable({ ...d, asOf: null }) ===
-                    stable({ ...state.data, asOf: null })
-                )
-                  return;
-                state.revision++;
-                setInbox(d);
-                render();
-                updateFreshness();
-                state.refreshWanted = true;
-                schedulePolling(0);
-              }
-            } catch (err) {
-              status.textContent = err.message;
-            }
-          }
+            if (request) reply(m.id, { result: {} });
+          } else if (request)
+            reply(
+              m.id,
+              m.method === "ping"
+                ? { result: {} }
+                : { error: { code: -32601, message: "Method not found" } },
+            );
         });
         document.querySelector("#refresh").onclick = () =>
           action((revision) =>

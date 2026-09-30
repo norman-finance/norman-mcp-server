@@ -90,7 +90,8 @@ async function fixture(width = 1100, { clock = false } = {}) {
       if (e.source !== document.querySelector("iframe").contentWindow) return;
       const m = e.data;
       window.calls.push(m);
-      if (!m.id) return;
+      // Answer requests only; the View's own replies carry no method.
+      if (!m.id || !m.method) return;
       let result = {};
       if (m.method === "tools/call") {
         const { name, arguments: args } = m.params;
@@ -706,6 +707,70 @@ test("unavailable live approval keeps the selection but cannot preserve consent"
     assert.equal(await ui.locator("#confirm").isEnabled(), true);
     assert.equal(await ui.locator("#confirm").isChecked(), false);
     assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("host requests are answered and never consume a pending response id", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    await page.evaluate(() => (window.holdNames = ["get_norman_inbox_data"]));
+    await page.clock.runFor(30_001);
+    await flush(page);
+    const view = page.frames()[1];
+    const id = await view.evaluate(
+      () => [...window.__inboxTestState.pending.keys()][0],
+    );
+    const send = (id, method) =>
+      page.evaluate(
+        ({ id, method }) =>
+          document
+            .querySelector("iframe")
+            .contentWindow.postMessage(
+              { jsonrpc: "2.0", id, method, params: {} },
+              "*",
+            ),
+        { id, method },
+      );
+    const replies = (id) =>
+      page.evaluate(
+        (id) =>
+          window.calls.filter((c) => c.id === id && c.method === undefined),
+        id,
+      );
+    // Host ids are independent of the View's: a host request that reuses
+    // the id of a pending poll is a request, not that poll's response.
+    await send(id, "ping");
+    await flush(page);
+    assert.deepEqual(await replies(id), [{ jsonrpc: "2.0", id, result: {} }]);
+    assert.equal(
+      await view.evaluate(
+        (id) => window.__inboxTestState.pending.has(id),
+        id,
+      ),
+      true,
+    );
+    await send(777, "ui/unknown-request");
+    await flush(page);
+    assert.equal((await replies(777))[0].error.code, -32601);
+    await send(id, "ui/resource-teardown");
+    await flush(page);
+    assert.equal((await replies(id)).length, 2);
+    assert.equal(
+      await view.evaluate(() => window.__inboxTestState.disposed),
+      true,
+    );
+    await page.evaluate(() => {
+      window.holdNames = [];
+      window.release();
+    });
+    await flush(page);
+    assert.doesNotMatch(
+      await ui.locator("#status").innerText(),
+      /Could not refresh/,
+    );
     assert.deepEqual(errors, []);
   } finally {
     await page.close();
