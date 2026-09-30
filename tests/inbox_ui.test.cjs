@@ -1513,6 +1513,52 @@ test("a warning raised by a user refresh is not replaced by its success status",
   }
 });
 
+test("the page returned by the server becomes the current page", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    const pages = async () =>
+      (await toolCalls(page, "get_norman_inbox_data")).map(
+        (call) => call.params.arguments.page,
+      );
+    await ui.getByRole("button", { name: "More approvals" }).click();
+    await idle(page);
+    await ui.getByRole("button", { name: "Previous approvals" }).waitFor();
+    // Page 2 no longer exists (its last item was decided); the server clamps.
+    await page.evaluate(
+      () =>
+        (window.hooks.get_norman_inbox_data = ({ page }) => ({
+          ...window.inbox,
+          pagination: { page: Math.min(page, 1), hasNext: false },
+        })),
+    );
+    await page.clock.runFor(30_001);
+    await idle(page);
+    assert.equal(
+      await ui.getByRole("button", { name: "Previous approvals" }).count(),
+      0,
+    );
+    await page.clock.runFor(30_001);
+    await idle(page);
+    assert.deepEqual(await pages(), [1, 2, 2, 1]);
+    // A page number sent as text still counts as a number.
+    await page.evaluate(
+      () =>
+        (window.hooks.get_norman_inbox_data = ({ page }) => ({
+          ...window.inbox,
+          pagination: { page: String(page), hasNext: true },
+        })),
+    );
+    await ui.getByRole("button", { name: "Refresh", exact: true }).click();
+    await idle(page);
+    await ui.getByRole("button", { name: "More approvals" }).click();
+    await idle(page);
+    assert.deepEqual((await pages()).slice(-2), [1, 2]);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
 test("tool errors show the API's own message and never a raw URL", async () => {
   const { page, ui, errors } = await fixture();
   try {

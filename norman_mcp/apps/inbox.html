@@ -586,6 +586,9 @@
             throw Error(
               "Norman returned unavailable Inbox data. Refresh to retry.",
             );
+          // The server clamps a page that no longer exists: always adopt it.
+          const page = Number(next.pagination.page);
+          next.pagination.page = Number.isInteger(page) && page > 0 ? page : 1;
           if (state.data && state.data.companyId !== next.companyId) {
             state.revision++;
             setDetail(null);
