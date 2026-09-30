@@ -140,3 +140,49 @@ def test_registration_without_refresh_token_grant_can_still_refresh(state_file):
     stored = provider.clients["auth-code-only"]
     assert stored.grant_types == ["authorization_code", "refresh_token"]
     assert stored.client_id_issued_at == 1_700_000_000
+
+
+def test_tokens_from_one_authorization_share_a_grant_across_refresh_and_restart(state_file):
+    from mcp.server.auth.provider import AuthorizationCode
+
+    provider = new_provider()
+    client = OAuthClientInformationFull(
+        client_id="claude-client",
+        redirect_uris=["https://claude.ai/api/mcp/auth_callback"],
+        token_endpoint_auth_method="none",
+        grant_types=["authorization_code", "refresh_token"],
+        response_types=["code"],
+        scope="read write",
+    )
+    code = AuthorizationCode(
+        code="code-1",
+        scopes=["read"],
+        expires_at=FUTURE,
+        client_id="claude-client",
+        code_challenge="challenge",
+        redirect_uri="https://claude.ai/api/mcp/auth_callback",
+        redirect_uri_provided_explicitly=True,
+    )
+    provider.auth_codes["code-1"] = code
+    provider.token_mapping.update({"code-1": "norman-access", "refresh_code-1": "norman-refresh"})
+
+    issued = asyncio.run(provider.exchange_authorization_code(client, code))
+    grant = provider.grant_for_token(issued.access_token)
+    assert grant.startswith("grant_") and provider.grant_for_token(issued.refresh_token) == grant
+
+    provider._refresh_norman_credentials = lambda token: ("norman-access-2", "norman-refresh-2")
+    refreshed = provider._exchange_refresh_token_sync(
+        client, provider.refresh_tokens[issued.refresh_token], ["read"]
+    )
+    assert refreshed.access_token != issued.access_token
+    assert provider.grant_for_token(refreshed.access_token) == grant
+
+    assert new_provider().grant_for_token(refreshed.access_token) == grant  # persisted
+
+    asyncio.run(provider.revoke_token(refreshed.access_token))
+    assert refreshed.access_token not in provider.token_grants
+
+
+def test_tokens_issued_before_grant_ids_still_group_by_refresh_token(state_file):
+    provider = new_provider()
+    assert provider.grant_for_token("legacy-access") == "legacy-access"

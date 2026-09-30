@@ -88,3 +88,35 @@ def test_slot_is_released_when_the_stream_fails(monkeypatch):
         assert not limits.active
 
     anyio.run(scenario)
+
+
+def test_refreshed_tokens_of_one_grant_share_the_allowance(monkeypatch):
+    limits = ListenLimits(per_token=2, total=10)
+    grants = {"first-token": "grant-1", "refreshed-token": "grant-1", "other": "grant-2"}
+    monkeypatch.setattr(
+        limits_module,
+        "get_oauth_provider",
+        lambda: type("P", (), {"grant_for_token": staticmethod(lambda t: grants.get(t, t))})(),
+    )
+    release = anyio.Event()
+
+    async def hold(ctx):
+        await release.wait()
+
+    async def scenario():
+        async with anyio.create_task_group() as group:
+            use_token(monkeypatch, "first-token")
+            group.start_soon(limits, Ctx(), hold)
+            await anyio.wait_all_tasks_blocked()
+            use_token(monkeypatch, "refreshed-token")
+            group.start_soon(limits, Ctx(), hold)
+            await anyio.wait_all_tasks_blocked()
+            with pytest.raises(MCPError):
+                await limits(Ctx(), hold)
+            use_token(monkeypatch, "other")
+            group.start_soon(limits, Ctx(), hold)
+            await anyio.wait_all_tasks_blocked()
+            assert limits.active == {"client:grant-1": 2, "client:grant-2": 1}
+            release.set()
+
+    anyio.run(scenario)
