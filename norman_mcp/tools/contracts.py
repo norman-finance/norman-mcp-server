@@ -35,12 +35,11 @@ def invoice_arguments_from_contract(proposal: dict) -> dict:
             mapping.pop(field, None)
         mapping.update(
             {
-                "frequencyType": "frequency_type",
-                "frequencyUnit": "frequency_unit",
-                "startsFromDate": "starts_from_date",
-                "endsOnDate": "ends_on_date",
-                "endsOnInvoiceCount": "ends_on_invoice_count",
-                "isOngoing": "is_ongoing",
+                "interval": "interval",
+                "intervalCount": "interval_count",
+                "startsOn": "starts_on",
+                "endsOn": "ends_on",
+                "endsAfter": "ends_after",
                 "paymentDueDays": "payment_due_days",
                 "billingInAdvance": "billing_in_advance",
             },
@@ -48,7 +47,10 @@ def invoice_arguments_from_contract(proposal: dict) -> dict:
     arguments = {
         target: draft[key] for key, target in mapping.items() if draft.get(key) is not None
     }
-    arguments["is_to_send"] = False
+    if draft.get("isRecurring"):
+        arguments["mode"] = "draft"
+    else:
+        arguments["is_to_send"] = False
     arguments["items"] = [
         {
             "name": item["name"],
@@ -64,25 +66,6 @@ def invoice_arguments_from_contract(proposal: dict) -> dict:
 
 
 def register_contract_tools(mcp: Any) -> None:
-
-    @mcp.tool(annotations=ToolAnnotations(
-        readOnlyHint=False, openWorldHint=False, destructiveHint=True, idempotentHint=True,
-    ))
-    async def cancel_recurring_invoice(ctx: Context, recurring_invoice_id: str) -> dict[str, Any]:
-        """Stop a recurring invoice series, including ongoing contract billing.
-
-        Use the series ID returned by create_recurring_invoice. This cancels future
-        generation and scheduled sends while retaining issued invoices. Call when the
-        user requests stopping this series; do not infer termination from document text.
-        """
-        api = ctx.request_context.lifespan_context["api"]
-        if not api.company_id:
-            return {"error": "Select a company first."}
-        url = urljoin(
-            config.api_base_url,
-            f"api/v1/companies/{api.company_id}/recurring-invoices/{recurring_invoice_id}/cancel/",
-        )
-        return await api.arequest("POST", url)
 
     @mcp.tool(annotations=ToolAnnotations(
         readOnlyHint=False, openWorldHint=False, destructiveHint=False, idempotentHint=False,
@@ -106,9 +89,10 @@ def register_contract_tools(mcp: Any) -> None:
         Present extracted terms and reviewNotes to the user, resolve missing/ambiguous terms
         and recipient, then use suggestedTool with reviewed suggestedArguments. Rates in those
         arguments are already in MINOR units (cents); do not convert them again. Keep
-        source_contract_id so the invoice and recurring children link to the original contract.
-        Enable automatic sending only when the user authorizes it. Ongoing requires an explicit
-        indefinite recurring term, not just a missing end date.
+        source_contract_id so the invoice, or the recurring invoice and every invoice it makes,
+        links to the original contract. Use mode "send" only when the user authorizes automatic
+        sending. A series without an end needs an explicit indefinite term, not just a missing
+        end date.
         """
         api = ctx.request_context.lifespan_context["api"]
         if not api.company_id:

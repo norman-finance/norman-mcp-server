@@ -18,6 +18,7 @@ from norman_mcp.tools.invoice_schemas import (
     InvoiceItem,
     MailingData,
     OverdueSettings,
+    RepeatRule,
     TransactionInvoiceItem,
     apply_invoice_options,
     item_payloads,
@@ -121,6 +122,7 @@ def register_invoice_tools(mcp):
         bank_account_pk: str | None = None,
         is_to_create_transaction: bool | None = None,
         paid_amount: int | None = None,
+        recurring: RepeatRule | None = None,
     ) -> Dict[str, Any]:
         """
         Create a new invoice. Ask for additional information if needed, for example:
@@ -155,6 +157,10 @@ def register_invoice_tools(mcp):
             bank_account_pk: Bank account ID for payment details.
             is_to_create_transaction: Create a linked accounting transaction with the invoice.
             paid_amount: Amount already paid in minor currency units.
+            recurring: Repeat this invoice. It becomes the first of a series, and Norman makes
+                the next invoices on the rule, as drafts unless mode says otherwise. Texts may use
+                {month} {year} {quarter} {week} {period}; each invoice fills them from the period
+                it bills.
             source_contract_id: Source contract ID in the active company.
             client_id: Client public ID, or null for an allowed invoice without a recipient
             items: List of invoice items, each containing name, quantity, rate and vatRate.
@@ -280,8 +286,43 @@ def register_invoice_tools(mcp):
             paid_amount=paid_amount,
         )
 
+        if recurring is not None:
+            invoice_data["recurring"] = recurring.payload()
+
         result = await api.arequest("POST", invoices_url, json_data=invoice_data)
         return _enrich_invoice_response(result, api=api, company_id=company_id)
+
+    @mcp.tool(
+        title="Make Invoice Recurring",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+    )
+    async def make_invoice_recurring(
+        ctx: Context,
+        invoice_id: str,
+        rule: RepeatRule,
+    ) -> Dict[str, Any]:
+        """
+        Repeat an existing invoice. It becomes the first of a series; Norman makes the next invoices
+        on the rule, each billing the period after the one before. An invoice of an ended series
+        can repeat again.
+
+        Args:
+            invoice_id: ID of the invoice to repeat
+            rule: The date of the next invoice and the rule from there
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+        url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{api.company_id}/invoices/{invoice_id}/make-recurring/"
+        )
+        return await api.arequest("POST", url, json_data=rule.payload())
 
     @mcp.tool(
         title="Create Recurring Invoice",
@@ -294,194 +335,269 @@ def register_invoice_tools(mcp):
     )
     async def create_recurring_invoice(
         ctx: Context,
-        client_id: str | None,
+        client_id: str,
         items: list[InvoiceItem],
-        frequency_type: str,
-        frequency_unit: int,
-        starts_from_date: str,
-        ends_on_date: Optional[str] = None,
-        ends_on_invoice_count: Optional[int] = None,
-        invoice_number: Optional[str] = None,
-        currency: str = "EUR",
-        payment_terms: Optional[str] = None,
-        notes: Optional[str] = None,
+        interval: Literal["week", "month", "year"],
+        starts_on: str,
+        interval_count: int = 1,
+        ends_on: str | None = None,
+        ends_after: int | None = None,
+        mode: Literal["draft", "issue", "send"] = "draft",
+        payment_due_days: int = 14,
+        billing_in_advance: bool = False,
+        currency: str | None = None,
+        currency_exchanged: str | None = None,
+        payment_terms: str | None = None,
+        notes: str | None = None,
         language: str = "en",
         invoice_type: str = "SERVICES",
         is_vat_included: bool = False,
-        bank_name: Optional[str] = None,
-        iban: Optional[str] = None,
-        bic: Optional[str] = None,
         create_qr: bool = False,
         color_schema: str | None = None,
         font: str | None = None,
-        is_to_send: bool = False,
         settings_on_overdue: OverdueSettings | None = None,
+        online_payment_enabled: bool | None = None,
         source_contract_id: str | None = None,
-        payment_due_days: int | None = None,
-        billing_in_advance: bool = False,
-        is_ongoing: bool = False,
         document_design: DocumentDesign | None = None,
         discount_percents: int | None = None,
-        currency_exchanged: str | None = None,
-        full_cost_origin_exchanged: float | None = None,
         tax_exempt_reason: str | None = None,
         instructions: str | None = None,
         message: str | None = None,
         company_email: str | None = None,
-        skip_bank_details: bool | None = None,
-        save_client_details: bool | None = None,
-        client_data: ClientData | None = None,
-        company_data: CompanyData | None = None,
-        online_payment_enabled: bool | None = None,
         mailing_data: MailingData | None = None,
     ) -> Dict[str, Any]:
         """
-        Create a recurring invoice that will automatically generate new invoices based on specified frequency.
-        Useful for contracts or services that bill on a regular basis.
-        Always ask for recurring configuration, for example:
-            - How often to generate invoices (weekly, monthly)
-            - Number of units for frequency (e.g. 1 for monthly = every month, 2 = every 2 months)
-            - Start date
-            - End date
-            - End invoice count (optional)
-            
-        Ask for additional information if needed, for example:
-            - If the client is not found, ask for the client details and create a new client if necessary.
-            - If the invoice number is not provided, ask for it.
-            - If the due date is not provided, ask for it.
-            - If the payment terms are not provided, ask for it.
-            - If the bank details are not provided, ask for it.
+        Set up a recurring invoice: a template and a rule. Norman makes nothing in advance.
+        On each run date it makes one ordinary invoice from the template, with the next
+        number of the company's normal sequence.
+
+        Always confirm with the user: the client, the lines, how often (every N weeks,
+        months or years), the first invoice date, the end (a date, a number of invoices,
+        or none), and what happens on each date (mode).
+
+        mode: "draft" (default) makes a draft the owner checks and issues; "issue" issues
+        the invoice without sending it; "send" issues it and emails it to the client.
+        Use "send" only when the user asks for automatic sending.
+
+        Placeholders {month}, {year}, {quarter}, {week} and {period} in item names and
+        descriptions, notes, message, payment terms and the email are filled with the
+        period each invoice covers, for example "Hosting {month} {year}".
+
+        A first invoice date of today or earlier makes the first invoice at once.
 
         For a contract, use prepare_invoice_from_contract and review its proposal first.
         Preserve source_contract_id on creation to link the original document.
 
         Args:
-            document_design: Template and appearance settings. Omit to inherit the company design. Paid templates require an active subscription.
-            discount_percents: Overall invoice discount percentage.
-            currency_exchanged: Reporting currency code.
-            full_cost_origin_exchanged: Total in reporting currency in major units; omit for automatic conversion.
-            tax_exempt_reason: VAT note; omit for automatic text, or use an empty string to print no note.
-            instructions: Invoice instructions.
-            message: Invoice message.
-            company_email: Sender email; omit to use the company email.
-            skip_bank_details: Exclude bank details from the document.
-            save_client_details: Also save the submitted client details to the client record.
-            client_data: Recipient details for this document.
-            company_data: Sender details for this document.
-            online_payment_enabled: Enable Stripe/PayPal payment links; omit to inherit, false to disable.
-            mailing_data: Email subject, body, recipient, extra recipients and copy-to-company option.
-            source_contract_id: Source contract ID in the active company.
-            client_id: Client public ID, or null for an allowed invoice without a recipient
-            items: List of invoice items, each containing name, quantity, rate and vatRate.
-                Optional per item: "description", "unit" and "productId", as in create_invoice.
-            is_ongoing: Continue until cancelled; omit both end conditions when true.
-            payment_due_days: Days after each issue date until payment is due (0-365).
-            billing_in_advance: True bills the upcoming service period; false bills in arrears.
-            frequency_type: How often to generate invoices ("weekly", "monthly")
-            frequency_unit: Number of units for frequency (e.g. 1 for monthly = every month, 2 = every 2 months)
-            starts_from_date: Date to start generating invoices from (YYYY-MM-DD)
-            ends_on_date: Optional end date for recurring invoices (YYYY-MM-DD). Either ends_on_date or ends_on_invoice_count should be provided.
-            ends_on_invoice_count: Optional number of invoices to generate before stopping. Either ends_on_date or ends_on_invoice_count should be provided.
-            invoice_number: Base invoice number (will be auto-generated if not provided)
-            currency: Invoice currency, e.g. USD. EUR, the default, bills in the company's own currency.
+            client_id: Client public ID
+            items: Invoice items, each with name, quantity, rate (cents) and vatRate.
+                Optional per item: "description", "unit", "productId", "discountPercent".
+            interval: "week", "month" or "year"
+            starts_on: First invoice date (YYYY-MM-DD). It also fixes the weekday or day of month.
+            interval_count: Every how many weeks, months or years (1-99)
+            ends_on: Optional last possible invoice date (YYYY-MM-DD)
+            ends_after: Optional number of invoices. Omit both ends to run until ended.
+            mode: "draft", "issue" or "send"
+            payment_due_days: Days from each invoice date to its due date (0-365)
+            billing_in_advance: True bills the coming period; false bills the period just ended.
+            currency: Invoice currency; omit for the company currency.
+            currency_exchanged: Reporting currency; omit for the company currency.
             payment_terms: Payment terms text
             notes: Additional notes
-            language: Invoice language (en, de)
-            invoice_type: Type of invoice (SERVICES, GOODS)
+            language: Invoice language (en, de, pl, it, es)
+            invoice_type: SERVICES or GOODS
             is_vat_included: Whether prices include VAT
-            bank_name: Name of the bank
-            iban: IBAN for payments
-            bic: BIC/SWIFT code
-            create_qr: Whether to create payment QR code
-            color_schema: Invoice style color (hex code). Omit to inherit company branding.
-            font: Invoice font. Omit to inherit the company font.
-            is_to_send: Whether to send invoices automatically to client
-            settings_on_overdue: Configuration for overdue notifications
+            create_qr: Print a payment QR code (needs the company IBAN)
+            color_schema: Hex colour; omit to inherit company branding.
+            font: Omit to inherit the company font.
+            settings_on_overdue: Payment reminder settings for each invoice
+            online_payment_enabled: Payment links on each invoice; omit for the company setting.
+            source_contract_id: Source contract ID in the active company
+            document_design: Template and appearance settings; omit to inherit the company design.
+            discount_percents: Overall discount percentage
+            tax_exempt_reason: VAT note; omit to derive it per invoice, empty string for none.
+            instructions: Invoice instructions
+            message: Invoice message
+            company_email: Sender email; omit to use the company email.
+            mailing_data: Email subject, body and recipients for mode "send".
 
         Returns:
-            Information about the created recurring invoice. Use downloadUrl for a direct temporary PDF download link (valid for 1 hour).
+            The series with its status, nextRunOn, upcoming dates and the invoices it made.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
-        
+
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        recurring_invoices_url = urljoin(
-            config.api_base_url,
-            f"api/v1/companies/{company_id}/recurring-invoices/"
-        )
-
-        if not invoice_number:
-            next_invoice_url = urljoin(
-                config.api_base_url,
-                f"api/v1/companies/{company_id}/invoices/next-invoice-number/"
-            )
-            next_invoice_data = await api.arequest("GET", next_invoice_url)
-            invoice_number = next_invoice_data.get("nextInvoiceNumber")
-
-        invoice_data = {
+        payload: Dict[str, Any] = {
             "client": client_id,
-            "recurringNumber": invoice_number,
             "invoicedItems": item_payloads(items),
-            "currency": currency,
+            "interval": interval,
+            "intervalCount": interval_count,
+            "startsOn": starts_on,
+            "mode": mode,
+            "paymentDueDays": payment_due_days,
+            "billingInAdvance": billing_in_advance,
             "language": language,
             "invoiceType": invoice_type,
             "isVatIncluded": is_vat_included,
             "createQr": create_qr,
-            "isToSend": is_to_send,
-            "frequencyType": frequency_type,
-            "frequencyUnit": frequency_unit,
-            "startsFromDate": starts_from_date,
+            "paymentTerms": payment_terms or "",
+            "notes": notes or "",
         }
-
-        invoice_data["isOngoing"] = is_ongoing
-        # Add conditional end parameters
-        if ends_on_date is not None:
-            invoice_data["endsOnDate"] = ends_on_date
-        if ends_on_invoice_count is not None:
-            invoice_data["endsOnInvoiceCount"] = ends_on_invoice_count
-        
-        if not is_ongoing and ends_on_date is None and ends_on_invoice_count is None:
-            invoice_data["endsOnInvoiceCount"] = 3
-
-        if payment_due_days is not None:
-            invoice_data["paymentDueDays"] = payment_due_days
-        invoice_data["billingInAdvance"] = billing_in_advance
-
-        # Add optional fields
-        if source_contract_id is not None:
-            invoice_data["sourceContract"] = source_contract_id
-        invoice_data["paymentTerms"] = payment_terms if payment_terms else ""
-        invoice_data["notes"] = notes if notes else ""
-        invoice_data["bankName"] = bank_name if bank_name else ""
-        invoice_data["iban"] = iban if iban else ""
-        invoice_data["bic"] = bic if bic else ""
-        
-
+        optional = {
+            "endsOn": ends_on,
+            "endsAfter": ends_after,
+            "currency": currency,
+            "currencyExchanged": currency_exchanged,
+            "sourceContract": source_contract_id,
+        }
+        payload.update({key: value for key, value in optional.items() if value is not None})
         apply_invoice_options(
-            invoice_data,
+            payload,
             document_design=document_design,
             discount_percents=discount_percents,
-            currency_exchanged=currency_exchanged,
-            full_cost_origin_exchanged=full_cost_origin_exchanged,
             tax_exempt_reason=tax_exempt_reason,
             instructions=instructions,
             message=message,
             company_email=company_email,
-            skip_bank_details=skip_bank_details,
-            save_client_details=save_client_details,
-            client_data=client_data,
-            company_data=company_data,
             online_payment_enabled=online_payment_enabled,
             mailing_data=mailing_data,
             color_schema=color_schema,
             font=font,
             settings_on_overdue=settings_on_overdue,
         )
+        url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/recurring-invoices/")
+        return await api.arequest("POST", url, json_data=payload)
 
-        result = await api.arequest("POST", recurring_invoices_url, json_data=invoice_data)
-        return _enrich_invoice_response(result, api=api, company_id=company_id)
+    @mcp.tool(
+        title="Get Recurring Invoice",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def get_recurring_invoice(
+        ctx: Context,
+        recurring_invoice_id: str,
+    ) -> Dict[str, Any]:
+        """
+        Get a recurring invoice: its template, rule, mode, status (active, paused, ended),
+        nextRunOn, the next dates and the invoices it made. Retrieve one of those with
+        get_invoice to see its payment URL and lifecycle status.
+
+        Args:
+            recurring_invoice_id: ID of the recurring invoice series
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        recurring_url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/recurring-invoices/{recurring_invoice_id}/"
+        )
+        return await api.arequest("GET", recurring_url)
+
+    @mcp.tool(
+        title="List Recurring Invoices",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def list_recurring_invoices(
+        ctx: Context,
+        status: Optional[Literal["active", "paused", "ended"]] = None,
+        page_size: int = 100,
+    ) -> Dict[str, Any]:
+        """
+        List the company's recurring invoices with client, amount, rule, mode, status and nextRunOn.
+
+        Args:
+            status: Only series in this status
+            page_size: Series per page (up to 1000); count in the result says how many there are
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+        url = urljoin(config.api_base_url, f"api/v1/companies/{api.company_id}/recurring-invoices/")
+        params = {"page_size": page_size, **({"status": status} if status else {})}
+        return await api.arequest("GET", url, params=params)
+
+    async def _series_action(ctx: Context, series_id: str, action: str) -> Dict[str, Any]:
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+        url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{api.company_id}/recurring-invoices/{series_id}/{action}/",
+        )
+        return await api.arequest("POST", url)
+
+    @mcp.tool(
+        title="Pause Recurring Invoice",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def pause_recurring_invoice(ctx: Context, recurring_invoice_id: str) -> Dict[str, Any]:
+        """
+        Pause a recurring invoice: Norman makes no invoices until it is resumed.
+
+        Args:
+            recurring_invoice_id: ID of the recurring invoice
+        """
+        return await _series_action(ctx, recurring_invoice_id, "pause")
+
+    @mcp.tool(
+        title="Resume Recurring Invoice",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def resume_recurring_invoice(ctx: Context, recurring_invoice_id: str) -> Dict[str, Any]:
+        """
+        Resume a paused recurring invoice. It carries on from the next date; dates missed
+        while it was paused stay skipped.
+
+        Args:
+            recurring_invoice_id: ID of the recurring invoice
+        """
+        return await _series_action(ctx, recurring_invoice_id, "resume")
+
+    @mcp.tool(
+        title="End Recurring Invoice",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def end_recurring_invoice(ctx: Context, recurring_invoice_id: str) -> Dict[str, Any]:
+        """
+        End a recurring invoice for good, including ongoing contract billing. Invoices it
+        already made stay as they are. Call only when the user asks to stop this series;
+        do not infer the end from document text.
+
+        Args:
+            recurring_invoice_id: ID of the recurring invoice
+        """
+        return await _series_action(ctx, recurring_invoice_id, "end")
 
     @mcp.tool(
         title="Get Invoice Details",

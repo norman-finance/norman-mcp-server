@@ -98,7 +98,7 @@ def test_external_actions_and_internal_ai_use_truthful_annotations() -> None:
     assert _annotation_tuple(tools["send_invoice"]) == EXTERNAL_IRREVERSIBLE_WRITE
     assert _annotation_tuple(tools["create_invoice"]) == EXTERNAL_IRREVERSIBLE_WRITE
     assert _annotation_tuple(tools["create_recurring_invoice"]) == EXTERNAL_IRREVERSIBLE_WRITE
-    assert _annotation_tuple(tools["cancel_recurring_invoice"]) == DESTRUCTIVE_WRITE
+    assert _annotation_tuple(tools["end_recurring_invoice"]) == DESTRUCTIVE_WRITE
     assert _annotation_tuple(tools["prepare_invoice_from_contract"]) == WRITE
     assert _annotation_tuple(tools["generate_finanzamt_preview"]) == WRITE
     assert _annotation_tuple(tools["send_invoice_overdue_reminder"]) == EXTERNAL_IRREVERSIBLE_WRITE
