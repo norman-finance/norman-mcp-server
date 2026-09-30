@@ -20,7 +20,8 @@ READ = ToolAnnotations(
 
 
 def endpoint(path: str) -> str:
-    return urljoin(config.api_base_url, f"api/v1/{path}")
+    base_url: str = config.api_base_url
+    return urljoin(base_url, f"api/v1/{path}")
 
 
 async def read(api: Any, path: str, **kwargs: Any) -> dict[str, Any]:
