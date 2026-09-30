@@ -15,6 +15,9 @@ from norman_mcp.server import create_app, create_cors_app
 
 def test_shared_startup_client_resolves_oauth_identity_per_http_request(monkeypatch, tmp_path):
     monkeypatch.setattr("norman_mcp.auth.provider._STATE_FILE", str(tmp_path / "oauth.json"))
+    # create_app replaces the process-wide provider and API client; put them back.
+    monkeypatch.setattr(context, "oauth_provider", context.oauth_provider)
+    monkeypatch.setattr(context, "_api_client", context._api_client)
     monkeypatch.delenv("NORMAN_MCP_EVENTS_DB", raising=False)
     monkeypatch.delenv("NORMAN_MCP_EVENTS_KEY", raising=False)
     server = create_app(transport="streamable-http", streamable_http_options={"stateless": True})
