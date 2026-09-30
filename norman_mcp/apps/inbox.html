@@ -751,7 +751,6 @@
             return window.openai.sendFollowUpMessage({ prompt: text });
           throw Error("Conversation messaging is unavailable in this host.");
         }
-        // kind: load, refresh, open, approve, dismiss, undo, answer or ask.
         function unloaded() {
           if (!state.data)
             content.innerHTML =
@@ -766,6 +765,7 @@
           unloaded();
           updateFreshness();
         }
+        // kind: load, refresh, open, approve, dismiss, undo, answer or ask.
         async function action(fn, { kind = "refresh" } = {}) {
           if (state.busy || state.disposed) return;
           const revision = ++state.revision,
@@ -1076,10 +1076,10 @@
             paymentType: "Payment type",
             message: "Message",
           };
-          const named = (labels, k) =>
-            label(labels?.[k]) ??
-            label(labels?.[k.replace(/_([a-z])/g, (_, c) => c.toUpperCase())]) ??
-            label(labels?.[k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)]);
+          const named = (names, k) =>
+            label(names?.[k]) ??
+            label(names?.[k.replace(/_([a-z])/g, (_, c) => c.toUpperCase())]) ??
+            label(names?.[k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)]);
           const proposed = (a) =>
             Object.entries(a.params || {})
               .map(
