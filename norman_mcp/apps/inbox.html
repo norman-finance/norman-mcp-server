@@ -407,6 +407,7 @@
           pollTimer: null,
           refreshPromise: null,
           refreshWanted: false,
+          resume: false,
           lastCheck: null,
         };
         const content = document.querySelector("#content"),
@@ -461,6 +462,11 @@
         function guard(revision) {
           if (state.disposed || revision !== state.revision) throw stale();
         }
+        const older = (next, current) => {
+          const a = Date.parse(next?.asOf),
+            b = Date.parse(current?.asOf);
+          return Number.isFinite(a) && Number.isFinite(b) && a < b;
+        };
         function syncControls() {
           document
             .querySelectorAll("button")
@@ -683,25 +689,123 @@
             return window.openai.sendFollowUpMessage({ prompt: text });
           throw Error("Conversation messaging is unavailable in this host.");
         }
-        async function action(fn) {
+        // kind: load, refresh, open, approve, dismiss, undo, answer or ask.
+        async function action(fn, { kind = "refresh" } = {}) {
           if (state.busy || state.disposed) return;
-          const revision = ++state.revision;
+          const revision = ++state.revision,
+            job = {
+              kind,
+              sent: null,
+              company: state.data?.companyId,
+              data: state.data,
+            };
           state.busy = true;
           stopPolling();
           syncControls();
           say("Working…");
           try {
-            await fn(revision);
-            guard(revision);
-            say("Updated from Norman.");
+            const message = await fn(revision, job);
+            // A chat message was delivered whatever the view did meanwhile.
+            if (kind !== "ask") guard(revision);
+            say(message || "Updated from Norman.");
           } catch (e) {
-            if (e.name !== "StaleResponse" && !state.disposed)
+            if (state.disposed) return;
+            if (e.name === "StaleResponse") await superseded(job);
+            else {
               say(e.message, true);
+              if (!state.data)
+                content.innerHTML =
+                  '<div class="empty">The Inbox could not be loaded.</div>';
+            }
           } finally {
             state.busy = false;
             syncControls();
             schedulePolling(state.refreshWanted ? 0 : POLL_MS);
             updateFreshness();
+          }
+        }
+        const SENT = {
+          approve: "Approval sent",
+          dismiss: "Dismissal sent",
+          undo: "Undo sent",
+          answer: "Answer sent",
+        };
+        // The response to an action was discarded because the view changed
+        // meanwhile (hidden frame, company switch). Say what happened to it.
+        async function superseded(job) {
+          if (job.sent) return reportSent(job);
+          const companyChanged =
+            !!job.company && state.data?.companyId !== job.company;
+          if (job.kind === "approve") {
+            // Consent was given for the review this re-read was checking.
+            state.consent = "";
+            render();
+            return say(
+              companyChanged
+                ? "Nothing was approved. Company changed. Select a decision to review."
+                : "Nothing was approved. Review the current values and confirm again.",
+            );
+          }
+          if (job.kind === "answer")
+            return say(
+              companyChanged
+                ? "Your answer was not sent. Company changed."
+                : "Your answer was not sent. Check the current question and send it again.",
+            );
+          if (companyChanged)
+            return say("Company changed. Select a decision to review.");
+          if (
+            !state.visible &&
+            (job.kind === "load" || job.kind === "refresh")
+          ) {
+            // Read again as soon as the Inbox is visible.
+            state.refreshWanted = true;
+            state.resume = true;
+            return say("Paused while the Inbox is hidden.");
+          }
+          say(
+            state.data !== job.data && job.kind !== "open"
+              ? "Updated from Norman."
+              : "Interrupted. Try again.",
+          );
+        }
+        // The mutation reached Norman but its response was discarded: read
+        // the actual result instead of leaving the outcome unknown.
+        async function reportSent(job) {
+          const done = SENT[job.kind];
+          if (job.company && state.data?.companyId !== job.company)
+            return say(
+              `${done} before the company changed. Switch back to that company to see the result.`,
+            );
+          const revision = state.revision;
+          try {
+            let result;
+            if (job.sent.executionId) {
+              const fresh = await tool("get_norman_approval_data", {
+                execution_id: job.sent.executionId,
+              });
+              guard(revision);
+              if (fresh.companyId !== state.data.companyId) throw stale();
+              setDetail(fresh);
+              result = fresh.execution?.revertedAt
+                ? "Undone"
+                : human(fresh.execution?.status);
+            } else {
+              const run = await tool("get_workflow_run", {
+                run_id: job.sent.runId,
+              });
+              guard(revision);
+              setDetail(null);
+              result = human(run.blockedReason || run.state);
+            }
+            await refresh(state.data.pagination.page, revision);
+            say(result ? `${done}. Norman now reports: ${result}.` : `${done}.`);
+          } catch {
+            if (!state.disposed)
+              say(
+                `${done}, but its result could not be loaded. Refresh to check it.`,
+                true,
+              );
           }
         }
         async function refresh(
@@ -717,6 +821,12 @@
             const selected = state.detail,
               next = await tool("get_norman_inbox_data", { page });
             guard(revision);
+            // A result pushed by the host meanwhile may be newer than ours.
+            if (
+              older(next, state.data) &&
+              next.pagination?.page === state.data.pagination.page
+            )
+              return;
             let latestDetail = null,
               detailError = null;
             if (selected && next.companyId === state.data?.companyId) {
@@ -775,6 +885,8 @@
           state.refreshWanted = false;
           try {
             await refresh();
+            if (state.resume) say("Updated from Norman.");
+            state.resume = false;
           } catch (error) {
             if (error.name !== "StaleResponse" && !state.disposed)
               say(`Could not refresh: ${error.message}`, true);
@@ -907,7 +1019,7 @@
                   }
                   setDetail(detail);
                   render();
-                })),
+                }, { kind: "open" })),
           );
           content.querySelectorAll("[data-run]").forEach(
             (b) =>
@@ -920,17 +1032,21 @@
                   guard(revision);
                   setDetail({ kind: "workflow", companyId, run: r });
                   render();
-                })),
+                }, { kind: "open" })),
           );
           content
             .querySelectorAll("[data-tax]")
             .forEach(
               (b) =>
                 (b.onclick = () =>
-                  action(() =>
-                    ask(
-                      `Review my prepared tax return in Norman. Selected review: ${b.dataset.tax}. Show the preview and what needs my attention.`,
-                    ),
+                  action(
+                    async () => {
+                      await ask(
+                        `Review my prepared tax return in Norman. Selected review: ${b.dataset.tax}. Show the preview and what needs my attention.`,
+                      );
+                      return "Sent to chat.";
+                    },
+                    { kind: "ask" },
                   )),
             );
           for (const [id, page] of [
@@ -955,14 +1071,14 @@
             const b = document.getElementById(id);
             if (b)
               b.onclick = () =>
-                action(async (revision) => {
+                action(async (revision, job) => {
                   if (
                     id === "approve" &&
                     (!state.consent ||
                       state.consent !== reviewKey(state.detail) ||
                       state.reviewStale)
                   )
-                    return;
+                    return "Confirm that you reviewed every listed action first.";
                   const executionId = state.detail.execution.publicId,
                     companyId = state.data.companyId,
                     reviewed = reviewKey(state.detail);
@@ -988,9 +1104,8 @@
                   }
                   guard(revision);
                   state.consent = "";
-                  const result = await tool(name, {
-                    execution_id: executionId,
-                  });
+                  job.sent = { executionId };
+                  await tool(name, { execution_id: executionId });
                   guard(revision);
                   const fresh = await tool("get_norman_approval_data", {
                     execution_id: executionId,
@@ -1003,31 +1118,38 @@
                   }
                   setDetail(fresh);
                   await refresh(state.data.pagination.page, revision);
-                  if (result.error) throw Error(result.error);
-                });
+                }, { kind: id });
           }
           const a = document.querySelector("#approval-ask");
           if (a)
             a.onclick = () =>
-              action(() =>
-                ask(
-                  `Explain every planned action for Norman execution ${state.detail.execution.publicId}. Use the current values and flag external effects before I decide.`,
-                ),
+              action(
+                async () => {
+                  await ask(
+                    `Explain every planned action for Norman execution ${state.detail.execution.publicId}. Use the current values and flag external effects before I decide.`,
+                  );
+                  return "Sent to chat.";
+                },
+                { kind: "ask" },
               );
           const w = document.querySelector("#workflow-ask");
           if (w)
             w.onclick = () =>
-              action(() =>
-                ask(
-                  `Help me resolve Norman workflow ${state.detail.run.publicId}. Read its current blocked state first.`,
-                ),
+              action(
+                async () => {
+                  await ask(
+                    `Help me resolve Norman workflow ${state.detail.run.publicId}. Read its current blocked state first.`,
+                  );
+                  return "Sent to chat.";
+                },
+                { kind: "ask" },
               );
           const answer = document.querySelector("#answer-send");
           const input = document.querySelector("#answer");
           if (input) input.oninput = () => (state.answer = input.value);
           if (answer)
             answer.onclick = () =>
-              action(async (revision) => {
+              action(async (revision, job) => {
                 const text = state.answer.trim(),
                   run = state.detail.run;
                 if (!text) throw Error("Please enter your answer.");
@@ -1050,6 +1172,7 @@
                     "This workflow question changed. Review your answer before sending.",
                   );
                 }
+                job.sent = { runId: run.publicId };
                 await tool("answer_workflow_question", {
                   run_id: run.publicId,
                   answer: text,
@@ -1057,7 +1180,7 @@
                 guard(revision);
                 setDetail(null);
                 await refresh(state.data.pagination.page, revision);
-              });
+              }, { kind: "answer" });
           state.renderedSelection = selectionKey(state.detail);
           syncControls();
           void syncContext();
@@ -1070,24 +1193,17 @@
         function toolResult(params) {
           try {
             const d = object(params);
-            if (d.view !== "inbox") return;
-            const incomingTime = Date.parse(d.asOf),
-              currentTime = Date.parse(state.data?.asOf);
-            if (
-              Number.isFinite(incomingTime) &&
-              Number.isFinite(currentTime) &&
-              incomingTime < currentTime
-            )
-              return;
-            // Hosts may also push the result of our own read. An identical
-            // result must not invalidate that read or an approval preflight.
+            if (d.view !== "inbox" || older(d, state.data)) return;
+            // Hosts may also push the result of our own read.
             if (
               state.data &&
               stable({ ...d, asOf: null }) ===
                 stable({ ...state.data, asOf: null })
             )
               return;
-            state.revision++;
+            // Same-company data does not invalidate reads or actions in flight:
+            // refresh() drops an older read by asOf, and setInbox() invalidates
+            // everything when the company changes.
             setInbox(d);
             render();
             updateFreshness();
@@ -1223,7 +1339,7 @@
           adoptToolOutput();
           state.initialized = true;
           if (!state.data && state.visible)
-            await action((revision) => refresh(1, revision));
+            await action((revision) => refresh(1, revision), { kind: "load" });
           else void syncContext();
           // Keep an immediate re-read the initial load asked for.
           if (state.pollTimer === null)

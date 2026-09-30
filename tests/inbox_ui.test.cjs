@@ -11,7 +11,10 @@ after(async () => {
   await browser?.close();
 });
 
-async function fixture(width = 1100, { clock = false } = {}) {
+async function fixture(
+  width = 1100,
+  { clock = false, pushOnInit = false, hold = [], settle = true } = {},
+) {
   const page = await browser.newPage({ viewport: { width, height: 1000 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -22,11 +25,12 @@ async function fixture(width = 1100, { clock = false } = {}) {
   await page.setContent(
     '<iframe title="Norman Inbox" style="border:0;width:100%;height:960px"></iframe>',
   );
-  await page.evaluate(() => {
+  await page.evaluate(
+    ({ pushOnInit, hold }) => {
     window.calls = [];
     window.mode = "";
     window.hooks = {};
-    window.holdNames = [];
+    window.holdNames = hold;
     window.held = [];
     window.release = () => {
       for (const held of window.held.splice(0))
@@ -91,6 +95,32 @@ async function fixture(width = 1100, { clock = false } = {}) {
       if (e.source !== document.querySelector("iframe").contentWindow) return;
       const m = e.data;
       window.calls.push(m);
+      if (m.method === "ui/notifications/initialized" && pushOnInit) {
+        // Spec host: tool-input, then the result of the tool that opened
+        // the View, right after initialization.
+        e.source.postMessage(
+          {
+            jsonrpc: "2.0",
+            method: "ui/notifications/tool-input",
+            params: { arguments: {} },
+          },
+          "*",
+        );
+        e.source.postMessage(
+          {
+            jsonrpc: "2.0",
+            method: "ui/notifications/tool-result",
+            params: {
+              structuredContent: {
+                ...structuredClone(window.inbox),
+                asOf: "2026-09-30T09:59:59+00:00",
+              },
+              content: [{ type: "text", text: "Norman Inbox" }],
+            },
+          },
+          "*",
+        );
+      }
       // Answer requests only; the View's own replies carry no method.
       if (!m.id || !m.method) return;
       let result = {};
@@ -135,7 +165,9 @@ async function fixture(width = 1100, { clock = false } = {}) {
       }
       e.source.postMessage({ jsonrpc: "2.0", id: m.id, result }, "*");
     });
-  });
+    },
+    { pushOnInit, hold },
+  );
   const html = readFileSync(
     join(__dirname, "../norman_mcp/apps/inbox.html"),
     "utf8",
@@ -145,8 +177,36 @@ async function fixture(width = 1100, { clock = false } = {}) {
     .evaluate((frame, html) => (frame.srcdoc = html), html);
   const ui = page.frameLocator("iframe");
   await ui.getByRole("button", { name: "Review changes" }).waitFor();
-  await idle(page);
+  if (settle) await idle(page);
   return { page, ui, errors };
+}
+async function until(page, predicate, arg, what = "condition") {
+  // Node-side polling: works while the browser clock is paused.
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    await flush(page);
+    if (await page.frames()[1].evaluate(predicate, arg)) return;
+  }
+  assert.fail(`Timed out waiting for ${what}`);
+}
+async function setShown(page, shown) {
+  await page
+    .locator("iframe")
+    .evaluate((frame, shown) => (frame.style.display = shown ? "" : "none"), shown);
+  await until(
+    page,
+    (shown) => window.__inboxTestState.visible === shown,
+    shown,
+    shown ? "visible" : "hidden",
+  );
+}
+async function view(page) {
+  return page.frames()[1].evaluate(() => ({
+    status: document.querySelector("#status").textContent,
+    confirm: document.querySelector("#confirm")?.checked ?? null,
+    approve: document.querySelector("#approve")?.disabled ?? null,
+    tag: document.querySelector("aside .tag")?.textContent ?? null,
+  }));
 }
 async function idle(page) {
   // Rendering precedes context RPC completion. Observe the test-exposed state
@@ -925,6 +985,117 @@ test("model context carries the summary and the selected review in every update"
     await idle(page);
     assert.equal((await contexts()).length, sent);
     assert.equal(await ui.locator("aside h2").innerText(), "Software VAT review");
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+async function consented(page, ui) {
+  await ui.getByRole("button", { name: "Review changes" }).click();
+  await idle(page);
+  await page.clock.runFor(1);
+  await idle(page);
+  await ui.locator("#confirm").check();
+  await page.clock.runFor(1);
+  await idle(page);
+}
+const quiet = () =>
+  !window.__inboxTestState.busy && window.__inboxTestState.pending.size === 0;
+
+test("a pre-approval read discarded while hidden clears consent and approves nothing", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    await consented(page, ui);
+    await page.evaluate(
+      () => (window.holdNames = ["get_norman_approval_data"]),
+    );
+    await ui.getByRole("button", { name: "Approve execution" }).click();
+    await flush(page);
+    assert.equal(await page.evaluate(() => window.held.length), 1);
+    await setShown(page, false);
+    await page.evaluate(() => {
+      window.holdNames = [];
+      window.release();
+    });
+    await until(page, quiet, undefined, "the approval to settle");
+    assert.deepEqual(await view(page), {
+      status:
+        "Nothing was approved. Review the current values and confirm again.",
+      confirm: false,
+      approve: true,
+      tag: "Awaiting your review",
+    });
+    await setShown(page, true);
+    await page.clock.runFor(1);
+    await idle(page);
+    assert.equal((await view(page)).confirm, false);
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("an approval sent before the frame was hidden reports Norman's actual result", async () => {
+  const { page, ui, errors } = await fixture(1100, { clock: true });
+  try {
+    await consented(page, ui);
+    await page.evaluate(() => (window.holdNames = ["approve_rule_execution"]));
+    await ui.getByRole("button", { name: "Approve execution" }).click();
+    // The preflight read answers at once; wait until the approval is held.
+    for (let i = 0; i < 20; i++) {
+      if (await page.evaluate(() => window.held.length)) break;
+      await flush(page);
+    }
+    assert.equal(await page.evaluate(() => window.held.length), 1);
+    await setShown(page, false);
+    await page.evaluate(() => {
+      window.holdNames = [];
+      window.release();
+    });
+    await until(page, quiet, undefined, "the approval report");
+    assert.deepEqual(await view(page), {
+      status: "Approval sent. Norman now reports: Completed.",
+      confirm: null,
+      approve: null,
+      tag: "Completed",
+    });
+    assert.equal(
+      await page
+        .frames()[1]
+        .evaluate(() => document.querySelector("aside").innerText.includes("Actual result")),
+      true,
+    );
+    assert.deepEqual(
+      (await mutations(page)).map((call) => call.params.name),
+      ["approve_rule_execution"],
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("startup on a host that pushes the tool result ends in a normal status", async () => {
+  const { page, ui, errors } = await fixture(1100, {
+    clock: true,
+    pushOnInit: true,
+    hold: ["get_norman_inbox_data"],
+    settle: false,
+  });
+  try {
+    // The pushed result is on screen while our own first read is in flight.
+    assert.equal((await view(page)).status, "Working…");
+    await page.evaluate(() => {
+      window.holdNames = [];
+      window.release();
+    });
+    await idle(page);
+    assert.equal((await view(page)).status, "Updated from Norman.");
+    await page.clock.runFor(1);
+    await idle(page);
+    assert.equal((await view(page)).status, "Updated from Norman.");
     assert.deepEqual(errors, []);
   } finally {
     await page.close();
