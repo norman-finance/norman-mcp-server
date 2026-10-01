@@ -297,6 +297,10 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             )
             self.clients[client_id] = client
             logger.debug(f"Registered redirect_uris: {[str(u) for u in client.redirect_uris]}")
+            # Auto-registration needs no request body at all -- any unknown
+            # client_id on /authorize creates an entry -- so it is the cheaper
+            # of the two ways to grow the registry. Cap it like DCR.
+            self._prune_registered_clients()
             self._save_state()
 
         return client
@@ -330,7 +334,25 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         metadata they submit and return a conforming RFC 7591 success response.
         Redirect trust is enforced authoritatively on every /authorize request
         via validate_redirect_uri, before an authorization code can be issued.
+
+        Rejecting a disallowed redirect_uri here was tried and reverted (it
+        breaks gateways whose callback host we have not allow-listed yet), so a
+        stored URI carries no trust at all. We do log it: a registration for a
+        host that can never complete /authorize is either a client we should
+        allow-list or someone probing us, and both are worth seeing.
         """
+        disallowed = [
+            str(uri)
+            for uri in (client_info.redirect_uris or [])
+            if not is_allowed_redirect_uri(str(uri))
+        ]
+        if disallowed:
+            logger.warning(
+                "DCR for %s registered redirect_uris that /authorize will reject: %s",
+                client_info.client_id,
+                disallowed,
+            )
+
         if not client_info.scope or not any(s in client_info.scope for s in SUPPORTED_SCOPES):
             client_info = OAuthClientInformationFull(
                 client_id=client_info.client_id,
@@ -344,7 +366,40 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             )
         self.clients[client_info.client_id] = client_info
         logger.info(f"Registered client: {client_info.client_id} with scope: {client_info.scope}")
+        self._prune_registered_clients()
         self._save_state()
+
+    def _prune_registered_clients(self) -> None:
+        """Drop the oldest unused DCR clients once the registry exceeds the cap.
+
+        Registration is unauthenticated, and every registration rewrites the
+        whole state file, so an unbounded registry is both a disk-growth and a
+        save-cost problem. Eviction is oldest-first over clients nothing is
+        bound to -- a client that holds a token, a refresh token or a live
+        authorization code is in use and is never evicted, nor is the
+        pre-registered Norman client.
+        """
+        try:
+            max_clients = int(os.environ.get("NORMAN_MCP_MAX_REGISTERED_CLIENTS", "500"))
+        except ValueError:
+            max_clients = 500
+        if max_clients <= 0 or len(self.clients) <= max_clients:
+            return
+
+        in_use = {t.client_id for t in self.tokens.values()}
+        in_use |= {r.client_id for r in self.refresh_tokens.values()}
+        in_use |= {c.client_id for c in self.auth_codes.values()}
+        # Read the env directly: get_norman_oauth_client_id() raises when unset,
+        # and a missing env var must not turn pruning into a failed registration.
+        norman_client_id = os.environ.get("NORMAN_OAUTH_CLIENT_ID")
+        if norman_client_id:
+            in_use.add(norman_client_id)
+
+        # dicts keep insertion order, so this is oldest-registered first.
+        evictable = [cid for cid in self.clients if cid not in in_use]
+        for cid in evictable[: len(self.clients) - max_clients]:
+            del self.clients[cid]
+            logger.info("Evicted unused registered client %s (registry cap %d)", cid, max_clients)
 
     async def authorize(
         self, client: OAuthClientInformationFull, params: AuthorizationParams

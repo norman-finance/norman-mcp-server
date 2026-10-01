@@ -40,6 +40,7 @@ _DEFAULT_ALLOWED_HTTPS_HOSTS = {
     "claude.ai",
     "claude.com",
     "connect.smithery.ai",
+    "manufact.com",
 }
 
 # Grok's callback observed in its custom-connector OAuth flow. Match the entire
