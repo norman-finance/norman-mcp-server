@@ -342,14 +342,14 @@ def test_reminder_fee_and_explicit_empty_transaction_lines(server):
     assert api.requests[-1][2]["json_data"] == {"transaction": "txn-1", "items": []}
 
 
-def test_send_leaves_text_and_copy_to_the_company_settings(server: FastMCP) -> None:
+def test_send_leaves_text_and_copy_to_the_company_settings(server: MCPServer) -> None:
     api = Api()
     call(server, api, "send_invoice", invoice_id="invoice-1", additional_emails=["cc@example.com"])
     assert api.requests[-1][1].endswith("/companies/company-1/invoices/invoice-1/send/")
     assert api.requests[-1][2]["json_data"] == {"additionalEmails": ["cc@example.com"]}
 
 
-def test_email_rule_and_templates_use_the_company_endpoints(server: FastMCP) -> None:
+def test_email_rule_and_templates_use_the_company_endpoints(server: MCPServer) -> None:
     api = Api()
     base = "https://api.norman.finance/api/v1/companies/company-1/invoices/"
     steps = [
