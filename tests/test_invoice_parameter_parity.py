@@ -337,9 +337,46 @@ def test_new_tools_require_an_active_company(server):
 def test_reminder_fee_and_explicit_empty_transaction_lines(server):
     api = Api()
     call(server, api, "send_invoice_overdue_reminder", invoice_id="invoice-1", fee=2.5)
-    assert api.requests[-1][2]["json_data"] == {"isSendToCompany": False, "fee": 2.5}
+    assert api.requests[-1][2]["json_data"] == {"fee": 2.5}
     call(server, api, "link_transaction", invoice_id="invoice-1", transaction_id="txn-1", items=[])
     assert api.requests[-1][2]["json_data"] == {"transaction": "txn-1", "items": []}
+
+
+def test_send_leaves_text_and_copy_to_the_company_settings(server: MCPServer) -> None:
+    api = Api()
+    call(server, api, "send_invoice", invoice_id="invoice-1", additional_emails=["cc@example.com"])
+    assert api.requests[-1][1].endswith("/companies/company-1/invoices/invoice-1/send/")
+    assert api.requests[-1][2]["json_data"] == {"additionalEmails": ["cc@example.com"]}
+
+
+def test_email_rule_and_templates_use_the_company_endpoints(server: MCPServer) -> None:
+    api = Api()
+    base = "https://api.norman.finance/api/v1/companies/company-1/invoices/"
+    steps = [
+        {"level": level, "days": days, "fee": fee, "enabled": level > 0}
+        for level, days, fee in ((0, -3, 0), (1, 3, 0), (2, 14, 5), (3, 28, 10))
+    ]
+    changes = {"remindersEnabled": True, "reminderSteps": steps}
+    call(server, api, "update_invoice_email_settings", changes=changes)
+    assert api.requests[-1] == ("PATCH", base + "email-settings/", {"json_data": changes})
+    with pytest.raises(Exception, match="validation"):
+        call(server, api, "update_invoice_email_settings", changes={"reminderSteps": steps[:2]})
+
+    template = {"key": "reminder_1", "language": "de", "subject": "Offen: {invoice_number}", "body": "Guten Tag"}
+    call(server, api, "save_invoice_email_template", template=template)
+    assert api.requests[-1] == ("PUT", base + "email-templates/", {"json_data": template})
+    call(server, api, "reset_invoice_email_template", key="reminder_1", language="de")
+    assert api.requests[-1] == (
+        "DELETE",
+        base + "email-templates/",
+        {"params": {"key": "reminder_1", "language": "de"}},
+    )
+
+    call(server, api, "skip_invoice_reminder", invoice_id="invoice-1", email_id="email-1")
+    assert api.requests[-1][:2] == ("POST", base + "invoice-1/emails/email-1/skip/")
+    assert call(server, Api([{"key": "invoice"}]), "list_invoice_email_templates") == {
+        "templates": [{"key": "invoice"}],
+    }
 
 
 def test_discovery_schema_advertises_controls_and_edit_fields(server):

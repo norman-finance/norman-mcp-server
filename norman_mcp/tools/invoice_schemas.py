@@ -37,7 +37,7 @@ class InvoiceItem(ApiInput):
     name: str = Field(max_length=255)
     quantity: float
     rate: int = Field(
-        description="Unit price in minor currency units (cents for EUR); gross when is_vat_included is true."
+        description="Unit price in minor currency units (cents for EUR); gross when is_vat_included is true.",
     )
     vat_rate: int = Field(description="VAT percentage, e.g. 19. The API validates the applicable rate.")
     id: str | None = Field(default=None, description="Preserve an existing line UUID on edit; omit for a new line.")
@@ -72,7 +72,7 @@ class InvoiceItem(ApiInput):
     is_split_payment: bool | None = None
     discount_note: str | None = Field(default=None, max_length=500, description="Deprecated alias; use description.")
     total: float | None = Field(
-        default=None, exclude=True, description="Legacy input, ignored. The API calculates totals."
+        default=None, exclude=True, description="Legacy input, ignored. The API calculates totals.",
     )
 
 
@@ -80,11 +80,15 @@ class MailingData(ApiInput):
     email_subject: str | None = None
     email_body: str | None = None
     custom_client_email: str | None = None
-    additional_emails: list[str] | None = None
-    is_send_to_company: bool | None = None
+    additional_emails: list[str] | None = Field(default=None, description="Further addresses, sent as CC.")
+    is_send_to_company: bool | None = Field(
+        default=None, description="Send the company its own copy; omit to follow the company's setting.",
+    )
 
 
 class OverdueSettings(ApiInput):
+    """Older reminder schedule, kept for existing integrations. It sends nothing; use autoReminders."""
+
     is_to_autosend_notification: bool | None = None
     notify_after_days: list[int] | None = None
     notify_in_particular_days: list[str] | None = None
@@ -120,7 +124,7 @@ class CompanyData(ApiInput):
 
 class DocumentFields(ApiInput):
     client: str | None = Field(
-        default=None, description="Client public ID. Explicit null removes the recipient where allowed."
+        default=None, description="Client public ID. Explicit null removes the recipient where allowed.",
     )
     client_data: ClientData | None = None
     company_data: CompanyData | None = None
@@ -145,15 +149,18 @@ class DocumentFields(ApiInput):
     skip_bank_details: bool | None = None
     save_client_details: bool | None = None
     settings_on_overdue: OverdueSettings | None = None
+    auto_reminders: bool | None = Field(
+        default=None, description="Automatic payment reminders by the company's rule; off unless true, paid plans.",
+    )
     color_schema: str | None = Field(default=None, description="Hex colour; omission preserves company/saved branding.")
     font: str | None = Field(default=None, description="Omission preserves company/saved font.")
     document_design: DocumentDesign | None = None
     mailing_data: MailingData | None = None
     tax_exempt_reason: str | None = Field(
-        default=None, max_length=500, description="Omit to derive the VAT note; an empty string prints no note."
+        default=None, max_length=500, description="Omit to derive the VAT note; an empty string prints no note.",
     )
     online_payment_enabled: bool | None = Field(
-        default=None, description="Stripe/PayPal payment link; false explicitly disables it."
+        default=None, description="Stripe/PayPal payment link; false explicitly disables it.",
     )
     source_contract: str | None = None
 
@@ -176,6 +183,9 @@ class InvoiceChanges(DocumentFields):
     payment_date: str | None = None
     bank_account_pk: str | None = None
     type: Literal["invoice", "quote", "delivery_note", "cancel", "credit_note"] | None = None
+    reminders_paused: bool | None = Field(
+        default=None, description="Pause the automatic payment reminders of this invoice; false resumes them.",
+    )
 
 
 class RecurringChanges(ApiInput):
@@ -201,6 +211,9 @@ class RecurringChanges(ApiInput):
     settings_on_overdue: OverdueSettings | None = None
     mailing_data: MailingData | None = None
     online_payment_enabled: bool | None = None
+    auto_reminders: bool | None = Field(
+        default=None, description="Send automatic payment reminders for each invoice of the series; paid plans.",
+    )
     document_design: DocumentDesign | None = None
     color_schema: str | None = None
     font: str | None = None
@@ -250,6 +263,56 @@ class InvoiceSettings(ApiInput):
     online_payments_default: bool | None = None
     tax_office_name: str | None = None
     tax_office_city: str | None = None
+
+
+class ReminderStep(ApiInput):
+    level: Literal[0, 1, 2, 3] = Field(
+        description="0 note before the due date, 1 payment reminder, 2 first dunning notice, 3 final notice.",
+    )
+    days: int = Field(description="Days after the due date; negative for level 0.")
+    fee: float = Field(default=0, ge=0, description="Dunning fee in major currency units, e.g. 5.00.")
+    enabled: bool = True
+
+
+class EmailSettings(ApiInput):
+    """How the company emails its clients. Only supplied fields change."""
+
+    copy_to_self: bool | None = Field(
+        default=None, description="Send the company its own copy of every client email.",
+    )
+    reminders_enabled: bool | None = Field(
+        default=None,
+        description="The reminder rule as a whole. An invoice gets reminders only when its autoReminders is true.",
+    )
+    reminder_steps: list[ReminderStep] | None = Field(
+        default=None,
+        min_length=4,
+        max_length=4,
+        description="All four levels at once. Levels 1 to 3 each come later than the one before.",
+    )
+
+
+class EmailTemplate(ApiInput):
+    """The company's wording for one kind of client email in one language."""
+
+    key: Literal[
+        "invoice",
+        "quote",
+        "cancel",
+        "credit_note",
+        "delivery_note",
+        "reminder_0",
+        "reminder_1",
+        "reminder_2",
+        "reminder_3",
+    ] = Field(description="The document type, or reminder_<level> for a reminder step.")
+    language: Literal["de", "en", "pl", "it", "es"] = Field(description="The document's language, not the user's.")
+    subject: str = Field(max_length=400)
+    body: str = Field(
+        max_length=10000,
+        description="Plain text. The API fills {client_name}, {invoice_number}, {invoice_amount}, {open_amount}, "
+        "{invoice_issued_date}, {invoice_due_date}, {company_name} and {full_name}.",
+    )
 
 
 def input_payload(value: ApiInput | dict, model: type[ApiInput]) -> dict:

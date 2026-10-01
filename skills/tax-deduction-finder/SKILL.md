@@ -1,7 +1,7 @@
 ---
 name: tax-deduction-finder
 description: Scan transactions for potentially missed tax deductions and suggest proper categorization. Use when the user asks about saving taxes, Steueroptimierung, deductible expenses, Betriebsausgaben, or wants to check if they are missing any write-offs.
-version: 1.0.0
+version: 1.0.1
 argument-hint: "[period, e.g. 2025 or Q4 2025]"
 metadata:
   openclaw:
@@ -34,7 +34,12 @@ Review each transaction and flag potential deductions that may be miscategorized
 **Travel & transportation (Reisekosten):**
 - Public transport, fuel, car maintenance
 - Hotels for business trips
-- Meals during business travel (Verpflegungspauschale: 14 EUR/28 EUR per day)
+- Meals during business travel (Verpflegungspauschale, see flat rates below)
+
+**Flat rates without receipts (DE sole proprietors):**
+- Home office flat rate: 6 EUR per day worked mainly from home, at most 1,260 EUR a year; not on top of Arbeitszimmer room costs
+- Travel meal allowance: 14 EUR per arrival, departure or over-8-hour day and 28 EUR per full day in Germany; country and city rates abroad (`get_flat_rates`)
+- If the year has no "Home office flat rate" or "Travel meal allowance" entries, ask the user for the days; never guess them. With the user's go, add one entry per period (one per country for trips) with `create_transaction`, that category and the days in `category_metadata`. Norman calculates the amount.
 
 **Professional development:**
 - Courses, certifications, books, conferences
