@@ -194,7 +194,9 @@ def register_invoice_management_tools(mcp, enrich=None):
         Keep existing line IDs when editing lines. Setting isToSend can send email,
         but a draft is never emailed. Status "saved" issues a draft; it takes the next
         free number if its own is taken. An issued document never returns to draft or
-        changes type. A draft cannot be marked paid. A cancelled invoice cannot change.
+        changes type. A draft cannot be marked paid. An issued, sent or overdue invoice
+        can be edited; a paid or cancelled invoice and an issued correction cannot, so
+        correct a paid invoice with cancel_invoice or create_credit_note.
         A partial documentDesign keeps the document's saved controls; changing its
         template starts from that template's defaults.
         Changing document content can regenerate its PDF. API plan and status rules apply.
