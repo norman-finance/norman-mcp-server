@@ -414,9 +414,9 @@ def register_rule_tools(mcp):
         title="Toggle Agent",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=True,
-            openWorldHint=False,
+            openWorldHint=True,
         ),
     )
     async def toggle_agent(
@@ -473,7 +473,7 @@ def register_rule_tools(mcp):
         title="Dismiss Rule Execution",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=True,
             openWorldHint=False,
         ),

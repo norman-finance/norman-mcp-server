@@ -149,7 +149,7 @@ def register_workflow_tools(mcp):
         title="Start Workflow",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=True,
             openWorldHint=True,
         ),
@@ -193,7 +193,7 @@ def register_workflow_tools(mcp):
         title="Answer Workflow Question",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=False,
             openWorldHint=True,
         ),
@@ -229,7 +229,7 @@ def register_workflow_tools(mcp):
         title="Complete Workflow Step",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=True,
             openWorldHint=True,
         ),
@@ -268,7 +268,7 @@ def register_workflow_tools(mcp):
         title="Continue Workflow",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=True,
             openWorldHint=True,
         ),
@@ -296,7 +296,7 @@ def register_workflow_tools(mcp):
         title="Stop Workflow",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=True,
             openWorldHint=False,
         ),
@@ -323,9 +323,9 @@ def register_workflow_tools(mcp):
         title="Schedule Workflow",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=True,
-            openWorldHint=False,
+            openWorldHint=True,
         ),
     )
     async def schedule_workflow(
@@ -376,7 +376,7 @@ def register_workflow_tools(mcp):
         title="Unschedule Workflow",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=True,
             openWorldHint=False,
         ),

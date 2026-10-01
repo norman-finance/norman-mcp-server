@@ -30,7 +30,7 @@ DESTRUCTIVE_WRITE = ToolAnnotations(readOnlyHint=False, openWorldHint=False, des
 
 PERSON_SHAPE = (
     "Person dict keys (camelCase): salutation ('1' Herr / '2' Frau), firstName, lastName, "
-    "dob (YYYY-MM-DD, adults only), taxId (11-digit steuerliche IdNr, optional), street, "
+    "dob (YYYY-MM-DD, adults only), street, "
     "houseNumber, additional, postalCode, city, country (ISO2, default DE)"
 )
 
@@ -50,6 +50,51 @@ def _app_url(path: str = "") -> str:
 
 def _clean(payload: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in payload.items() if value is not None}
+
+
+# Personal government identifiers belong in Norman's authenticated form, not chat.
+_PERSONAL_IDENTIFIER_KEYS = frozenset({
+    "taxid", "taxidentificationnumber", "steuerid", "steueridentifikationsnummer",
+    "ssn", "socialsecuritynumber", "passportnumber", "passport",
+    "nationalid", "nationalidentificationnumber", "identitynumber",
+    "driverslicensenumber", "driverlicensenumber",
+})
+
+
+def _identifier_key(key: str) -> bool:
+    return "".join(c for c in key.casefold() if c.isalnum()) in _PERSONAL_IDENTIFIER_KEYS
+
+
+def _contains_personal_identifiers(value: Any) -> bool:
+    if isinstance(value, dict):
+        return any(_identifier_key(str(k)) or _contains_personal_identifiers(v) for k, v in value.items())
+    if isinstance(value, list):
+        return any(_contains_personal_identifiers(v) for v in value)
+    return False
+
+
+def _without_personal_identifiers(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _without_personal_identifiers(v) for k, v in value.items() if not _identifier_key(str(k))}
+    if isinstance(value, list):
+        return [_without_personal_identifiers(v) for v in value]
+    return value
+
+
+def _has_stored_identifiers(value: Any) -> bool:
+    if isinstance(value, dict):
+        return any(
+            (_identifier_key(str(k)) and bool(v)) or _has_stored_identifiers(v)
+            for k, v in value.items()
+        )
+    if isinstance(value, list):
+        return any(_has_stored_identifiers(v) for v in value)
+    return False
+
+
+def _request(api: Any, *args: Any, **kwargs: Any) -> Any:
+    # Make a new projection; leave the stored API record and its IDs untouched.
+    return _without_personal_identifiers(api._make_request(*args, **kwargs))
 
 
 def register_corporate_tax_registration_tools(mcp):
@@ -83,7 +128,7 @@ def register_corporate_tax_registration_tools(mcp):
         transmission protocol PDF.
         """
         api = ctx.request_context.lifespan_context.get("api")
-        return api._make_request("GET", _corporate_url("my/"))
+        return _request(api, "GET", _corporate_url("my/"))
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_corporate_tax_registration_choices(ctx: Context) -> dict[str, Any]:
@@ -110,7 +155,7 @@ def register_corporate_tax_registration_tools(mcp):
         """
         api = ctx.request_context.lifespan_context.get("api")
         payload = _clean({"source": NORMAN_AGENT_SOURCE, "incorporation": incorporation_public_id})
-        return api._make_request("POST", _corporate_url(), json_data=payload)
+        return _request(api, "POST", _corporate_url(), json_data=payload)
 
     @mcp.tool(annotations=WRITE)
     async def update_corporate_company(  # noqa: PLR0913
@@ -164,7 +209,7 @@ def register_corporate_tax_registration_tools(mcp):
                 "taxOffice": tax_office,
             },
         )
-        return api._make_request("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
+        return _request(api, "PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
 
     @mcp.tool(annotations=WRITE)
     async def update_corporate_registration_details(  # noqa: PLR0913
@@ -196,7 +241,7 @@ def register_corporate_tax_registration_tools(mcp):
                 "registerNumber": register_number,
             },
         )
-        return api._make_request("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
+        return _request(api, "PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
 
     @mcp.tool(annotations=DESTRUCTIVE_WRITE)
     async def set_corporate_people(
@@ -220,10 +265,37 @@ def register_corporate_tax_registration_tools(mcp):
             ),
         ),
     ) -> dict[str, Any]:
-        """Sections 3+4 (people): managing directors and shareholders, replace-all semantics."""
+        """Replace managing directors and shareholders with the complete supplied lists.
+
+        Use only the legal identity, address and ownership details required for
+        sections 3 and 4 of the corporate tax-registration form, not profile data.
+        Personal tax IDs, passport numbers and other personal government identifiers
+        must be entered in the authenticated Norman app, never supplied here.
+        Stored personal government identifiers are withheld from tool responses.
+        If a replaced list already contains identifiers, edit it in the app so
+        the replace-all API cannot discard hidden values.
+        """
+        if _contains_personal_identifiers(representatives) or _contains_personal_identifiers(shareholder_entries):
+            return {
+                "error": "Enter personal government identifiers in the authenticated Norman app; do not send them in chat.",
+                "url": _app_url("corporate-tax-registration"),
+            }
         api = ctx.request_context.lifespan_context.get("api")
+        if representatives is not None or shareholder_entries is not None:
+            stored = api._make_request("GET", _corporate_url(f"{public_id}/"))
+            if not isinstance(stored, dict) or "error" in stored:
+                return {"error": "Could not check the existing people; no changes were made."}
+            groups = (
+                (representatives, stored.get("representatives")),
+                (shareholder_entries, stored.get("shareholderEntries", stored.get("shareholder_entries"))),
+            )
+            if any(supplied is not None and _has_stored_identifiers(existing) for supplied, existing in groups):
+                return {
+                    "error": "Edit these people in the authenticated Norman app to preserve stored personal identifiers.",
+                    "url": _app_url("corporate-tax-registration"),
+                }
         payload = _clean({"representatives": representatives, "shareholderEntries": shareholder_entries})
-        return api._make_request("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
+        return _request(api, "PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
 
     @mcp.tool(annotations=WRITE)
     async def update_corporate_financials(  # noqa: PLR0913
@@ -251,7 +323,7 @@ def register_corporate_tax_registration_tools(mcp):
                 "expectedProfitFollowingYear": expected_profit_following_year,
             },
         )
-        return api._make_request("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
+        return _request(api, "PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
 
     @mcp.tool(annotations=WRITE)
     async def update_corporate_vat_and_bank(  # noqa: PLR0913
@@ -297,7 +369,7 @@ def register_corporate_tax_registration_tools(mcp):
                 "bankAccountHolderName": bank_account_holder_name,
             },
         )
-        return api._make_request("PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
+        return _request(api, "PATCH", _corporate_url(f"{public_id}/"), json_data=payload)
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_corporate_submission_link(ctx: Context) -> dict[str, Any]:
@@ -309,7 +381,7 @@ def register_corporate_tax_registration_tools(mcp):
         `readyToSubmit` is false, finish the `missing` fields first.
         """
         api = ctx.request_context.lifespan_context.get("api")
-        record = api._make_request("GET", _corporate_url("my/"))
+        record = _request(api, "GET", _corporate_url("my/"))
         sections = record.get("sections", {}) if isinstance(record, dict) else {}
         missing = [name for section in sections.values() for name in section.get("missing", [])]
         return {
