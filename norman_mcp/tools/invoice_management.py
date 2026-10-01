@@ -22,7 +22,8 @@ from norman_mcp.tools.invoice_schemas import (
 
 READ = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
 EDIT = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=True)
-SETTINGS = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False)
+SETTINGS = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False)
+EMAIL_SETTINGS = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=True)
 REPLACE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False)
 EMAIL_LANGUAGE = Literal["de", "en", "pl", "it", "es"]
 
@@ -95,7 +96,7 @@ def _register_email_tools(mcp):  # noqa: ANN001, ANN202
         api, company_url = _company_api(ctx)
         return await api.arequest("GET", company_url + "invoices/email-settings/")
 
-    @mcp.tool(title="Update Invoice Email Settings", annotations=SETTINGS)
+    @mcp.tool(title="Update Invoice Email Settings", annotations=EMAIL_SETTINGS)
     async def update_invoice_email_settings(ctx: Context, changes: EmailSettings) -> dict:
         """Change the company's reminder rule or its own copy of client emails.
 

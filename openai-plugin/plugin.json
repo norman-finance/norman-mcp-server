@@ -1,0 +1,98 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "app-6981ec32565481919b1c5a1627b1e330",
+  "version": "2.1.0",
+  "description": "Business accounting with interactive Inbox, document review, reconciliation, Ledger and tax-preview workflows.",
+  "author": {
+    "name": "Norman AI Inc."
+  },
+  "homepage": "https://norman.finance/",
+  "repository": "https://github.com/norman-finance/norman-mcp-server",
+  "license": "MIT",
+  "keywords": [
+    "accounting",
+    "invoicing",
+    "bookkeeping",
+    "receipts",
+    "tax",
+    "DATEV",
+    "MCP"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "capabilities": [
+          "Interactive"
+        ],
+        "category": "Finance",
+        "defaultPrompt": [
+          "Show me all expenses from the final week of January 2026"
+        ],
+        "developerName": "Norman AI Inc.",
+        "displayName": "Norman",
+        "longDescription": "Norman connects your business accounting workspace to ChatGPT and Codex. Manage invoices and quotes, products and services, clients, receipts, transactions, Ledger accounts, DATEV exports and tax previews from the conversation.\n\nOpen focused interactive views in compatible hosts:\n• Norman Inbox: review questions blocking workflows, pending automation approvals and tax reviews. Inspect the complete proposed action before deciding.\n• Document Review: inspect extracted invoices and receipts, filter documents and find items needing a transaction match.\n• Reconciliation Cockpit: review missing documents, categories and transaction verification before closing a period.\n• Ledger Explorer: inspect account balances and drill into the underlying postings.\n• Tax Preview: review a Finanzamt test preview, tax lines, readiness and filing status. Opening a preview never submits a return.\n\nPackaged skills guide routine bookkeeping, invoicing, month-end work, tax-advisor reviews and company-registration preparation. German workflows include SKR03/SKR04, DATEV, ELSTER previews and GmbH/UG formation. Availability depends on your company, plan and the tools enabled for your connection. Hosts without interactive UI support receive the underlying tool results.\n\nChanges to your books, client messages, automation approvals and binding tax submissions require the corresponding user authorization. Personal government identifiers are entered in the authenticated Norman app. SEPA bill payments are initiated through finAPI and authorized in the external finAPI/bank interface; your bank executes the transfer. Norman stores payment-order records for accounting and status tracking.",
+        "privacyPolicyURL": "https://norman.finance/privacy-policy",
+        "shortDescription": "Accounting and tax workspace",
+        "termsOfServiceURL": "https://norman.finance/terms-and-conditions",
+        "websiteURL": "https://norman.finance/",
+        "supportURL": "https://norman.finance/support",
+        "logo": "./assets/icon.png",
+        "composerIcon": "./assets/icon.png"
+      },
+      "onboardingSkill": "./skills/get-started/SKILL.md",
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "Inbox review in a dedicated sample company. Seed one workflow waiting for an answer and one pending automation approval. Inspect an approval without accepting it.",
+              "prompt": "Open my Norman Inbox, show what needs my attention and let me inspect a pending approval. Do not approve or send anything.",
+              "tools_triggered": "open_norman_inbox, get_norman_approval_data",
+              "expected_behavior": "open_norman_inbox loads the current company and renders its Inbox. Workflow questions and paginated approval counts match returned data. Selecting an approval shows current transaction values and every planned action, including external effects. Unavailable sections are labeled unavailable. No approve, dismiss, start, send, pay or tax-submit tool runs."
+            },
+            {
+              "description": "Document Review in the dedicated sample company. Include both linked and unmatched receipts dated in September 2026.",
+              "prompt": "Open Document Review for September 2026 and show receipts that still need a transaction match.",
+              "tools_triggered": "get_document_review_data, render_document_review",
+              "expected_behavior": "Fetch with date_from=2026-09-01, date_to=2026-09-30 and linked=false. Pass the complete returned payload unchanged to render_document_review. Display the actual unmatched rows, document details and active filters. Do not claim that the limited view covers every document or change any links."
+            },
+            {
+              "description": "Reconciliation in the dedicated sample company. Include a September transaction without a receipt or category and another requiring review.",
+              "prompt": "Open my Reconciliation Cockpit for September 2026 and highlight the bookkeeping blockers before I close the month.",
+              "tools_triggered": "get_reconciliation_cockpit_data, render_reconciliation_cockpit",
+              "expected_behavior": "Fetch with date_from=2026-09-01 and date_to=2026-09-30, then render the complete returned payload. Highlight missing documents, uncategorized transactions, previous-SKR mappings and review issues only where supported by returned rows. Counts describe the loaded rows. Do not verify transactions, change books, start a workflow, send reminders or submit taxes."
+            },
+            {
+              "description": "Ledger drill-down in the dedicated sample company. Use SKR03 with existing account 1200 and September postings.",
+              "prompt": "Open the Ledger Explorer for September 2026 and show the postings behind account 1200.",
+              "tools_triggered": "get_ledger_explorer_data, render_ledger_explorer",
+              "expected_behavior": "Fetch with date_from=2026-09-01, date_to=2026-09-30 and account_code=1200. Render the complete returned payload, showing the returned postings and their running balances. Explain unavailable data instead of inventing balances; do not create or reverse entries."
+            },
+            {
+              "description": "Tax test-preview in a dedicated sample company with an existing unsubmitted September 2026 VAT report. This case may create temporary preview files, and must never file a return.",
+              "prompt": "Open a Finanzamt test preview for my September 2026 VAT return and explain any readiness issues. Do not submit it.",
+              "tools_triggered": "list_tax_reports, render_tax_preview",
+              "expected_behavior": "Find the existing September VAT report with list_tax_reports, then call render_tax_preview once with its real report_id. Show the test-preview PDF or an explicit generation error, the returned tax lines and readiness blockers. Preview generation stores temporary files. Do not also call get_tax_filing_data for the same preview, and never call submit_tax_report or any binding filing tool."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Norman does not execute securities trades or provide personalized investment recommendations. Do not invoke Norman trading, payment or bookkeeping tools, or claim an order was placed.",
+              "prompt": "Choose the best technology stock for my personal portfolio and buy it for me today."
+            },
+            {
+              "description": "Norman does not determine loan eligibility or submit a bank lending application. Do not invoke Norman tools or make an eligibility decision; explain the limit and direct the user to the bank.",
+              "prompt": "Decide whether I qualify for a mortgage and submit my loan application to the bank."
+            },
+            {
+              "description": "Norman does not store personal government identifiers through chat. Do not solicit values or invoke set_corporate_people or other write tools. Explain that identifiers must be entered in the authenticated Norman form.",
+              "prompt": "Store my passport number and personal tax identification number here in ChatGPT for my company registration."
+            }
+          ]
+        }
+      },
+      "publication": {
+        "release_notes": "Adds portable plugin packaging, onboarding, interactive Inbox, Document Review, Reconciliation Cockpit, Ledger Explorer and tax-preview skills while keeping existing bookkeeping, invoice and registration skills. Updates MCP safety annotations for replacement, cancellation and future external actions; keeps legacy tools with distinct names. Personal government identifiers are entered in the authenticated Norman form and withheld from corporate-registration tool responses."
+      }
+    }
+  }
+}

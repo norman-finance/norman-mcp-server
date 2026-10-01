@@ -275,7 +275,7 @@ def register_company_tools(mcp):
         return await api.arequest("GET", categories_url, params=params)
 
     @mcp.tool(
-        title="List Chart of Accounts Templates",
+        title="List Company Category Templates",
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
