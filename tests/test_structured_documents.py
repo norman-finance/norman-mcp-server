@@ -1,7 +1,7 @@
 import asyncio
 import base64
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from norman_mcp.tools.documents import register_document_tools
 
@@ -37,7 +37,7 @@ class _Ctx:
 
 
 def _tool():
-    server = FastMCP()
+    server = MCPServer()
     register_document_tools(server)
     return server._tool_manager._tools["upload_structured_attachments"].fn  # noqa: SLF001
 

@@ -5,10 +5,11 @@ import json
 from types import SimpleNamespace
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from mcp.types import ImageContent, TextContent
 
 from norman_mcp.tools.taxes import register_tax_tools
+from tests.mcp_harness import FakeApi, call_tool
 
 
 @pytest.mark.parametrize(
@@ -30,14 +31,14 @@ def test_tax_preview_preserves_api_image_format(mime_type, expected):
 
     api = SimpleNamespace(_make_request=request, company_id="company-1")
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context={"api": api}))
-    server = FastMCP()
+    server = MCPServer()
     register_tax_tools(server)
     tool = server._tool_manager._tools["generate_finanzamt_preview"]
 
     result = asyncio.run(tool.fn(context, "report-1"))
 
     assert isinstance(result.content[0], ImageContent)
-    assert result.content[0].mimeType == expected
+    assert result.content[0].mime_type == expected
     assert result.content[0].data == payload["previewImage"]
     assert isinstance(result.content[1], TextContent)
     metadata = json.loads(result.content[1].text)
@@ -54,7 +55,7 @@ def test_tax_preview_without_thumbnail_still_returns_pdf_link():
         company_id="company-1",
     )
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context={"api": api}))
-    server = FastMCP()
+    server = MCPServer()
     register_tax_tools(server)
 
     result = asyncio.run(
@@ -64,3 +65,19 @@ def test_tax_preview_without_thumbnail_still_returns_pdf_link():
     assert len(result.content) == 1
     assert isinstance(result.content[0], TextContent)
     assert json.loads(result.content[0].text)["downloadUrl"] == "https://example.test/preview.pdf"
+
+
+@pytest.mark.parametrize(
+    ("report_id", "company_id", "message"),
+    [
+        ("   ", "company-1", "Invalid report ID"),
+        ("report-1", None, "No company available. Please authenticate first."),
+    ],
+)
+def test_tax_preview_validation_messages_survive_mcp_call(report_id, company_id, message):
+    api = FakeApi(company_id=company_id)
+    result = call_tool("generate_finanzamt_preview", {"report_id": report_id}, api)
+
+    assert result.is_error
+    assert message in result.content[0].text
+    assert api.requests == []

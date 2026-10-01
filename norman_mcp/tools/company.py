@@ -11,6 +11,26 @@ from norman_mcp.tools.results import as_object
 
 logger = logging.getLogger(__name__)
 
+# A tax advisor sees every client here too; stop after a few hundred entries.
+COMPANIES_PAGE_SIZE = 100
+COMPANIES_MAX_PAGES = 5
+
+
+def _company_summary(company: Dict[str, Any], active_id: Optional[str]) -> Dict[str, Any]:
+    """What tells the companies apart. The list endpoint returns full records
+    (IBAN, tax numbers, members); none of that is needed to pick one."""
+    company_id = company.get("publicId")
+    return {
+        "id": company_id,
+        "name": company.get("name"),
+        "legalForm": company.get("accountType"),
+        "country": company.get("country"),
+        "isSme": company.get("isSme"),
+        "isArchived": company.get("isArchived"),
+        "active": bool(company_id) and company_id == active_id,
+    }
+
+
 def register_company_tools(mcp):
     """Register all company-related tools with the MCP server."""
     from norman_mcp.tools.financial_overview import register_financial_overview_tools
@@ -36,6 +56,65 @@ def register_company_tools(mcp):
         
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
         return await api.arequest("GET", company_url)
+
+    @mcp.tool(
+        title="List My Companies",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def list_companies(
+        ctx: Context,
+        include_archived: bool = Field(
+            default=False,
+            description="Also list archived (wound-down) companies. They stay readable but cannot be made active.",
+        ),
+    ) -> Dict[str, Any]:
+        """
+        List every company the user can work in: the ones they own or are a member of,
+        and the ones they advise as a tax advisor. The most recently used company comes
+        first; `active` marks the one the other tools currently work on.
+
+        Pass a returned id to switch_company to work in another company.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        companies_url = urljoin(config.api_base_url, "api/v1/companies/")
+        params: Dict[str, Any] = {"pageSize": COMPANIES_PAGE_SIZE}
+        if include_archived:
+            params["includeArchived"] = "true"
+
+        companies = []
+        total = 0
+        for page in range(1, COMPANIES_MAX_PAGES + 1):
+            response = await api.arequest("GET", companies_url, params={**params, "page": page})
+            if isinstance(response, dict) and response.get("error"):
+                if not companies:
+                    return response
+                break
+            if isinstance(response, list):
+                companies.extend(response)
+                total = len(companies)
+                break
+            companies.extend(response.get("results") or [])
+            total = response.get("count") or len(companies)
+            if not response.get("next"):
+                break
+
+        active_id = api.company_id
+        result: Dict[str, Any] = {
+            "count": total,
+            "activeCompanyId": active_id,
+            "companies": [_company_summary(company, active_id) for company in companies],
+        }
+        if total > len(companies):
+            result["note"] = (
+                f"Showing the {len(companies)} most recently used of {total} companies. "
+                "Tax advisors get every client from list_tax_advisor_clients."
+            )
+        return result
 
     @mcp.tool(
         title="Get Company Balance",

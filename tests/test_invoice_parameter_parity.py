@@ -5,7 +5,7 @@ import re
 from types import SimpleNamespace
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from norman_mcp.tools.invoices import register_invoice_tools
 
@@ -172,7 +172,7 @@ class Api:
 
 @pytest.fixture
 def server():
-    mcp = FastMCP()
+    mcp = MCPServer()
     register_invoice_tools(mcp)
     return mcp
 
@@ -380,7 +380,7 @@ def test_email_rule_and_templates_use_the_company_endpoints(server: FastMCP) -> 
 
 
 def test_discovery_schema_advertises_controls_and_edit_fields(server):
-    schemas = {tool.name: tool.inputSchema for tool in asyncio.run(server.list_tools())}
+    schemas = {tool.name: tool.input_schema for tool in asyncio.run(server.list_tools())}
     schema = schemas["create_invoice"]
     design = schema["$defs"]["DocumentDesign"]["properties"]
     assert len(design["template"]["enum"]) == 7

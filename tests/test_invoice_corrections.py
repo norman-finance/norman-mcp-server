@@ -4,7 +4,7 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from norman_mcp.tools.invoice_management import register_invoice_management_tools
 from norman_mcp.tools.invoices import register_invoice_tools
@@ -30,7 +30,7 @@ class Api:
 
 @pytest.fixture
 def server():
-    mcp = FastMCP()
+    mcp = MCPServer()
     register_invoice_management_tools(mcp)
     return mcp
 
@@ -126,7 +126,7 @@ def test_correction_tools_require_an_active_company(server, tool):
 
 
 def test_list_invoices_filters_by_document_type():
-    mcp = FastMCP()
+    mcp = MCPServer()
     register_invoice_tools(mcp)
     api = Api({"results": []})
     call(mcp, api, "list_invoices", document_type="credit_note")
@@ -137,7 +137,7 @@ def test_list_invoices_filters_by_document_type():
 
 
 def test_create_invoice_leaves_the_currency_to_the_company_unless_told() -> None:
-    mcp = FastMCP()
+    mcp = MCPServer()
     register_invoice_tools(mcp)
     api = Api()
     call(mcp, api, "create_invoice", client_id="client-1", items=[LINE], invoice_number="RE-1")

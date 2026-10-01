@@ -10,6 +10,8 @@ This server uses Norman's OAuth for authentication:
 
 import os
 import logging
+import asyncio
+from contextvars import Context as TaskContext
 from contextlib import asynccontextmanager
 
 from pydantic import AnyHttpUrl
@@ -18,7 +20,8 @@ import httpx
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
+from mcp.server.apps import Apps
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.auth.routes import validate_issuer_url
 
@@ -44,6 +47,7 @@ from norman_mcp.tools.corporate_tax_registration import register_corporate_tax_r
 from norman_mcp.prompts.templates import register_prompts
 from norman_mcp.resources.endpoints import register_resources
 from norman_mcp.apps import register_public_apps
+from norman_mcp.apps.inbox import register_inbox
 from norman_mcp.auth.provider import NormanOAuthProvider
 from norman_mcp.auth.routes import create_norman_auth_routes
 
@@ -240,15 +244,40 @@ async def lifespan(app):
     if transport == "stdio":
         await authenticate_with_credentials(api_client)
     else:
-        from norman_mcp.context import set_api_client, get_api_token
+        # Streamable HTTP enters this lifespan once per process, outside any
+        # request; SSE enters it once per connection. Either way identity must
+        # be resolved when tools run, never from startup state, and nothing
+        # process-wide may be started or stopped here without a transport check.
+        api_client.token_source = "oauth"
+        from norman_mcp.context import get_api_token
         token = get_api_token()
         if token:
             api_client.set_token(token)
-        set_api_client(api_client)
         logger.info(f"Using {transport} transport with OAuth")
+
+    # SDK 2 static resources have no injected Context on any transport.
+    from norman_mcp.context import set_api_client
+    set_api_client(api_client)
     
-    yield {"api": api_client}
-    
+    service = getattr(app, "_event_service", None)
+    live = getattr(app, "_inbox_live", None)
+    workers = [
+        TaskContext().run(asyncio.create_task, worker_service.run())
+        for worker_service in (service, live) if worker_service is not None
+    ]
+    try:
+        yield {"api": api_client}
+    finally:
+        if live:
+            live.close()
+        for worker in workers:
+            worker.cancel()
+        for worker in workers:
+            try:
+                await worker
+            except asyncio.CancelledError:
+                pass
+
     logger.info("Shutting down Norman MCP server")
 
 
@@ -301,22 +330,39 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
             scopes_supported=SUPPORTED_SCOPES,
         )
     
-    server = FastMCP(
+    from mcp.server.subscriptions import InMemorySubscriptionBus
+    live_requested = os.environ.get("NORMAN_MCP_INBOX_LIVE") == "1" and oauth_provider is not None
+    # The observer is process-wide, but SSE enters the lifespan once per
+    # connection: every client would start another observer and the first
+    # disconnect would close the feed for everyone. Streamable HTTP only.
+    live_enabled = live_requested and transport_type == "streamable-http"
+    if live_requested and not live_enabled:
+        logger.warning("NORMAN_MCP_INBOX_LIVE needs the streamable-http transport; live Inbox is off")
+    live_bus = InMemorySubscriptionBus() if live_enabled else None
+
+    server = MCPServer(
         "Norman Finance API", 
         instructions="Norman Finance MCP Server - Access your financial data",
         lifespan=lifespan,
         auth_server_provider=oauth_provider,
         auth=auth_settings,
-        host=host,
-        port=port,
+        extensions=[Apps()],
+        subscriptions=live_bus,
         # Starlette debug mode returns full tracebacks to HTTP clients; keep it
         # opt-in for local debugging only.
         debug=os.environ.get("NORMAN_MCP_DEBUG") == "1",
-        stateless_http=streamable_http_options.get("stateless", False),
-        json_response=streamable_http_options.get("json_response", True),
     )
     
+    # SDK 2 bounds subscriptions/listen only process-wide; bound it per connection.
+    from norman_mcp.security.listen_limits import ListenLimits
+    server.middleware.append(ListenLimits())
+
     server._transport = transport_type
+    server._http_options = {
+        "host": host,
+        "stateless_http": streamable_http_options.get("stateless", False),
+        "json_response": streamable_http_options.get("json_response", True),
+    }
     
     # Register OAuth callback route
     if use_oauth:
@@ -384,17 +430,33 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
     register_prompts(server)
     register_resources(server)
     register_public_apps(server)
-    
+    register_inbox(server)
+    if live_enabled:
+        from norman_mcp.apps.inbox_live import InboxLive, register_inbox_live
+        server._inbox_live = InboxLive(oauth_provider, live_bus)
+        register_inbox_live(server, server._inbox_live)
+
+    # Explicit persistent storage and encryption are required before advertising events.
+    events_path = os.environ.get("NORMAN_MCP_EVENTS_DB")
+    events_key = os.environ.get("NORMAN_MCP_EVENTS_KEY")
+    if events_path or events_key:
+        if not events_path or not events_key or transport_type != "streamable-http":
+            raise ValueError("MCP Events requires HTTPS hosted transport, NORMAN_MCP_EVENTS_DB and NORMAN_MCP_EVENTS_KEY")
+        from norman_mcp.events.service import EventService, register_events
+        from norman_mcp.events.store import SubscriptionStore
+        server._event_service = EventService(SubscriptionStore(events_path, events_key), oauth_provider)
+        register_events(server, server._event_service)
+
     return server
 
 
-def create_cors_app(server: FastMCP):
+def create_cors_app(server: MCPServer):
     """Wrap FastMCP app with CORS middleware for browser clients."""
     from starlette.applications import Starlette
     from starlette.routing import Mount
     
     # Get the underlying ASGI app
-    app = server.streamable_http_app()
+    app = server.streamable_http_app(**getattr(server, "_http_options", {}))
 
     # Wrap with CORS
     cors_app = CORSMiddleware(
@@ -410,7 +472,7 @@ def create_cors_app(server: FastMCP):
 
 
 # Create default server instance
-mcp = create_app()
+mcp = create_app(transport="streamable-http" if os.environ.get("NORMAN_MCP_EVENTS_DB") else "sse")
 
 if __name__ == "__main__":
     from norman_mcp.cli import main

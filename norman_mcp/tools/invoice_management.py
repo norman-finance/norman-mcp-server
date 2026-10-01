@@ -7,6 +7,7 @@ from urllib.parse import quote, urljoin
 from mcp.types import ToolAnnotations
 
 from norman_mcp import config
+from mcp.server.mcpserver.exceptions import ToolError
 from norman_mcp.context import Context
 from norman_mcp.tools.invoice_schemas import (
     EmailSettings,
@@ -29,7 +30,7 @@ EMAIL_LANGUAGE = Literal["de", "en", "pl", "it", "es"]
 def _company_api(ctx: Context):
     api = ctx.request_context.lifespan_context["api"]
     if not api.company_id:
-        raise ValueError("No company available. Please authenticate first.")
+        raise ToolError("No company available. Please authenticate first.")
     return api, urljoin(config.api_base_url, f"api/v1/companies/{quote(str(api.company_id), safe='')}/")
 
 
@@ -181,7 +182,7 @@ def register_invoice_management_tools(mcp, enrich=None):
         """
         patch = input_payload(changes, InvoiceSettings)
         if not patch:
-            raise ValueError("Supply at least one invoice setting to change.")
+            raise ToolError("Supply at least one invoice setting to change.")
         api, company_url = _company_api(ctx)
         return await api.arequest("PATCH", company_url + "invoices/settings/", json_data=patch)
 
@@ -203,7 +204,7 @@ def register_invoice_management_tools(mcp, enrich=None):
         """
         patch = input_payload(changes, InvoiceChanges)
         if not patch:
-            raise ValueError("Supply at least one invoice field to change.")
+            raise ToolError("Supply at least one invoice field to change.")
         api, company_url = _company_api(ctx)
         return await _result(
             await api.arequest(
@@ -226,7 +227,7 @@ def register_invoice_management_tools(mcp, enrich=None):
         """
         patch = input_payload(changes, RecurringChanges)
         if not patch:
-            raise ValueError("Supply at least one recurring invoice field to change.")
+            raise ToolError("Supply at least one recurring invoice field to change.")
         api, company_url = _company_api(ctx)
         return await _result(
             await api.arequest(

@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional
 from urllib.parse import urljoin
 from pydantic import Field
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
+from mcp.server.mcpserver.exceptions import ToolError
 
 from norman_mcp.context import Context
 from norman_mcp import config
@@ -165,17 +166,17 @@ def register_tax_tools(mcp):
         api = ctx.request_context.lifespan_context["api"]
 
         if not report_id or not isinstance(report_id, str) or not report_id.strip():
-            raise ValueError("Invalid report ID")
+            raise ToolError("Invalid report ID")
 
         company_id = api.company_id
         if not company_id:
-            raise ValueError(NO_COMPANY_ERROR["error"])
+            raise ToolError(NO_COMPANY_ERROR["error"])
         preview_url = reports_url(company_id, f"{report_id}/generate-preview-url/")
 
         try:
             result = api._make_request("POST", preview_url)
             if not result.get("downloadUrl"):
-                raise ValueError("Preview generation failed: no download URL returned")
+                raise ToolError("Preview generation failed: no download URL returned")
 
             content: list = []
             preview_b64 = result.get("previewImage")
@@ -193,14 +194,19 @@ def register_tax_tools(mcp):
             ))
 
             return CallToolResult(content=content)
+        except ToolError:
+            # Deliberate failures remain useful to clients on both protocol eras.
+            raise
         except requests.exceptions.RequestException as e:
             logger.error("Failed to generate tax report preview: %s", e)
             if hasattr(e, "response") and e.response is not None:
                 logger.error("Response: %s", e.response.text)
-            raise ValueError(f"Failed to generate tax report preview: {e}")
+            raise ToolError("Could not generate the tax preview. Please try again.") from e
         except Exception as e:
             logger.error("Error generating tax report preview: %s", e)
-            raise ValueError(f"Error generating tax report preview: {e}")
+            raise ToolError(
+                "Could not generate the tax preview. Please try again or contact Norman support."
+            ) from e
 
     @mcp.tool(
         title="Submit Tax Report to Finanzamt",

@@ -16,10 +16,9 @@ import asyncio
 import logging
 import sys
 import os
-from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
-import httpx
+import httpx2  # the SDK 2 client transport and OAuth provider use httpx2
 from pydantic import AnyUrl
 
 from mcp import ClientSession
@@ -121,15 +120,14 @@ async def main():
     # Connect to the Streamable HTTP server with OAuth
     try:
         # Create an HTTP client with OAuth authentication
-        async with httpx.AsyncClient(
+        async with httpx2.AsyncClient(
             auth=oauth_provider,
-            follow_redirects=True,
-            timeout=httpx.Timeout(30.0, connect=10.0),
+            timeout=httpx2.Timeout(30.0, connect=10.0),
         ) as http_client:
             async with streamable_http_client(
                 mcp_endpoint,
                 http_client=http_client,
-            ) as (read_stream, write_stream, get_session_id):
+            ) as (read_stream, write_stream):
                 logger.info("Connected to server, initializing session...")
 
                 # Create a client session
@@ -138,11 +136,6 @@ async def main():
                     await session.initialize()
                     logger.info("Session initialized successfully!")
                     
-                    # Get the session ID
-                    session_id = get_session_id()
-                    if session_id:
-                        logger.info(f"Session ID: {session_id}")
-
                     # List available prompts
                     try:
                         logger.info("\n--- Listing available prompts ---")
@@ -199,20 +192,13 @@ async def main_simple():
     logger.info(f"Using Streamable HTTP transport (no OAuth)")
 
     try:
-        async with streamable_http_client(
-            mcp_endpoint,
-            timeout=timedelta(seconds=30),
-            sse_read_timeout=timedelta(seconds=300),
-        ) as (read_stream, write_stream, get_session_id):
+        async with streamable_http_client(mcp_endpoint) as (read_stream, write_stream):
             logger.info("Connected to server, initializing session...")
 
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
                 logger.info("Session initialized")
                 
-                session_id = get_session_id()
-                logger.info(f"Session ID: {session_id}")
-
                 tools_result = await session.list_tools()
                 tools = tools_result.tools if hasattr(tools_result, 'tools') else tools_result
                 logger.info(f"Available tools: {[t.name for t in tools]}")

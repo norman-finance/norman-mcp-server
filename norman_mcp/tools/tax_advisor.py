@@ -401,12 +401,13 @@ def register_tax_advisor_tools(mcp):
     )
     async def switch_company(
         ctx: Context,
-        company_id: str = Field(description="Public ID of the company to switch to. Use list_tax_advisor_clients to see available companies."),
+        company_id: str = Field(description="Public ID of the company to switch to. Use list_companies to see the companies you can switch to."),
     ) -> Dict[str, Any]:
         """
         Switch the active company context. All subsequent tool calls will operate
-        on the selected company. Tax advisors can use this to switch between
-        client companies; regular users can switch if they own multiple companies.
+        on the selected company. Owners and members of several companies switch
+        between them here, and tax advisors between their client companies;
+        list_companies returns the ids.
         """
         api = ctx.request_context.lifespan_context["api"]
         previous_id = api.company_id
