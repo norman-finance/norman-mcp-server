@@ -171,7 +171,7 @@ def register_incorporation_tools(mcp):
             json_data={"shareCapital": share_capital},
         )
 
-    @mcp.tool(annotations=WRITE)
+    @mcp.tool(annotations=DESTRUCTIVE_WRITE)
     async def add_incorporation_shareholder(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),
@@ -234,7 +234,7 @@ def register_incorporation_tools(mcp):
         )
         return api._make_request("POST", _incorporations_url(f"{public_id}/shareholders/"), json_data=payload)
 
-    @mcp.tool(annotations=WRITE)
+    @mcp.tool(annotations=DESTRUCTIVE_WRITE)
     async def update_incorporation_shareholder(
         ctx: Context,
         public_id: str = Field(description="Incorporation publicId"),

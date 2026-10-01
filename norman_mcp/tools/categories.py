@@ -103,6 +103,8 @@ def register_category_tools(mcp):
         Sends the query to OpenAI along with the full SKR catalog as context,
         so it can semantically match even vague or partial descriptions.
         Returns up to 5 best matching entries with accountNumber, nameDe, nameEn.
+        Results are limited to Norman's fixed SKR03/SKR04 catalog; this does not
+        search the web, contact arbitrary destinations or modify your books.
 
         NOTE: This calls OpenAI — prefer search_skr_by_code when you have a code.
         """

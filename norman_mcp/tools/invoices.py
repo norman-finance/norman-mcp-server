@@ -570,9 +570,9 @@ def register_invoice_tools(mcp):
         title="Resume Recurring Invoice",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=True,
-            openWorldHint=False,
+            openWorldHint=True,
         ),
     )
     async def resume_recurring_invoice(ctx: Context, recurring_invoice_id: str) -> Dict[str, Any]:

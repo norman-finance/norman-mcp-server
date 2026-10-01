@@ -63,6 +63,13 @@ Managing directors (max 9) and shareholders (max 99, natural persons or legal en
 nominal amounts; percents must sum to 100). Both lists use replace-all semantics: send the
 complete list every time, or omit the parameter to leave it unchanged.
 
+Personal tax IDs, passport numbers and other personal government identifiers must
+be entered in the authenticated Norman form. Never ask for them in chat, copy them
+from another source, or pass them to `set_corporate_people`. Use
+`get_corporate_submission_link` to open the form for the people sections, especially
+when existing people may already have identifiers stored. Tool responses omit those
+values; omission does not mean the stored identifiers are missing.
+
 ## Section 5 — Financials (`update_corporate_financials`)
 
 Stammkapital (GmbH ≥ 25.000 €, UG 1–24.999 €), start of activity, divergent fiscal year and

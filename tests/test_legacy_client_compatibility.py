@@ -6,6 +6,12 @@ SDK 2 client/server changes cannot hide a wire incompatibility from the test.
 New tools may be added freely. Intentional changes to an existing wire contract
 must update its oracle signature after compatibility review; never regenerate
 every signature simply to accept an SDK upgrade.
+
+The OpenAI plugin update intentionally revises safety annotations, the legacy
+category-template display title, the bounded SKR suggestion description and the
+corporate people tool's government-identifier boundary. Only those 16 legacy
+tool signatures were updated; request methods, tool names and unrelated
+schemas remain covered by the original oracle.
 """
 
 import asyncio
