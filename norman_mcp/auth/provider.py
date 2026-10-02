@@ -9,6 +9,7 @@ authentication to Norman's OAuth server. It:
 """
 
 import asyncio
+import hashlib
 import json as _json
 import os
 import logging
@@ -43,6 +44,15 @@ from norman_mcp.config.settings import config
 from norman_mcp.security.redirects import is_allowed_redirect_uri
 
 logger = logging.getLogger(__name__)
+OAUTH_TRANSACTION_TTL = 600
+
+
+class OAuthCallbackError(Exception):
+    """A failed callback that can safely return to its validated client."""
+
+    def __init__(self, redirect_url: str):
+        super().__init__("OAuth authorization could not complete")
+        self.redirect_url = redirect_url
 
 
 def get_norman_oauth_client_id() -> str:
@@ -113,11 +123,24 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         return Path(_STATE_FILE)
 
     def _save_state(self) -> None:
-        """Persist clients, refresh tokens, and token mappings to disk."""
+        """Persist credentials and bounded browser authorization transactions."""
         with self._persist_lock:
             try:
                 path = self._state_path()
                 path.parent.mkdir(parents=True, exist_ok=True)
+
+                now = time.time()
+                for key, code in list(getattr(self, "auth_codes", {}).items()):
+                    if code.expires_at <= now:
+                        self.auth_codes.pop(key, None)
+                        self.token_mapping.pop(key, None)
+                        self.token_mapping.pop(f"refresh_{key}", None)
+                for key, pending in list(getattr(self, "state_mapping", {}).items()):
+                    expires_at = pending.get("expires_at")
+                    if expires_at is not None and (
+                        not isinstance(expires_at, (int, float)) or expires_at <= now
+                    ):
+                        self.state_mapping.pop(key, None)
 
                 clients_ser = {}
                 for cid, c in self.clients.items():
@@ -151,10 +174,22 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                     "token_mapping": self.token_mapping,
                     "token_to_company_id": self.token_to_company_id,
                     "token_grants": getattr(self, "token_grants", {}),
+                    "auth_codes": {
+                        key: code.model_dump(mode="json")
+                        for key, code in getattr(self, "auth_codes", {}).items()
+                        if code.expires_at > now
+                    },
+                    "state_mapping": {
+                        key: pending
+                        for key, pending in getattr(self, "state_mapping", {}).items()
+                        if isinstance(pending.get("expires_at"), (int, float))
+                        and pending["expires_at"] > now
+                    },
                 }
 
                 tmp = path.with_suffix(".tmp")
                 tmp.write_text(_json.dumps(data, indent=2))
+                tmp.chmod(0o600)
                 tmp.replace(path)
                 logger.debug("OAuth state persisted to %s", path)
             except Exception:
@@ -254,16 +289,47 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             except Exception:
                 keep_unloaded("tokens", tid, t)
 
+        for key, raw in section("auth_codes").items():
+            try:
+                code = AuthorizationCode.model_validate(raw)
+                if code.expires_at > now:
+                    self.auth_codes[key] = code
+            except Exception:
+                # Codes are short-lived. An unreadable code must never become
+                # redeemable or prevent other connections from loading.
+                logger.warning("Ignoring unreadable OAuth authorization code")
+
+        for key, pending in section("state_mapping").items():
+            if (
+                isinstance(pending, dict)
+                and isinstance(pending.get("expires_at"), (int, float))
+                and pending["expires_at"] > now
+            ):
+                self.state_mapping[key] = pending
+
         self.token_mapping = section("token_mapping")
+        for key in section("auth_codes"):
+            if (
+                key not in self.auth_codes
+                and key not in self.tokens
+                and key not in self.refresh_tokens
+            ):
+                if key in self.token_mapping or f"refresh_{key}" in self.token_mapping:
+                    migrated = True
+                self.token_mapping.pop(key, None)
+                self.token_mapping.pop(f"refresh_{key}", None)
         self.token_to_company_id = section("token_to_company_id")
         live = set(self.tokens) | set(self.refresh_tokens)
         self.token_grants = {t: g for t, g in section("token_grants").items() if t in live}
         logger.info(
             "Restored OAuth state: %d clients, %d refresh tokens, %d access tokens (%d unreadable kept)",
-            len(self.clients), len(self.refresh_tokens), len(self.tokens), skipped,
+            len(self.clients),
+            len(self.refresh_tokens),
+            len(self.tokens),
+            skipped,
         )
         if migrated:
-            # Persist the scrubbed secrets so the next restart doesn't log the migration again.
+            # Persist public-client migrations and expired code cleanup.
             self._save_state()
 
     def _register_norman_client(self) -> None:
@@ -271,7 +337,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         try:
             client_id = get_norman_oauth_client_id()
             client_secret = get_norman_oauth_client_secret()
-            
+
             # Common redirect URIs for MCP clients (Inspector, etc.)
             redirect_uris = [
                 "http://localhost:3000/callback",
@@ -284,7 +350,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                 "https://mcp.norman.finance/callback",
                 "https://chatgpt.com/connector_platform_oauth_redirect"
             ]
-            
+
             # Register as public client (no client_secret) for MCP clients like Inspector
             # The client_secret is only used for MCP server -> Norman communication
             client = OAuthClientInformationFull(
@@ -299,14 +365,14 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             )
             self.clients[client_id] = client
             logger.info(f"Pre-registered Norman OAuth client: {client_id[:20]}...")
-            
+
         except ValueError as e:
             logger.warning(f"Norman OAuth client not pre-registered: {e}")
 
     async def get_client(self, client_id: str) -> Optional[OAuthClientInformationFull]:
         """Get client by ID. Auto-registers unknown clients for development."""
         client = self.clients.get(client_id)
-        
+
         if not client:
             logger.info(f"Auto-registering client: {client_id}")
             # Default redirect URIs for common development scenarios
@@ -343,7 +409,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             self._save_state()
 
         return client
-    
+
     def add_redirect_uri(self, client_id: str, redirect_uri: str) -> None:
         """Add a redirect URI to an existing client (for dynamic registration)."""
         if not is_allowed_redirect_uri(redirect_uri):
@@ -394,17 +460,22 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         self, client: OAuthClientInformationFull, params: AuthorizationParams
     ) -> str:
         """Redirect to Norman's OAuth authorize endpoint."""
-        state = params.state or secrets.token_hex(16)
-        
+        # Each browser attempt gets its own upstream state. Hosts can reuse
+        # their state during retries; that must not overwrite another PKCE
+        # challenge or send a callback to a different client.
+        state = secrets.token_urlsafe(32)
+
         logger.info(f"Authorization request from client: {client.client_id[:8]}...")
-        
+
         # Dynamically add the redirect URI if not already registered
         redirect_uri_str = str(params.redirect_uri)
         if redirect_uri_str not in [str(uri) for uri in client.redirect_uris]:
             self.add_redirect_uri(client.client_id, redirect_uri_str)
-        
+
         # Store state mapping for callback
         self.state_mapping[state] = {
+            "client_state": params.state,
+            "expires_at": time.time() + OAUTH_TRANSACTION_TTL,
             "redirect_uri": redirect_uri_str,
             "code_challenge": params.code_challenge,
             "code_challenge_method": "S256",  # PKCE always uses S256
@@ -412,7 +483,8 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             "client_id": client.client_id,
             "scopes": list(params.scopes) if params.scopes else SUPPORTED_SCOPES,
         }
-        
+        self._save_state()
+
         # Build Norman OAuth authorization URL
         oauth_params = {
             "response_type": "code",
@@ -421,11 +493,68 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             "state": state,
             "scope": "read write",
         }
-        
+
         auth_url = f"{self.norman_authorize_url}?{urlencode(oauth_params)}"
-        logger.info(f"Redirecting to Norman OAuth: {auth_url}")
-        
+        logger.info("OAuth browser authorization started: attempt=%s", self._attempt_id(state))
+
         return auth_url
+
+    @staticmethod
+    def _attempt_id(state: str) -> str:
+        """Correlate browser stages without logging the bearer state value."""
+        return hashlib.sha256(state.encode()).hexdigest()[:12]
+
+    def _consume_callback_state(self, state: str | None) -> Dict[str, Any] | None:
+        if not state:
+            return None
+        with self._persist_lock:
+            pending = self.state_mapping.pop(state, None)
+        if pending is None:
+            return None
+        self._save_state()
+        expires_at = pending.get("expires_at")
+        if expires_at is not None and (
+            not isinstance(expires_at, (int, float)) or expires_at <= time.time()
+        ):
+            return None
+        redirect_uri = pending.get("redirect_uri")
+        client = self.clients.get(pending.get("client_id"))
+        if (
+            not isinstance(redirect_uri, str)
+            or not is_allowed_redirect_uri(redirect_uri)
+            or client is None
+            or redirect_uri not in [str(uri) for uri in client.redirect_uris]
+        ):
+            return None
+        # Old in-memory transactions had the host state as their lookup key.
+        if "client_state" not in pending:
+            pending["client_state"] = state
+        return pending
+
+    @staticmethod
+    def _callback_error_url(pending: Dict[str, Any], error: str) -> str:
+        descriptions = {
+            "access_denied": "Norman authorization was not granted. Please reconnect.",
+            "temporarily_unavailable": "Norman authorization is temporarily unavailable. Please retry.",
+            "invalid_request": "Norman authorization could not complete. Please reconnect.",
+            "server_error": "Norman authorization could not complete. Please reconnect.",
+        }
+        if error not in descriptions:
+            error = "server_error"
+        return construct_redirect_uri(
+            pending["redirect_uri"],
+            error=error,
+            error_description=descriptions[error],
+            state=pending.get("client_state"),
+        )
+
+    def callback_error_redirect(self, state: str | None, error: str) -> str | None:
+        """Return a failure only to the client registered for this attempt."""
+        pending = self._consume_callback_state(state)
+        if pending is None:
+            return None
+        logger.info("OAuth browser authorization failed: attempt=%s", self._attempt_id(state))
+        return self._callback_error_url(pending, error)
 
     async def handle_oauth_callback(self, code: str, state: str) -> str:
         """Handle OAuth callback from Norman.
@@ -437,12 +566,12 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         Returns:
             Redirect URL to the MCP client with new authorization code
         """
-        state_data = self.state_mapping.get(state)
+        state_data = self._consume_callback_state(state)
         if not state_data:
             raise HTTPException(400, "Invalid or expired state parameter")
-        
-        logger.info(f"OAuth callback received, exchanging code with Norman...")
-        
+
+        logger.info("OAuth callback received: attempt=%s", self._attempt_id(state))
+
         # Exchange Norman's authorization code for tokens
         token_payload = {
             "grant_type": "authorization_code",
@@ -450,12 +579,12 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             "redirect_uri": self.callback_url,
             "client_id": get_norman_oauth_client_id(),
         }
-        
+
         # Add client secret if configured
         client_secret = get_norman_oauth_client_secret()
         if client_secret:
             token_payload["client_secret"] = client_secret
-        
+
         try:
             async with httpx.AsyncClient() as http_client:
                 response = await http_client.post(
@@ -463,91 +592,97 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
                     data=token_payload,
                     timeout=config.NORMAN_API_TIMEOUT
                 )
-                
+
                 if response.status_code != 200:
-                    logger.error(f"Norman token exchange failed: {response.status_code}")
-                    logger.error(f"Response: {response.text}")
-                    raise HTTPException(400, "Failed to exchange authorization code")
-                
+                    logger.warning(
+                        "Norman authorization code exchange rejected: status=%s",
+                        response.status_code,
+                    )
+                    error = (
+                        "temporarily_unavailable"
+                        if response.status_code == 429 or response.status_code >= 500
+                        else "server_error"
+                    )
+                    raise OAuthCallbackError(self._callback_error_url(state_data, error))
+
                 auth_data = response.json()
+                if not isinstance(auth_data, dict):
+                    raise ValueError("Invalid Norman token response")
                 norman_token = auth_data.get("access_token")
                 norman_refresh = auth_data.get("refresh_token")
-                
-                if not norman_token:
-                    raise HTTPException(400, "No access token in Norman response")
-                
-                # Store Norman token in global context
-                from norman_mcp.context import set_api_token
-                set_api_token(norman_token)
-                
-                logger.info(f"✅ Norman token obtained: {norman_token[:15]}...")
-                
+
+                if not isinstance(norman_token, str) or not norman_token:
+                    raise ValueError("Invalid Norman access token")
+                if norman_refresh is not None and (
+                    not isinstance(norman_refresh, str) or not norman_refresh
+                ):
+                    raise ValueError("Invalid Norman refresh token")
+
                 # Generate MCP authorization code for the client
                 mcp_code = f"mcp_{secrets.token_hex(16)}"
                 redirect_uri = state_data["redirect_uri"]
                 client_id = state_data["client_id"]
                 scopes = state_data["scopes"]
                 code_challenge = state_data["code_challenge"]
-                
+
                 # Create and store MCP authorization code
                 auth_code = AuthorizationCode(
                     code=mcp_code,
                     client_id=client_id,
                     redirect_uri=AnyUrl(redirect_uri),
                     redirect_uri_provided_explicitly=state_data["redirect_uri_provided_explicitly"],
-                    expires_at=time.time() + 600,  # 10 minutes
+                    expires_at=time.time() + OAUTH_TRANSACTION_TTL,
                     scopes=scopes,
                     code_challenge=code_challenge,
                 )
-                
+
                 self.auth_codes[mcp_code] = auth_code
                 self.token_mapping[mcp_code] = norman_token
-                
+
                 # Store refresh token if available
                 if norman_refresh:
                     self.token_mapping[f"refresh_{mcp_code}"] = norman_refresh
-                
-                # Clean up state
-                del self.state_mapping[state]
-                
+
                 # Redirect client with MCP authorization code
-                redirect_url = construct_redirect_uri(redirect_uri, code=mcp_code, state=state)
-                logger.info(f"Redirecting to client: {redirect_url[:50]}...")
-                
+                redirect_url = construct_redirect_uri(
+                    redirect_uri, code=mcp_code, state=state_data.get("client_state")
+                )
+                logger.info(
+                    "OAuth callback returning to client: attempt=%s", self._attempt_id(state)
+                )
+
                 self._save_state()
                 return redirect_url
-                
-        except httpx.RequestError as e:
-            logger.error(f"Network error during Norman token exchange: {e}")
-            raise HTTPException(500, "Failed to communicate with Norman API")
+
+        except httpx.RequestError:
+            logger.warning("Norman authorization code exchange temporarily unavailable")
+            raise OAuthCallbackError(
+                self._callback_error_url(state_data, "temporarily_unavailable")
+            ) from None
+        except (ValueError, TypeError):
+            logger.warning("Invalid Norman authorization code exchange response")
+            raise OAuthCallbackError(self._callback_error_url(state_data, "server_error")) from None
 
     async def load_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: str
     ) -> Optional[AuthorizationCode]:
         """Load an authorization code."""
-        logger.info(f"Loading auth code: {authorization_code[:20]}... for client {client.client_id[:10]}...")
-        logger.info(f"Available codes: {list(self.auth_codes.keys())[:3]}")
         code = self.auth_codes.get(authorization_code)
-        if code:
-            logger.info(f"✅ Found auth code, expires_at={code.expires_at}, scopes={code.scopes}")
-        else:
-            logger.warning(f"❌ Auth code not found!")
         return code
 
     async def exchange_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
     ) -> OAuthToken:
         """Exchange authorization code for MCP tokens."""
-        logger.info(f"Token exchange for code: {authorization_code.code[:10]}...")
-        
+
         # Get the Norman token associated with this code
         norman_token = self.token_mapping.get(authorization_code.code)
         if not norman_token:
             raise ValueError("Norman token not found for authorization code")
-        
+
         # Generate MCP access token
         mcp_token = f"mcp_{secrets.token_hex(32)}"
-        
+
         # Store MCP token
         self.tokens[mcp_token] = AccessToken(
             token=mcp_token,
@@ -555,12 +690,12 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             scopes=authorization_code.scopes,
             expires_at=int(time.time()) + 86400,  # 24 hours
         )
-        
+
         # Map MCP token to Norman token
         self.token_mapping[mcp_token] = norman_token
         grant = f"grant_{secrets.token_hex(16)}"
         self.token_grants[mcp_token] = grant
-        
+
         # Check for refresh token
         norman_refresh = self.token_mapping.get(f"refresh_{authorization_code.code}")
         refresh_token_id = None
@@ -579,15 +714,15 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             # Norman access token when it expires mid-session (see
             # NormanAPI._make_request 401 handler).
             self.token_mapping[f"refresh_for_{mcp_token}"] = norman_refresh
-        
+
         # Clean up used authorization code
         del self.auth_codes[authorization_code.code]
         if authorization_code.code in self.token_mapping:
             del self.token_mapping[authorization_code.code]
         if f"refresh_{authorization_code.code}" in self.token_mapping:
             del self.token_mapping[f"refresh_{authorization_code.code}"]
-        
-        logger.info(f"✅ Issued MCP token: {mcp_token[:15]}...")
+
+        logger.info("OAuth client token issued")
         self._save_state()
 
         return OAuthToken(
@@ -601,10 +736,10 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
     async def load_access_token(self, token: str) -> Optional[AccessToken]:
         """Load and validate an access token."""
         access_token = self.tokens.get(token)
-        
+
         if not access_token:
             return None
-        
+
         if access_token.expires_at and access_token.expires_at < time.time():
             del self.tokens[token]
             if token in self.token_mapping:
@@ -663,6 +798,8 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             # this refresh fix does not migrate that existing per-token state.
             new_mcp_token = f"mcp_{secrets.token_hex(32)}"
             with self._persist_lock:
+                if refresh_token.token not in self.refresh_tokens:
+                    raise TokenError("invalid_grant", "Refresh token no longer available")
                 self.tokens[new_mcp_token] = AccessToken(
                     token=new_mcp_token,
                     client_id=client.client_id,
@@ -691,25 +828,44 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         return getattr(self, "token_grants", {}).get(token, token)
 
     async def revoke_token(self, token: str, token_type_hint: Optional[str] = None) -> None:
-        """Revoke a token."""
-        changed = False
-        if token in self.tokens:
-            if token in self.token_mapping:
-                del self.token_mapping[token]
-            if token in self.token_to_company_id:
-                del self.token_to_company_id[token]
-            del self.tokens[token]
-            logger.info(f"Revoked access token: {token[:10]}...")
-            changed = True
-        elif token in self.refresh_tokens:
-            if token in self.token_mapping:
-                del self.token_mapping[token]
-            del self.refresh_tokens[token]
-            logger.info(f"Revoked refresh token: {token[:10]}...")
-            changed = True
-        if changed:
-            getattr(self, "token_grants", {}).pop(token, None)
+        """Invalidate one connection, including its still-live access aliases."""
+        await asyncio.to_thread(self._invalidate_grant, token)
+
+    def _invalidate_grant(self, mapping_key: str) -> None:
+        # A client_id is shared by independent users. Invalidate only a stable
+        # grant id or aliases of this exact upstream refresh token; legacy
+        # connections did not yet persist grant ids.
+        with self._persist_lock:
+            access_key = mapping_key.removeprefix("refresh_for_")
+            grant = getattr(self, "token_grants", {}).get(access_key)
+            upstream_refresh = self.token_mapping.get(
+                mapping_key
+                if mapping_key in self.refresh_tokens or mapping_key.startswith("refresh_for_")
+                else f"refresh_for_{mapping_key}"
+            )
+            members = {
+                key
+                for key in set(self.tokens) | set(self.refresh_tokens)
+                if key == access_key
+                or (grant is not None and getattr(self, "token_grants", {}).get(key) == grant)
+                or (
+                    upstream_refresh is not None
+                    and self.token_mapping.get(
+                        key if key in self.refresh_tokens else f"refresh_for_{key}"
+                    )
+                    == upstream_refresh
+                )
+            }
+            for key in members:
+                self.tokens.pop(key, None)
+                self.refresh_tokens.pop(key, None)
+                self.token_mapping.pop(key, None)
+                self.token_mapping.pop(f"refresh_for_{key}", None)
+                self.token_to_company_id.pop(key, None)
+                getattr(self, "token_grants", {}).pop(key, None)
+        if members:
             self._save_state()
+            logger.info("OAuth connection invalidated: aliases=%s", len(members))
 
     def get_norman_token(self, mcp_token: str) -> Optional[str]:
         """Get the Norman API token for a given MCP token."""
@@ -831,6 +987,7 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
             raise HTTPException(502, "Invalid response from Norman authorization service")
         if response.status_code != 200:
             if response.status_code == 400 and data.get("error") == "invalid_grant":
+                self._invalidate_grant(mapping_key)
                 raise TokenError("invalid_grant", "Norman authorization expired; please reconnect")
             raise HTTPException(502, "Norman authorization service rejected the refresh request")
         new_norman_token = data.get("access_token")
@@ -849,6 +1006,18 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         # both the client-facing refresh handle and every still-live MCP access
         # token that shares this exact upstream grant, in either refresh path.
         with self._persist_lock:
+            # Revocation can arrive while the upstream network call is in
+            # flight. A successful response must never resurrect its grant.
+            access_key = mapping_key.removeprefix("refresh_for_")
+            if (
+                mapping_key not in self.token_mapping
+                or (mapping_key.startswith("refresh_for_") and access_key not in self.tokens)
+                or (
+                    not mapping_key.startswith("refresh_for_")
+                    and mapping_key not in self.refresh_tokens
+                )
+            ):
+                raise TokenError("invalid_grant", "Norman authorization no longer available")
             for key, value in list(self.token_mapping.items()):
                 if value != norman_refresh:
                     continue
