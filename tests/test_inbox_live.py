@@ -1,6 +1,7 @@
 """Grant/company isolation, invalidations, and bounded Inbox observer state."""
 
 import asyncio
+import json
 import time
 from types import SimpleNamespace
 
@@ -42,18 +43,26 @@ class API:
         self.count = 1
         self.status = None
         self.calls = []
+        self.company_details = {
+            "isSme": True,
+            "chartOfAccounts": {"code": "skr04"},
+            "taxNumber": "private-company-metadata",
+        }
+        self.tax_runs = []
 
     async def arequest(self, method, url, **kwargs):
         self.calls.append((method, url, kwargs))
         assert method == "GET"
         if self.status:
             return {"error": "Unavailable", "status_code": self.status}
+        if url.endswith(f"companies/{self.company_id}/"):
+            return self.company_details
         if url.endswith("workflow-runs/"):
             return {"runs": []}
         if url.endswith("rule-executions/"):
             return {"count": self.count, "results": [], "next": None}
         if url.endswith("autofiling/runs/"):
-            return []
+            return self.tax_runs
         if url.endswith("balance/"):
             return {"bankAccounts": [], "sumsByCurrency": []}
         if url.endswith(("transactions/", "invoices/", "attachments/")):
@@ -85,7 +94,8 @@ async def test_lease_is_opaque_idempotent_bounded_and_expires_with_grant(setup, 
     assert opened["expiresAt"] == provider.tokens["alice"].expires_at
     assert opened["page"] == 2
     assert await service.open(api, 2) == opened
-    assert len(service.watches) == 1 and len(api.calls) == 9
+    assert len(service.watches) == 1 and len(api.calls) == 10
+    assert len([call for call in api.calls if call[1].endswith("companies/company-a/")]) == 1
     monkeypatch.setattr(inbox_live, "MAX_PER_GRANT", 1)
     with pytest.raises(ToolError, match="limit"):
         await service.open(api, 3)
@@ -166,12 +176,52 @@ async def test_poll_only_active_leases_and_publish_only_semantic_invalidation(se
     assert not reads  # No connected stream, no API polling.
     watch.listeners = 1
     await service.tick()
-    assert len(reads) == 9 and not received  # asOf alone is not a change.
+    assert len(reads) == 10 and not received  # asOf alone is not a change.
     api.count = 2
     await service.tick()
     assert len(received) == 1 and received[0].uri == uri
     assert vars(received[0]) == {"uri": uri}  # No financial data in notifications.
     assert fingerprint({"asOf": "before", "count": 1}) == fingerprint({"asOf": "after", "count": 1})
+
+
+@pytest.mark.asyncio
+async def test_capability_evidence_changes_invalidate_without_exposing_company_details(setup):
+    service, provider, current, api = setup
+    api.tax_runs = [{"publicId": "ready", "status": "ready_for_approval"}]
+    uri = (await service.open(api, 1))["resourceUri"]
+    service.watches[uri].listeners = 1
+    received = []
+    service.bus.subscribe(received.append)
+
+    # Unrelated private metadata is not part of the read model or fingerprint.
+    api.company_details["taxNumber"] = "another-private-value"
+    await service.tick()
+    assert not received
+
+    api.company_details["isSme"] = False
+    await service.tick()
+    assert len(received) == 1 and vars(received[0]) == {"uri": uri}
+
+    # The review row stays the same; only actual report evidence changes.
+    api.tax_runs[0]["report"] = "77777777-7777-4777-8777-777777777777"
+    await service.tick()
+    assert len(received) == 2 and vars(received[1]) == {"uri": uri}
+    result = await service.read(uri, api)
+    assert json.loads(result)["capabilities"] == {"ledger": False, "taxPreview": True}
+    assert "private" not in result and "taxNumber" not in result
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [401, 403])
+async def test_company_metadata_authorization_failure_alone_closes_watch(setup, status):
+    service, provider, current, api = setup
+    uri = (await service.open(api, 1))["resourceUri"]
+    service.watches[uri].listeners = 1
+    received = []
+    service.bus.subscribe(received.append)
+    api.company_details = {"error": "Unavailable", "status_code": status}
+    await service.tick()
+    assert not service.watches and not received
 
 
 @pytest.mark.asyncio
