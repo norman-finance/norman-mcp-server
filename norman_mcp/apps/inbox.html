@@ -129,6 +129,10 @@
       :root[data-bounded="true"] main {
         height: min(var(--host-height, 100dvh), 100dvh);
       }
+      :root[data-sizing="max"] main {
+        height: auto;
+        max-height: var(--host-height);
+      }
       #company {
         margin: 16px 0 24px;
         padding-bottom: 16px;
@@ -2143,7 +2147,8 @@
             state.legacyContext = { ...state.legacyContext, ...update };
           else state.hostContext = { ...state.hostContext, ...update };
           const context = { ...state.legacyContext, ...state.hostContext },
-            root = document.documentElement;
+            root = document.documentElement,
+            wasBounded = root.dataset.bounded === "true";
           if (["light", "dark"].includes(context.theme))
             root.dataset.theme = context.theme;
           else delete root.dataset.theme;
@@ -2155,19 +2160,35 @@
             );
           }
           const dimensions = context.containerDimensions || {},
-            height = dimensions.height ?? dimensions.maxHeight,
-            validHeight = Number.isFinite(height) && height > 0,
+            fixed = Number.isFinite(dimensions.height) && dimensions.height > 0,
+            flexible =
+              !fixed &&
+              Number.isFinite(dimensions.maxHeight) &&
+              dimensions.maxHeight > 0,
+            height = fixed ? dimensions.height : dimensions.maxHeight,
             bounded =
-              validHeight ||
-              context.displayMode === "fullscreen" ||
-              context.displayMode === "pip" ||
-              context.platform === "mobile";
-          if (bounded || context.displayMode === "inline")
+              fixed ||
+              (!flexible &&
+                context.displayMode !== "inline" &&
+                (context.displayMode === "fullscreen" ||
+                  context.displayMode === "pip" ||
+                  context.platform === "mobile"));
+          if (bounded || flexible || context.displayMode === "inline")
             root.dataset.bounded = String(bounded);
           else delete root.dataset.bounded;
-          if (validHeight)
+          root.dataset.sizing = flexible
+            ? "max"
+            : bounded
+              ? "fixed"
+              : "natural";
+          if (fixed || flexible)
             root.style.setProperty("--host-height", `${height}px`);
           else root.style.removeProperty("--host-height");
+          if (state.ready && wasBounded && !bounded) reportedSize = "";
+          // A flexible frame can start shorter than its content. Its current
+          // viewport is not its limit; request the measured size up to maxHeight.
+          // Defer until after the initialize acknowledgement on first connect.
+          queueMicrotask(reportSize);
         }
         function legacyChanged(event) {
           const globals = event?.detail?.globals || window.openai || {},
@@ -2184,15 +2205,16 @@
         window.addEventListener("openai:set_globals", legacyChanged);
         legacyChanged();
         let reportedSize = "";
-        const sizeObserver = new ResizeObserver(([entry]) => {
+        function reportSize() {
           if (
             !state.ready ||
             state.disposed ||
             document.documentElement.dataset.bounded === "true"
           )
             return;
-          const width = Math.ceil(entry.target.getBoundingClientRect().width),
-            height = Math.ceil(entry.target.getBoundingClientRect().height),
+          const box = document.querySelector("main").getBoundingClientRect(),
+            width = Math.ceil(box.width),
+            height = Math.ceil(box.height),
             key = `${width}:${height}`;
           if (key === reportedSize) return;
           reportedSize = key;
@@ -2204,7 +2226,8 @@
             },
             "*",
           );
-        });
+        }
+        const sizeObserver = new ResizeObserver(reportSize);
         sizeObserver.observe(document.querySelector("main"));
         const profileText = (value) =>
           typeof value === "string" ? value.trim() : "";
