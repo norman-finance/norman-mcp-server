@@ -43,7 +43,16 @@ def test_shared_startup_client_resolves_oauth_identity_per_http_request(monkeypa
         if url.endswith("autofiling/runs/"):
             assert url.endswith(f"companies/{company}/autofiling/runs/")
             return []
-        return {"items": []}
+        if url.endswith("balance/"):
+            assert url.endswith(f"companies/{company}/balance/")
+            return {
+                "bankAccounts": [company],
+                "sumsByCurrency": [{"currency": "EUR", "sumAmount": "12.34"}],
+            }
+        assert method == "GET"
+        if url.endswith(("transactions/", "invoices/", "attachments/")):
+            return {"count": 7 if company == "company-alice" else 19, "results": []}
+        raise AssertionError(url)
 
     monkeypatch.setattr(NormanAPI, "arequest", source)
     with TestClient(create_cors_app(server), base_url="http://localhost:3001") as client:
@@ -80,11 +89,18 @@ def test_shared_startup_client_resolves_oauth_identity_per_http_request(monkeypa
             data = result.get("structuredContent") or json.loads(result["content"][0]["text"])
             assert data["companyId"] == "company-" + caller
             assert data["questions"][0]["publicId"] == "company-" + caller
+            assert data["overview"]["actions"]["unreviewedTransactions"] == (
+                7 if caller == "alice" else 19
+            )
+            assert data["overview"]["bankBalances"]["values"] == [
+                {"currency": "EUR", "amount": "12.34"}
+            ]
             if name == "open_norman_inbox":
                 text = result["content"][0]["text"]
                 assert "1 workflows awaiting your answer" in text
                 assert "0 pending automation approvals" in text
                 assert "0 tax reviews." in text
+                assert "unfinalized transactions (UNVERIFIED, all history)" in text
                 assert "do not claim that a screen opened" in text
 
         with ThreadPoolExecutor(max_workers=4) as pool:

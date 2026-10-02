@@ -116,7 +116,7 @@ with the current accounting context.
 
 | Interactive workspace | Use case |
 |:--|:--|
-| **Norman Inbox** | Review blocked workflows and pending automation approvals. Inspect current values and the complete planned action list, then explicitly approve or dismiss. |
+| **Norman Inbox** | See current bank balances, bookkeeping tasks and quick chat actions. Review blocked workflows and pending automation approvals before explicitly approving or dismissing. |
 | **Document Review** | Review uploaded invoices and receipts, find documents that still need a transaction match, and inspect linked records. |
 | **Reconciliation Cockpit** | Find transactions with missing documents, missing categories, or accounts from a previous SKR before month-end or year-end close. |
 | **Ledger Explorer** | Browse the chart of accounts, inspect balances, and drill into the postings behind an account. |
@@ -453,6 +453,20 @@ MCP Apps hosts can render the same self-contained UI; other clients can call
 `get_norman_inbox_data` and `get_norman_approval_data` for structured results.
 Workflow questions use actual blocking state. Pending approval totals include all
 pages; tax reviews are a bounded list. Source failures are shown as unavailable.
+The Inbox also shows latest synced bank balances grouped by their original
+currency, overdue unpaid invoices, unattached invoice/receipt documents and
+unfinalized transactions with status `UNVERIFIED`. These task counts cover all
+history. Transaction totals cover the previous and current calendar months, with
+the date range displayed. Counts come from pagination totals, not
+the single record requested with each counter. Overdue invoices use Norman's
+stored overdue status; bank snapshots may lag the bank and are not profit.
+Task buttons delegate work to the conversation with the selected company and
+scope. The assistant can complete supported, evidence-backed document matching,
+categorization and finalization through existing tools, then report verified
+results and genuine blockers. Financial overview is analysis-only; invoice
+follow-ups prepare drafts. External messages, payments, tax filing and automation
+approvals require a separate decision. The iframe sends a chat request rather
+than calling write tools itself; clients without messaging show a copyable request.
 The review card uses existing approve/dismiss/undo tools and refreshes actual
 results. Approval requires a checkbox and re-reads current values and planned
 actions immediately before executing. A changed review requires confirmation
@@ -492,11 +506,13 @@ An expired Norman token (one hour) is refreshed through that grant; a 401 that
 survives the refresh, or a 403, closes the watch. Local grant revocation, company changes and expiry
 end its stream within one second. The observer reads only while a stream is
 connected, with 30 seconds between observation cycles. Each watch observes one
-approval page, workflow state and bounded tax reviews; it is not a complete
+approval page, workflow state, bounded tax reviews and the Inbox overview; it is not a complete
 company event log and may miss intermediate changes. Financial snapshots are
 never cached in the change bus. There are at most 128 leases/streams, four leases
-and four open streams per OAuth grant, four concurrent snapshot reads (three API
-sources per snapshot) and two per grant. Tokens refreshed from one authorization
+and four open streams per OAuth grant, four concurrent snapshot reads (normally
+nine API requests per snapshot) and two per grant. The grant-pinned reader
+permits only GET requests.
+Tokens refreshed from one authorization
 share its grant, so refreshing does not raise these limits.
 
 Leases and the SDK subscription bus are in memory. Use one process/replica;

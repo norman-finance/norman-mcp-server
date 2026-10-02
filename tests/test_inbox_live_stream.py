@@ -66,6 +66,12 @@ class OfflineAPI:
             return {"runs": []}
         if url.endswith("accounting/rule-executions/"):
             return {"results": [], "count": self.provider.count, "next": None}
+        if url.endswith("autofiling/runs/"):
+            return []
+        if url.endswith("balance/"):
+            return {"bankAccounts": [], "sumsByCurrency": []}
+        if url.endswith(("transactions/", "invoices/", "attachments/")):
+            return {"count": 0, "results": []}
         if url.endswith("assistant/approvals/"):
             return {"items": []}
         return self._make_request(method, url, **kwargs)
