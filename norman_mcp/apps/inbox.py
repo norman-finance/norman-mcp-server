@@ -17,8 +17,8 @@ from norman_mcp.apps.inbox_overview import load_overview
 from norman_mcp.context import Context, set_api_company_id
 
 # Bump when the HTML changes: hosts cache widget templates by URI.
-INBOX_URI = "ui://norman/inbox-v6.html"
-PREVIOUS_INBOX_URI = "ui://norman/inbox-v5.html"
+INBOX_URI = "ui://norman/inbox-v7.html"
+PREVIOUS_INBOX_URI = "ui://norman/inbox-v6.html"
 READ = ToolAnnotations(
     read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False
 )
@@ -97,7 +97,9 @@ def tax_review(run: dict[str, Any]) -> dict[str, Any]:
     return {
         "key": f"autofiling:{run.get('publicId')}",
         "kind": "autofiling",
-        "title": "Tax Autopilot needs your input" if needs_input else "UStVA prepared — waiting for you",
+        "title": (
+            "Tax Autopilot needs your input" if needs_input else "UStVA prepared — waiting for you"
+        ),
         "detail": f"{start} - {end}" if start and end else "",
         "planned": "",
         "createdAt": run.get("created"),
@@ -137,6 +139,33 @@ def discovery_capabilities(company: dict[str, Any], tax_runs: Any) -> dict[str, 
     return {"ledger": ledger, "taxPreview": tax_preview}
 
 
+def company_profile(company_id: str, details: dict[str, Any]) -> dict[str, Any]:
+    """Only the selected company's identifying display fields, never its full record.
+
+    An unavailable or inconsistent profile must not borrow another company's
+    name. Keep the selected ID for context, with unknown display fields null.
+    """
+    if details.get("error") or details.get("publicId") not in (None, company_id):
+        details = {}
+
+    def text(key: str) -> str | None:
+        value = details.get(key)
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+    def flag(key: str) -> bool | None:
+        value = details.get(key)
+        return value if isinstance(value, bool) else None
+
+    return {
+        "id": company_id,
+        "name": text("name"),
+        "legalForm": text("accountType"),
+        "country": text("country"),
+        "isSme": flag("isSme"),
+        "isArchived": flag("isArchived"),
+    }
+
+
 async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
     company = await resolve_company(api)
     if not company:
@@ -157,15 +186,19 @@ async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
         # could hide every prepared UStVA.
         read_list(api, f"companies/{company}/autofiling/runs/"),
         load_overview(api, str(company)),
-        # One bounded lookup; never return the company's tax IDs, bank details
-        # or members just to decide which discovery tasks to suggest.
+        # One bounded lookup for display identity and discovery hints. Never
+        # return the company's tax IDs, bank details or members to the Inbox.
         read(api, f"companies/{company}/"),
     )
     if page > 1 and executions.get("status_code") == 404:
         # Deciding the last item on the last page empties that page and the API
         # answers 404 for it. Serve the last page that still exists instead.
         first = await executions_page(1)
-        last = max(1, math.ceil((first.get("count") or 0) / PAGE_SIZE)) if not first.get("error") else 1
+        last = (
+            max(1, math.ceil((first.get("count") or 0) / PAGE_SIZE))
+            if not first.get("error")
+            else 1
+        )
         page = min(page - 1, last)
         executions = first if page == 1 else await executions_page(page)
     for data in (runs, executions, tax_runs, overview, company_details):
@@ -180,7 +213,11 @@ async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
     tax = (
         []
         if tax_failed
-        else [tax_review(r) for r in tax_runs if isinstance(r, dict) and r.get("status") in TAX_REVIEW_STATUSES]
+        else [
+            tax_review(r)
+            for r in tax_runs
+            if isinstance(r, dict) and r.get("status") in TAX_REVIEW_STATUSES
+        ]
     )
     overview_names = {
         "bankBalances": "bank balances",
@@ -201,6 +238,7 @@ async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
     return {
         "view": "inbox",
         "companyId": str(company),
+        "company": company_profile(str(company), company_details),
         "capabilities": discovery_capabilities(company_details, tax_runs),
         "asOf": datetime.now(timezone.utc).isoformat(),
         "questions": questions,
@@ -257,7 +295,9 @@ def overview_text(overview: dict[str, Any]) -> str:
     return text
 
 
-async def entity_labels(api: Any, company: str, wanted: set[tuple[str, str]]) -> dict[tuple[str, str], str]:
+async def entity_labels(
+    api: Any, company: str, wanted: set[tuple[str, str]]
+) -> dict[tuple[str, str], str]:
     async def one(kind: str, ident: str) -> str | None:
         try:
             ident = str(UUID(ident))
@@ -272,8 +312,17 @@ async def entity_labels(api: Any, company: str, wanted: set[tuple[str, str]]) ->
 
 def register_inbox(mcp: Any) -> None:
     # Entrypoint icons belong to tools/list, not the HTML document's favicon.
-    icon = Path(__file__).parent.parent / "static" / "norman-icon.svg"
-    icon_src = "data:image/svg+xml;base64," + base64.b64encode(icon.read_bytes()).decode("ascii")
+    static = Path(__file__).parent.parent / "static"
+    icons = [
+        Icon(
+            src="data:image/svg+xml;base64,"
+            + base64.b64encode((static / filename).read_bytes()).decode("ascii"),
+            mimeType="image/svg+xml",
+            sizes=["any"],
+            theme=theme,
+        )
+        for theme, filename in (("light", "norman-icon.svg"), ("dark", "norman-icon-dark.svg"))
+    ]
     resource_meta = {
         "ui": {"prefersBorder": False, "csp": {"connectDomains": [], "resourceDomains": []}},
         "openai/widgetDescription": (
@@ -298,6 +347,7 @@ def register_inbox(mcp: Any) -> None:
     # Previously opened clients can still resolve their cached resource URI.
     for previous in (
         PREVIOUS_INBOX_URI,
+        "ui://norman/inbox-v5.html",
         "ui://norman/inbox-v4.html",
         "ui://norman/inbox-v3.html",
         "ui://norman/inbox-v2.html",
@@ -328,7 +378,7 @@ def register_inbox(mcp: Any) -> None:
 
     @mcp.tool(
         title="Open Norman Inbox",
-        icons=[Icon(src=icon_src, mimeType="image/svg+xml", sizes=["any"])],
+        icons=icons,
         annotations=READ,
         meta={
             "ui": {"resourceUri": INBOX_URI},
@@ -416,7 +466,11 @@ def register_inbox(mcp: Any) -> None:
         if before is not None:
             for field in ENTITY_PATHS:
                 value = before.get(field)
-                if isinstance(value, str) and value and not entity_label(current.get(f"{field}Details")):
+                if (
+                    isinstance(value, str)
+                    and value
+                    and not entity_label(current.get(f"{field}Details"))
+                ):
                     wanted.add((field, value))
         actions = [a for a in execution.get("actionsPlanned") or [] if isinstance(a, dict)]
         for action in actions:
