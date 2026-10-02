@@ -16,8 +16,8 @@ from norman_mcp.apps.inbox_overview import load_overview
 from norman_mcp.context import Context, set_api_company_id
 
 # Bump when the HTML changes: hosts cache widget templates by URI.
-INBOX_URI = "ui://norman/inbox-v4.html"
-PREVIOUS_INBOX_URI = "ui://norman/inbox-v3.html"
+INBOX_URI = "ui://norman/inbox-v5.html"
+PREVIOUS_INBOX_URI = "ui://norman/inbox-v4.html"
 READ = ToolAnnotations(
     read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False
 )
@@ -258,7 +258,7 @@ def register_inbox(mcp: Any) -> None:
         return Path(__file__).with_name("inbox.html").read_text(encoding="utf-8")
 
     # Previously opened clients can still resolve their cached resource URI.
-    for previous in (PREVIOUS_INBOX_URI, "ui://norman/inbox-v2.html"):
+    for previous in (PREVIOUS_INBOX_URI, "ui://norman/inbox-v3.html", "ui://norman/inbox-v2.html"):
         mcp.resource(
             previous,
             name="norman-" + previous.rsplit("/", 1)[1].removesuffix(".html"),
