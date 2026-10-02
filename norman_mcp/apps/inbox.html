@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
     <title>Norman Inbox</title>
     <style>
       /* Plus Jakarta Sans, embedded for offline MCP hosts. SIL OFL 1.1: static/plus-jakarta-sans-OFL.txt. */
@@ -94,7 +97,79 @@
       main {
         max-width: 1100px;
         margin: auto;
-        padding: 32px;
+        --space: 32px;
+        padding: calc(
+            var(--space) +
+              max(var(--safe-top, 0px), env(safe-area-inset-top, 0px))
+          )
+          calc(
+            var(--space) +
+              max(var(--safe-right, 0px), env(safe-area-inset-right, 0px))
+          )
+          calc(
+            var(--space) +
+              max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px))
+          )
+          calc(
+            var(--space) +
+              max(var(--safe-left, 0px), env(safe-area-inset-left, 0px))
+          );
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+        scroll-padding-top: 20px;
+      }
+      :root[data-bounded="true"],
+      :root[data-bounded="true"] body {
+        height: 100%;
+        overflow: hidden;
+      }
+      :root[data-bounded="true"] main {
+        height: min(var(--host-height, 100dvh), 100dvh);
+      }
+      #company {
+        margin: 16px 0 24px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--n-border-default);
+      }
+      #company-toggle {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 0;
+        border: 0;
+        text-align: left;
+        max-width: 100%;
+        font-size: 16px;
+      }
+      #company-name {
+        overflow-wrap: anywhere;
+      }
+      #company-meta {
+        font-size: 12px;
+      }
+      #company-options {
+        margin-top: 12px;
+      }
+      #company-options button {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        width: 100%;
+        text-align: left;
+        padding: 12px 0;
+        border: 0;
+        border-top: 1px solid var(--n-border-default);
+        overflow-wrap: anywhere;
+      }
+      #company-options small {
+        display: block;
+        font-weight: 400;
+      }
+      .mobile-only {
+        display: none;
       }
       header {
         display: flex;
@@ -426,8 +501,22 @@
       #status.error {
         color: var(--n-status-error);
       }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --n-surface-page: #0a0a0b;
+        --n-surface-subtle: #141416;
+        --n-text-primary: #fff;
+        --n-text-secondary: #b2b2b8;
+        --n-border-default: #26262a;
+        --n-accent-base: #fff;
+        --n-accent-hover: #d4d4d9;
+        --n-accent-contrast: #0a0a0b;
+      }
+      :root[data-theme="light"] {
+        color-scheme: light;
+      }
       @media (prefers-color-scheme: dark) {
-        :root {
+        :root:not([data-theme]) {
           --n-surface-page: #0a0a0b;
           --n-surface-subtle: #141416;
           --n-text-primary: #fff;
@@ -440,7 +529,67 @@
       }
       @media (max-width: 700px) {
         main {
-          padding: 20px;
+          --space: 20px;
+        }
+        :root:not([data-bounded="false"]),
+        :root:not([data-bounded="false"]) body {
+          height: 100%;
+          overflow: hidden;
+        }
+        :root:not([data-bounded="false"]) main {
+          height: min(var(--host-height, 100dvh), 100dvh);
+        }
+        .desktop-only,
+        #freshness,
+        .primary-intro,
+        .suggestion .outcome,
+        .empty-on-mobile,
+        .metrics.all-clear {
+          display: none;
+        }
+        .mobile-only {
+          display: inline;
+        }
+        h1 {
+          font-size: 22px;
+        }
+        .brand {
+          height: 18px;
+          margin-bottom: 12px;
+        }
+        #company {
+          margin: 12px 0 16px;
+          padding-bottom: 12px;
+        }
+        #status {
+          margin-top: 0;
+        }
+        button {
+          min-height: 44px;
+        }
+        .suggestion {
+          padding: 16px 0;
+        }
+        .suggestion.is-clear {
+          padding: 10px 0;
+        }
+        .suggestion.is-clear .scope {
+          display: none;
+        }
+        .suggestion.is-clear strong {
+          font-size: 12px;
+          font-weight: 400;
+          color: var(--n-text-secondary);
+        }
+        .suggestion button {
+          width: 100%;
+        }
+        .overview-stats {
+          margin: 12px 0;
+          padding: 12px 0;
+        }
+        .overview-stat .notice {
+          font-size: 11px;
         }
         .layout {
           grid-template-columns: 1fr;
@@ -469,7 +618,7 @@
     </style>
   </head>
   <body>
-    <main>
+    <main id="inbox-scroll" aria-label="Norman Inbox">
       <header>
         <div>
           <!-- Shared Norman wordmark from the frontend's LogoMark.tsx. -->
@@ -488,11 +637,27 @@
               fill="currentColor"
             />
           </svg>
-          <h1>Let AI handle your bookkeeping</h1>
+          <h1>
+            <span class="desktop-only">Let AI handle your bookkeeping</span
+            ><span class="mobile-only">Your Inbox</span>
+          </h1>
           <div class="muted">Choose a task. AI takes it from here in chat.</div>
         </div>
         <button id="refresh">Refresh</button>
       </header>
+      <section id="company" aria-label="Current company">
+        <button
+          id="company-toggle"
+          aria-expanded="false"
+          aria-controls="company-options"
+          aria-label="Change company"
+        >
+          <span id="company-name">Selected company</span
+          ><span aria-hidden="true">⌄</span>
+        </button>
+        <div id="company-meta" class="muted"></div>
+        <div id="company-options" hidden></div>
+      </section>
       <div id="status" role="status" aria-live="polite"></div>
       <div id="freshness" class="muted notice"></div>
       <section id="chat-request" hidden>
@@ -512,6 +677,16 @@
           busy: false,
           ready: false,
           hostCapabilities: {},
+          hostContext: {},
+          legacyContext: {},
+          companyOpen: false,
+          companies: [],
+          companyListNote: "",
+          companyListError: "",
+          switching: false,
+          companyUncertain: false,
+          switchedLocally: false,
+          switchTarget: null,
           helpOpen: false,
           discoveryOrder: null,
           pending: new Map(),
@@ -627,7 +802,12 @@
         function syncControls() {
           document
             .querySelectorAll("button")
-            .forEach((button) => (button.disabled = state.busy));
+            .forEach(
+              (button) =>
+                (button.disabled =
+                  state.busy ||
+                  (state.companyUncertain && button.id !== "refresh")),
+            );
           const confirm = document.querySelector("#confirm"),
             approve = document.querySelector("#approve");
           if (confirm) {
@@ -693,6 +873,10 @@
           else if (draftFitted && draftChanged()) warn(QUESTION_CHANGED);
         }
         function setInbox(next) {
+          if (state.switchTarget && next.companyId !== state.switchTarget)
+            throw Error(
+              "Company switch is still unconfirmed. Refresh to check it before choosing a task.",
+            );
           if (
             next.view !== "inbox" ||
             !next.summary ||
@@ -731,6 +915,9 @@
             warn("Company changed. Select a decision to review.");
           }
           state.data = next;
+          state.companyUncertain = false;
+          state.switchTarget = null;
+          renderCompany();
           state.lastCheck = Date.now();
         }
         const esc = (x) =>
@@ -815,28 +1002,42 @@
           return new Promise((resolve, reject) => {
             const timer = setTimeout(() => {
               state.pending.delete(id);
-              reject(
-                Error("Request timed out. Refresh before retrying an action."),
+              const error = Error(
+                "Request timed out. Refresh before retrying an action.",
               );
+              error.unknownOutcome = true;
+              reject(error);
             }, timeout);
             state.pending.set(id, { resolve, reject, timer });
             parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
           });
         }
         async function tool(name, args = {}) {
-          return object(
-            await (state.ready
-              ? rpc("tools/call", { name, arguments: args })
-              : window.openai?.callTool
-                ? window.openai.callTool(name, args)
-                : rpc("tools/call", { name, arguments: args })),
-          );
+          let result;
+          if (!state.ready && window.openai?.callTool) {
+            try {
+              result = await window.openai.callTool(name, args);
+            } catch (error) {
+              error.unknownOutcome = true;
+              throw error;
+            }
+          } else result = await rpc("tools/call", { name, arguments: args });
+          return object(result);
         }
         function modelContext() {
           const d = state.data,
             s = state.detail;
+          if (!d)
+            return {
+              view: "inbox",
+              companyId: null,
+              selected: null,
+              status:
+                "Company selection is being refreshed. Do not act on previous Inbox context.",
+            };
           return {
             companyId: d.companyId,
+            company: d.company?.id === d.companyId ? d.company : null,
             view: "inbox",
             summary: d.summary,
             ...(d.overview ? { overview: d.overview } : {}),
@@ -858,7 +1059,12 @@
         // Each ui/update-model-context replaces the previous one, so every
         // update carries the summary and the current selection together.
         async function syncContext() {
-          if (!state.initialized || state.disposed || !state.data) return false;
+          if (
+            !state.initialized ||
+            state.disposed ||
+            (!state.data && !state.companyUncertain)
+          )
+            return false;
           if (!state.ready && !window.openai?.setWidgetState) return false;
           const data = modelContext(),
             fingerprint = stable(data);
@@ -950,7 +1156,10 @@
               "Conversation messaging is unavailable in this host. Copy the request into chat.",
             );
           } catch (error) {
-            if (error.name === "StaleResponse" || company !== state.data?.companyId)
+            if (
+              error.name === "StaleResponse" ||
+              company !== state.data?.companyId
+            )
               throw stale();
             showChatRequest(text);
             throw error;
@@ -1265,7 +1474,8 @@
           },
           monthlyReconciliation: {
             label: "Finish my monthly bookkeeping",
-            description: "Match documents, categorize and finalize clear cases.",
+            description:
+              "Match documents, categorize and finalize clear cases.",
             mode: "bookkeeping",
             request:
               "Complete monthly bookkeeping within the overview period, month by month: match documents, assign supported categories and finalize well-documented clear cases. Leave entries blocked by missing facts or ambiguous evidence unresolved. Do not claim the period is reconciled from a limited batch.",
@@ -1297,7 +1507,8 @@
           },
           draftInvoice: {
             label: "Draft an invoice",
-            description: "Prepare an unsent draft with your client and services.",
+            description:
+              "Prepare an unsent draft with your client and services.",
             mode: "invoiceDraft",
             request:
               'Prepare an invoice draft using the actual client, services, prices, currency and applicable tax treatment. Ask for missing required details, including dates; do not infer invoice dates from the overview period. Explicitly pass status="draft" when creating the invoice because omitting it may issue the invoice. Show the saved draft for review.',
@@ -1326,7 +1537,8 @@
           },
           ledger: {
             label: "Explore my accounts",
-            description: "Explain account balances and the entries behind them.",
+            description:
+              "Explain account balances and the entries behind them.",
             mode: "readOnly",
             capability: "ledger",
             request:
@@ -1464,7 +1676,7 @@
                 button: "Finalize my transactions",
               },
             ];
-          return `<section class="overview" aria-label="Bookkeeping next steps"><p class="notice">Sends the task to this chat. AI handles clear cases and asks when facts are missing.</p><div class="suggestions">${suggestions
+          return `<section class="overview" aria-label="Bookkeeping next steps"><p class="notice primary-intro">Sends the task to this chat. AI handles clear cases and asks when facts are missing.</p><div class="suggestions">${suggestions
             .map((task) => {
               const n = o.actions?.[task.key],
                 known = Number.isInteger(n) && n >= 0,
@@ -1472,9 +1684,9 @@
                   known && n === 0
                     ? task.zero
                     : known
-                      ? `${n} ${task.noun}`
+                      ? `${n} ${n === 1 ? task.noun.replace("invoices", "invoice").replace("documents", "document").replace("transactions", "transaction") : task.noun}`
                       : task.title;
-              return `<article class="card suggestion" data-suggestion="${task.key}"><div><strong>${title}</strong>${!known ? '<p class="muted">Count unavailable</p>' : ""}${known && n === 0 ? "" : `<p class="muted">${task.outcome}</p>`}<p class="muted scope">${task.scope}</p></div>${known && n === 0 ? "" : `<button id="intent-${task.key}" data-intent="${task.key}">${task.button}</button>`}</article>`;
+              return `<article class="card suggestion${known && n === 0 ? " is-clear" : ""}" data-suggestion="${task.key}"><div><strong>${title}</strong>${!known ? '<p class="muted">Count unavailable</p>' : ""}${known && n === 0 ? "" : `<p class="muted outcome">${task.outcome}</p>`}<p class="muted scope">${task.scope}</p></div>${known && n === 0 ? "" : `<button id="intent-${task.key}" data-intent="${task.key}">${task.button}</button>`}</article>`;
             })
             .join(
               "",
@@ -1559,14 +1771,15 @@
                 ? [focused.selectionStart, focused.selectionEnd]
                 : null;
           // What is on screen; polls back off while it stays the same.
-          state.markup = `${overview(d)}<div class="metrics" aria-label="Decision summary"><div class="metric"><strong>${display(d.summary.questions)}</strong><span>Workflows need you</span></div><div class="metric"><strong>${display(d.summary.approvals)}</strong><span>Pending approvals</span></div><div class="metric"><strong>${display(d.summary.taxReviewsShown)}</strong><span>Tax reviews shown</span></div></div>${d.unavailable.length ? `<p class="error">Unavailable: ${esc(d.unavailable.join(", "))}. Refresh to retry.</p>` : ""}<div class="layout${state.detail ? "" : " no-selection"}"><div>${d.questions.length || d.approvals.length || d.taxReviews.length ? "<h2>Decisions to review</h2>" : ""}${d.questions.map((r) => `<article class="card"><div class="tag">Workflow · ${esc(human(r.blockedReason))}</div><strong>${esc(r.title)}</strong><p>${esc(r.blockedDetail || r.steps?.find((s) => s.active)?.title || "Review the current step.")}</p><button data-run="${esc(r.publicId)}">Review question</button></article>`).join("")}${d.approvals.map((e) => `<article class="card"><div class="tag">Automation approval</div><strong>${esc(e.ruleName || e.rule?.name || "Automation")}</strong><p>${described(e.transaction?.description || "Review planned actions", facts(e.transaction))}</p><button data-execution="${esc(e.publicId)}">Review changes</button></article>`).join("")}${d.taxReviews.map((t) => `<article class="card"><div class="tag">Tax review</div><strong>${esc(t.title)}</strong><p>${esc(t.detail)}</p><button data-tax="${esc(t.key)}">Discuss in chat</button></article>`).join("")}${!d.questions.length && !d.approvals.length && !d.taxReviews.length ? '<div class="empty">No workflow questions, approvals or tax reviews returned.</div>' : ""}<div class="row">${d.pagination.page > 1 ? '<button id="previous">Previous approvals</button>' : ""}${d.pagination.hasNext ? '<button id="next">More approvals</button>' : ""}</div><p class="muted notice">Tax reviews are a bounded list. Approval totals include all pages.</p><h2>In progress</h2>${
+          state.markup = `${overview(d)}<div class="metrics${Object.values(d.summary).every((n) => n === 0) ? " all-clear" : ""}" aria-label="Decision summary"><div class="metric"><strong>${display(d.summary.questions)}</strong><span>Workflows need you</span></div><div class="metric"><strong>${display(d.summary.approvals)}</strong><span>Pending approvals</span></div><div class="metric"><strong>${display(d.summary.taxReviewsShown)}</strong><span>Tax reviews shown</span></div></div>${d.unavailable.length ? `<p class="error">Unavailable: ${esc(d.unavailable.join(", "))}. Refresh to retry.</p>` : ""}<div class="layout${state.detail ? "" : " no-selection"}"><div>${d.questions.length || d.approvals.length || d.taxReviews.length ? "<h2>Decisions to review</h2>" : ""}${d.questions.map((r) => `<article class="card"><div class="tag">Workflow · ${esc(human(r.blockedReason))}</div><strong>${esc(r.title)}</strong><p>${esc(r.blockedDetail || r.steps?.find((s) => s.active)?.title || "Review the current step.")}</p><button data-run="${esc(r.publicId)}">Review question</button></article>`).join("")}${d.approvals.map((e) => `<article class="card"><div class="tag">Automation approval</div><strong>${esc(e.ruleName || e.rule?.name || "Automation")}</strong><p>${described(e.transaction?.description || "Review planned actions", facts(e.transaction))}</p><button data-execution="${esc(e.publicId)}">Review changes</button></article>`).join("")}${d.taxReviews.map((t) => `<article class="card"><div class="tag">Tax review</div><strong>${esc(t.title)}</strong><p>${esc(t.detail)}</p><button data-tax="${esc(t.key)}">Discuss in chat</button></article>`).join("")}${!d.questions.length && !d.approvals.length && !d.taxReviews.length ? '<div class="empty empty-on-mobile">No workflow questions, approvals or tax reviews returned.</div>' : ""}<div class="row">${d.pagination.page > 1 ? '<button id="previous">Previous approvals</button>' : ""}${d.pagination.hasNext ? '<button id="next">More approvals</button>' : ""}</div><p class="muted notice${d.taxReviews.length || d.approvals.length ? "" : " empty-on-mobile"}">Tax reviews are a bounded list. Approval totals include all pages.</p><h2${d.runs.some((r) => !r.blockedReason) ? "" : ' class="empty-on-mobile"'}>In progress</h2>${
             d.runs
               .filter((r) => !r.blockedReason)
               .map(
                 (r) =>
                   `<article class="card"><strong>${esc(r.title)}</strong><p class="muted">${esc(r.steps?.find((s) => s.active)?.title || r.state)}</p></article>`,
               )
-              .join("") || '<div class="empty">No other active workflows.</div>'
+              .join("") ||
+            '<div class="empty empty-on-mobile">No other active workflows.</div>'
           }</div>${state.detail ? `<aside class="detail" aria-labelledby="review-heading">${review()}</aside>` : ""}</div>`;
           content.innerHTML = state.markup;
           const help = document.getElementById("bookkeeping-help");
@@ -1828,7 +2041,37 @@
         function toolResult(params) {
           try {
             const d = object(params);
-            if (d.view !== "inbox" || older(d, state.data)) return;
+            if (
+              state.switching ||
+              state.companyUncertain ||
+              d.view !== "inbox" ||
+              older(d, state.data)
+            )
+              return;
+            // After a local switch, an old request may still push a result with
+            // a later timestamp. Verify selection with a new read before adopting it.
+            if (
+              state.switchedLocally &&
+              state.data &&
+              d.companyId !== state.data.companyId
+            ) {
+              state.revision++;
+              state.companyUncertain = true;
+              setDetail(null);
+              state.data = null;
+              state.context = "";
+              state.discoveryOrder = null;
+              state.helpOpen = false;
+              showChatRequest("");
+              content.innerHTML =
+                '<div class="empty">Checking selected company…</div>';
+              renderCompany();
+              syncControls();
+              void syncContext();
+              state.refreshWanted = true;
+              schedulePolling(0);
+              return;
+            }
             // Hosts may also push the result of our own read.
             if (
               state.data &&
@@ -1881,6 +2124,8 @@
           }
           const request = m.id !== undefined && m.id !== null;
           if (m.method === "ui/notifications/tool-result") toolResult(m.params);
+          else if (m.method === "ui/notifications/host-context-changed")
+            applyHostContext(m.params || {});
           else if (m.method === "ui/resource-teardown") {
             dispose();
             if (request) reply(m.id, { result: {} });
@@ -1892,6 +2137,266 @@
                 : { error: { code: -32601, message: "Method not found" } },
             );
         });
+        function applyHostContext(update = {}, legacy = false) {
+          if (!update || typeof update !== "object") return;
+          if (legacy)
+            state.legacyContext = { ...state.legacyContext, ...update };
+          else state.hostContext = { ...state.hostContext, ...update };
+          const context = { ...state.legacyContext, ...state.hostContext },
+            root = document.documentElement;
+          if (["light", "dark"].includes(context.theme))
+            root.dataset.theme = context.theme;
+          else delete root.dataset.theme;
+          for (const edge of ["top", "right", "bottom", "left"]) {
+            const value = context.safeAreaInsets?.[edge];
+            root.style.setProperty(
+              `--safe-${edge}`,
+              `${Number.isFinite(value) && value >= 0 ? value : 0}px`,
+            );
+          }
+          const dimensions = context.containerDimensions || {},
+            height = dimensions.height ?? dimensions.maxHeight,
+            validHeight = Number.isFinite(height) && height > 0,
+            bounded =
+              validHeight ||
+              context.displayMode === "fullscreen" ||
+              context.displayMode === "pip" ||
+              context.platform === "mobile";
+          if (bounded || context.displayMode === "inline")
+            root.dataset.bounded = String(bounded);
+          else delete root.dataset.bounded;
+          if (validHeight)
+            root.style.setProperty("--host-height", `${height}px`);
+          else root.style.removeProperty("--host-height");
+        }
+        function legacyChanged(event) {
+          const globals = event?.detail?.globals || window.openai || {},
+            update = {};
+          if (globals.theme !== undefined) update.theme = globals.theme;
+          if (globals.displayMode !== undefined)
+            update.displayMode = globals.displayMode;
+          if (globals.safeArea !== undefined)
+            update.safeAreaInsets = globals.safeArea?.insets;
+          if (globals.maxHeight !== undefined)
+            update.containerDimensions = { maxHeight: globals.maxHeight };
+          applyHostContext(update, true);
+        }
+        window.addEventListener("openai:set_globals", legacyChanged);
+        legacyChanged();
+        let reportedSize = "";
+        const sizeObserver = new ResizeObserver(([entry]) => {
+          if (
+            !state.ready ||
+            state.disposed ||
+            document.documentElement.dataset.bounded === "true"
+          )
+            return;
+          const width = Math.ceil(entry.target.getBoundingClientRect().width),
+            height = Math.ceil(entry.target.getBoundingClientRect().height),
+            key = `${width}:${height}`;
+          if (key === reportedSize) return;
+          reportedSize = key;
+          parent.postMessage(
+            {
+              jsonrpc: "2.0",
+              method: "ui/notifications/size-changed",
+              params: { width, height },
+            },
+            "*",
+          );
+        });
+        sizeObserver.observe(document.querySelector("main"));
+        const profileText = (value) =>
+          typeof value === "string" ? value.trim() : "";
+        function companyMeta(profile) {
+          const legal = profileText(profile?.legalForm),
+            country = profileText(profile?.country);
+          return [legal.replaceAll("_", " "), country]
+            .filter(Boolean)
+            .join(" · ");
+        }
+        function renderCompany() {
+          const profile =
+            state.data?.company?.id === state.data?.companyId
+              ? state.data?.company
+              : null;
+          document.getElementById("company-name").textContent =
+            state.companyUncertain
+              ? "Checking selected company…"
+              : profileText(profile?.name) || "Selected company";
+          document.getElementById("company-meta").textContent =
+            companyMeta(profile);
+          const toggle = document.getElementById("company-toggle"),
+            options = document.getElementById("company-options");
+          toggle.setAttribute("aria-expanded", String(state.companyOpen));
+          options.hidden = !state.companyOpen;
+        }
+        function renderCompanies() {
+          const options = document.getElementById("company-options");
+          options.innerHTML = state.companyListError
+            ? `<p class="error">${esc(state.companyListError)}</p><button id="company-retry">Try again</button>`
+            : state.companies
+                .map(
+                  (company) =>
+                    `<button data-company-id="${esc(company.id)}"${company.id === state.data?.companyId ? ' aria-current="true"' : ""}><span>${esc(company.name || "Unnamed company")}<small class="muted">${esc(companyMeta(company))}</small></span>${company.id === state.data?.companyId ? '<span class="muted">Current</span>' : '<span aria-hidden="true">→</span>'}</button>`,
+                )
+                .join("") +
+              (state.companyListNote
+                ? `<p class="notice">${esc(state.companyListNote)}</p>`
+                : "") +
+              (!state.companies.length
+                ? '<p class="notice">No available companies returned.</p>'
+                : "");
+          options.querySelectorAll("[data-company-id]").forEach((button) => {
+            button.onclick = () => switchCompany(button.dataset.companyId);
+          });
+          const retry = document.getElementById("company-retry");
+          if (retry) retry.onclick = loadCompanies;
+          renderCompany();
+          syncControls();
+        }
+        function loadCompanies() {
+          return action(
+            async (revision) => {
+              state.companyOpen = true;
+              state.companyListError = "";
+              renderCompany();
+              document.getElementById("company-options").textContent =
+                "Loading companies…";
+              try {
+                const result = await tool("list_companies", {
+                  include_archived: false,
+                });
+                guard(revision);
+                if (!Array.isArray(result.companies))
+                  throw Error("Company list is unavailable.");
+                const seen = new Set();
+                state.companies = result.companies
+                  .filter((company) => {
+                    if (
+                      !company ||
+                      typeof company.id !== "string" ||
+                      !company.id.trim() ||
+                      company.isArchived !== false ||
+                      seen.has(company.id)
+                    )
+                      return false;
+                    seen.add(company.id);
+                    return true;
+                  })
+                  .map((company) => ({
+                    id: company.id,
+                    name: profileText(company.name),
+                    legalForm: profileText(company.legalForm),
+                    country: profileText(company.country),
+                  }));
+                state.companyListNote =
+                  result.note ||
+                  (Number.isInteger(result.count) &&
+                    result.count > state.companies.length)
+                    ? "Some companies are not shown. Ask Norman in chat to find another company."
+                    : "";
+                renderCompanies();
+                return "Choose a company to work with.";
+              } catch (error) {
+                guard(revision);
+                state.companyListError = "Could not load companies. Try again.";
+                renderCompanies();
+                throw error;
+              }
+            },
+            { kind: "open" },
+          );
+        }
+        document.getElementById("company-toggle").onclick = () => {
+          if (state.busy || state.companyUncertain) return;
+          if (state.companyOpen) {
+            state.companyOpen = false;
+            renderCompany();
+          } else void loadCompanies();
+        };
+        document
+          .getElementById("company")
+          .addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && state.companyOpen && !state.busy) {
+              state.companyOpen = false;
+              renderCompany();
+              document.getElementById("company-toggle").focus();
+            }
+          });
+        function switchCompany(companyId) {
+          if (!state.companies.some((company) => company.id === companyId))
+            return;
+          if (state.data?.companyId === companyId) {
+            state.companyOpen = false;
+            renderCompany();
+            return;
+          }
+          return action(
+            async (revision) => {
+              state.switching = true;
+              state.switchedLocally = true;
+              state.companyUncertain = true;
+              state.companyOpen = false;
+              setDetail(null);
+              state.consent =
+                state.answer =
+                state.answerFor =
+                state.answerQuestion =
+                state.context =
+                  "";
+              state.data = null;
+              state.markup = "";
+              state.discoveryOrder = null;
+              state.helpOpen = false;
+              showChatRequest("");
+              content.innerHTML =
+                '<div class="empty">Loading company Inbox…</div>';
+              renderCompany();
+              syncControls();
+              try {
+                await syncContext();
+                guard(revision);
+                let switchError = null;
+                try {
+                  const result = await tool("switch_company", {
+                    company_id: companyId,
+                  });
+                  if (result?.activeCompanyId !== companyId)
+                    throw Error("Company switch was not confirmed.");
+                } catch (error) {
+                  switchError = error;
+                  if (error.unknownOutcome) state.switchTarget = companyId;
+                }
+                // A timeout can mean the server switched successfully. Read actual
+                // selection, never retry a switch or restore the previous snapshot.
+                guard(revision);
+                const next = await tool("get_norman_inbox_data", { page: 1 });
+                guard(revision);
+                if (typeof next?.companyId !== "string" || !next.companyId)
+                  throw Error(
+                    "Selected company is unavailable. Refresh to retry.",
+                  );
+                setInbox(next);
+                render();
+                if (next.companyId !== companyId) {
+                  return switchError
+                    ? "Could not switch company. The current company has been reloaded."
+                    : "Company selection changed. Showing the current company.";
+                }
+                return "Company switched. Choose a task for this company.";
+              } finally {
+                state.switching = false;
+                if (state.companyUncertain) {
+                  content.innerHTML =
+                    '<div class="empty">Company selection could not be checked. Refresh before choosing a task.</div>';
+                  renderCompany();
+                }
+              }
+            },
+            { kind: "switch" },
+          );
+        }
         document.querySelector("#refresh").onclick = () =>
           action((revision) =>
             refresh(state.data?.pagination.page || 1, revision),
@@ -1960,6 +2465,8 @@
           state.revision++;
           stopPolling();
           observer.disconnect();
+          sizeObserver.disconnect();
+          window.removeEventListener("openai:set_globals", legacyChanged);
           document.removeEventListener("visibilitychange", visibilityChanged);
           window.removeEventListener("focus", wake);
           document.removeEventListener("pointerdown", touch, true);
@@ -1976,6 +2483,7 @@
           if (state.ready || state.disposed) return;
           state.ready = true;
           state.hostCapabilities = result?.hostCapabilities || {};
+          applyHostContext(result?.hostContext || {});
           parent.postMessage(
             {
               jsonrpc: "2.0",
