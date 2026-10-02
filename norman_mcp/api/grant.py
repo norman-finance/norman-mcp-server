@@ -34,13 +34,13 @@ class GrantAPI:
         self.client = client
         self.timeout = timeout
 
-    async def arequest(self, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
+    async def arequest(self, method: str, url: str, **kwargs: Any) -> dict[str, Any] | list[Any]:
+        params = kwargs.get("params")
         if method != "GET" or not validate_url(url):
             raise ValueError("Grant-pinned access only supports trusted API reads.")
         token = self.provider.get_norman_token(self.mcp_token)
         if not token:
             return {"error": "Norman connection is unavailable.", "status_code": 401}
-        params = kwargs.get("params")
         response = await self._get(url, token, params)
         if response is not None and response.status_code == 401:
             refreshed = await asyncio.to_thread(
@@ -56,18 +56,27 @@ class GrantAPI:
             data = response.json()
         except ValueError:
             return {"error": "Norman returned an invalid response."}
-        return data if isinstance(data, dict) else {"error": "Norman returned an unexpected response."}
+        return (
+            data
+            if isinstance(data, (dict, list))
+            else {"error": "Norman returned an unexpected response."}
+        )
 
     async def _get(self, url: str, token: str, params: Any) -> httpx.Response | None:
         headers = {**HEADERS, "Authorization": "Bearer " + token}
         if self.company_id:
             headers["X-Company-Id"] = str(self.company_id)
         try:
+            request: dict[str, Any] = {
+                "params": params,
+                "headers": headers,
+                "follow_redirects": False,
+            }
             if self.client is not None:
-                return await self.client.get(url, params=params, headers=headers, timeout=self.timeout)
+                return await self.client.get(url, **request, timeout=self.timeout)
             async with httpx.AsyncClient(
                 timeout=self.timeout, follow_redirects=False, trust_env=False
             ) as client:
-                return await client.get(url, params=params, headers=headers)
+                return await client.get(url, **request)
         except httpx.RequestError:
             return None

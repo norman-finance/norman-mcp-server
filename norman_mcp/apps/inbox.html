@@ -321,6 +321,48 @@
         font-size: 12px;
         margin: 16px 0;
       }
+      .overview-stats,
+      .suggestions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0 24px;
+      }
+      .overview-stats {
+        padding: 16px 0;
+        margin: 24px 0 16px;
+        border-top: 1px solid var(--n-border-default);
+        border-bottom: 1px solid var(--n-border-default);
+      }
+      .overview-stat + .overview-stat {
+        border-left: 1px solid var(--n-border-default);
+        padding-left: 24px;
+      }
+      .overview-value {
+        font-size: 24px;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      .overview-stat .notice {
+        margin: 4px 0 0;
+      }
+      .overview .quick-actions {
+        margin-bottom: 24px;
+      }
+      .suggestions {
+        margin-bottom: 24px;
+      }
+      .suggestion {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .suggestion p {
+        margin-bottom: 0;
+      }
+      .suggestion button {
+        flex-shrink: 0;
+      }
       #dismiss,
       #undo {
         margin-top: 8px;
@@ -372,6 +414,15 @@
           border-top: 1px solid var(--n-border-default);
           padding: 20px 0 0;
         }
+        .suggestions {
+          grid-template-columns: 1fr;
+        }
+        .overview-value {
+          font-size: 20px;
+        }
+        .overview-stat + .overview-stat {
+          padding-left: 12px;
+        }
       }
     </style>
   </head>
@@ -387,6 +438,10 @@
       </header>
       <div id="status" role="status" aria-live="polite"></div>
       <div id="freshness" class="muted notice"></div>
+      <section id="chat-request" hidden>
+        <label for="chat-request-text">Copy this request into chat</label>
+        <textarea id="chat-request-text" readonly></textarea>
+      </section>
       <section id="content">
         <div class="empty">Connecting to Norman…</div>
       </section>
@@ -398,6 +453,7 @@
           detail: null,
           busy: false,
           ready: false,
+          hostCapabilities: {},
           pending: new Map(),
           id: 1,
           initId: null,
@@ -607,6 +663,7 @@
             state.answer = "";
             state.answerFor = "";
             state.context = "";
+            showChatRequest("");
             warn("Company changed. Select a decision to review.");
           }
           state.data = next;
@@ -718,6 +775,7 @@
             companyId: d.companyId,
             view: "inbox",
             summary: d.summary,
+            ...(d.overview ? { overview: d.overview } : {}),
             selected: !s
               ? null
               : s.kind === "workflow"
@@ -748,15 +806,52 @@
             if (state.context === fingerprint) state.context = "";
           }
         }
+        function showChatRequest(text) {
+          document.getElementById("chat-request").hidden = !text;
+          document.getElementById("chat-request-text").value = text;
+        }
         async function ask(text) {
-          if (state.ready)
-            return rpc("ui/message", {
-              role: "user",
-              content: [{ type: "text", text }],
-            });
-          if (window.openai?.sendFollowUpMessage)
-            return window.openai.sendFollowUpMessage({ prompt: text });
-          throw Error("Conversation messaging is unavailable in this host.");
+          const company = state.data?.companyId;
+          showChatRequest("");
+          const accepted = (result) => {
+            if (result?.isError)
+              throw Error(
+                "The host did not accept this chat request. Copy it into chat to continue.",
+              );
+            return result;
+          };
+          try {
+            if (state.ready && state.hostCapabilities.message?.text) {
+              try {
+                return accepted(
+                  await rpc("ui/message", {
+                    role: "user",
+                    content: [{ type: "text", text }],
+                  }),
+                );
+              } catch (error) {
+                // Method-not-found is an explicit unsupported response. A
+                // timeout or rejection must not cause a duplicate chat turn.
+                if (
+                  error.code !== -32601 ||
+                  !window.openai?.sendFollowUpMessage
+                )
+                  throw error;
+                if (company !== state.data?.companyId) throw stale();
+              }
+            }
+            if (window.openai?.sendFollowUpMessage)
+              return accepted(
+                await window.openai.sendFollowUpMessage({ prompt: text }),
+              );
+            throw Error(
+              "Conversation messaging is unavailable in this host. Copy the request into chat.",
+            );
+          } catch (error) {
+            if (company !== state.data?.companyId) throw stale();
+            showChatRequest(text);
+            throw error;
+          }
         }
         function unloaded() {
           if (!state.data)
@@ -884,7 +979,9 @@
               result = human(run.blockedReason || run.state);
             }
             await refresh(state.data.pagination.page, revision);
-            say(result ? `${done}. Norman now reports: ${result}.` : `${done}.`);
+            say(
+              result ? `${done}. Norman now reports: ${result}.` : `${done}.`,
+            );
           } catch {
             if (!state.disposed)
               say(
@@ -1046,6 +1143,96 @@
             .join(" · ");
         const described = (description, line) =>
           `${esc(description)}${description && line ? "<br>" : ""}${line ? `<span class="facts">${line}</span>` : ""}`;
+        // UI actions select a fixed intent; returned tool/document text never
+        // supplies a prompt or a tool name to execute.
+        const INTENTS = Object.freeze({
+          financialStatus: {
+            label: "Show my financial status",
+            request:
+              "Show my financial status for the overview period. Keep bank balances by currency separate from period income, costs and profit, and identify unavailable data.",
+          },
+          findReceipts: {
+            label: "Find receipts",
+            request:
+              "Find missing receipts for transactions in the overview period. Inspect Norman and available connected sources, and show candidate matches and a proposed attachment plan.",
+          },
+          monthlyReconciliation: {
+            label: "Monthly reconciliation",
+            request:
+              "Review monthly reconciliation within the overview period, month by month. Show missing documents, categories and verification blockers, then preview proposed fixes. Do not claim the period is reconciled from a limited batch.",
+          },
+          overdueInvoices: {
+            label: "Overdue invoices",
+            request:
+              "Review all currently outstanding overdue invoices across all dates. Show the invoice, payment and existing reminder status, then preview any proposed reminders.",
+          },
+          unmatchedDocuments: {
+            label: "Unmatched documents",
+            request:
+              "Review all currently unattached invoices and receipts across all dates. Show proposed transaction matches first.",
+          },
+          unreviewedTransactions: {
+            label: "Unfinalized transactions",
+            request:
+              "Review transactions with status UNVERIFIED across all history, independently of the overview period. Show what needs a document, category or other information, then preview proposed finalization changes.",
+          },
+        });
+        function intentPrompt(key) {
+          if (!Object.hasOwn(INTENTS, key))
+            throw Error("This chat action is unavailable.");
+          const company = state.data?.companyId,
+            period = state.data?.overview?.period;
+          if (
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              company || "",
+            ) ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(period?.from || "") ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(period?.to || "") ||
+            period.from > period.to
+          )
+            throw Error(
+              "Company or period is unavailable. Refresh before using this action.",
+            );
+          return `Use Norman company ${company}. Overview period: ${period.from} through ${period.to}. ${INTENTS[key].request} Start with read-only inspection and previews. Ask me to approve concrete changes before uploading, linking, categorizing or verifying records, sending messages, starting workflows, paying or filing. If the active company differs, ask me to select this company first.`;
+        }
+        const count = (value) =>
+          Number.isInteger(value) && value >= 0 ? String(value) : "Unavailable";
+        function overview(d) {
+          const o = d.overview;
+          // Older hosts may still return the previous Inbox contract.
+          if (!o) return "";
+          const period =
+              o.period?.from && o.period?.to
+                ? `${esc(o.period.from)} — ${esc(o.period.to)}`
+                : "Period unavailable",
+            bank = o.bankBalances,
+            balances = Array.isArray(bank?.values) ? bank.values : [],
+            validBalances =
+              balances.length &&
+              balances.every(
+                (entry) =>
+                  entry &&
+                  /^[A-Z]{3}$/.test(entry.currency || "") &&
+                  /^-?\d+(?:\.\d+)?$/.test(entry.amount || ""),
+              ),
+            balanceText =
+              bank?.status === "no_data"
+                ? "No synced bank balances"
+                : bank?.status === "available" && validBalances
+                  ? balances
+                      .map(
+                        (entry) =>
+                          `${esc(entry.amount)} ${esc(entry.currency)}`,
+                      )
+                      .join("<br>")
+                  : "Unavailable",
+            suggestions = [
+              ["overdueInvoices", "Overdue unpaid invoices · all dates"],
+              ["unmatchedDocuments", "All unattached invoices and receipts"],
+              ["unreviewedTransactions", "All history · UNVERIFIED"],
+            ];
+          return `<section class="overview" aria-label="Financial status and suggested actions"><h2>Current status</h2><div class="overview-stats"><div class="overview-stat"><div class="overview-value" data-balance>${balanceText}</div><p class="notice">Bank balances · latest synced by currency${bank?.partial ? "<br>Some bank snapshots are missing" : ""}</p></div><div class="overview-stat"><div class="overview-value" data-transaction-count>${count(o.transactionsCount)}</div><p class="notice">Transactions<br>${period}</p></div></div><div class="row quick-actions" aria-label="Quick actions">${["financialStatus", "findReceipts", "monthlyReconciliation"].map((key) => `<button data-intent="${key}">${INTENTS[key].label}</button>`).join("")}</div><h2>Suggested actions</h2><div class="suggestions">${suggestions.map(([key, scope]) => `<article class="card suggestion" data-suggestion="${key}"><div><strong>${count(o.actions?.[key])} · ${INTENTS[key].label}</strong><p class="muted">${scope}</p></div><button data-intent="${key}" aria-label="Review ${INTENTS[key].label.toLowerCase()} in chat">Review in chat</button></article>`).join("")}</div></section>`;
+        }
         function review() {
           const d = state.detail;
           if (!d)
@@ -1126,7 +1313,7 @@
                 ? [focused.selectionStart, focused.selectionEnd]
                 : null;
           // What is on screen; polls back off while it stays the same.
-          state.markup = `<div class="metrics"><div class="metric"><strong>${display(d.summary.questions)}</strong><span>Workflows need you</span></div><div class="metric"><strong>${display(d.summary.approvals)}</strong><span>Pending approvals</span></div><div class="metric"><strong>${display(d.summary.taxReviewsShown)}</strong><span>Tax reviews shown</span></div></div>${d.unavailable.length ? `<p class="error">Unavailable: ${esc(d.unavailable.join(", "))}. Refresh to retry.</p>` : ""}<div class="layout"><div><h2>Needs your attention</h2>${d.questions.map((r) => `<article class="card"><div class="tag">Workflow · ${esc(human(r.blockedReason))}</div><strong>${esc(r.title)}</strong><p>${esc(r.blockedDetail || r.steps?.find((s) => s.active)?.title || "Review the current step.")}</p><button data-run="${esc(r.publicId)}">Review question</button></article>`).join("")}${d.approvals.map((e) => `<article class="card"><div class="tag">Automation approval</div><strong>${esc(e.ruleName || e.rule?.name || "Automation")}</strong><p>${described(e.transaction?.description || "Review planned actions", facts(e.transaction))}</p><button data-execution="${esc(e.publicId)}">Review changes</button></article>`).join("")}${d.taxReviews.map((t) => `<article class="card"><div class="tag">Tax review</div><strong>${esc(t.title)}</strong><p>${esc(t.detail)}</p><button data-tax="${esc(t.key)}">Discuss in chat</button></article>`).join("")}${!d.questions.length && !d.approvals.length && !d.taxReviews.length ? '<div class="empty">No items returned by the available sources.</div>' : ""}<div class="row">${d.pagination.page > 1 ? '<button id="previous">Previous approvals</button>' : ""}${d.pagination.hasNext ? '<button id="next">More approvals</button>' : ""}</div><p class="muted notice">Tax reviews are a bounded list. Approval totals include all pages.</p><h2>In progress</h2>${
+          state.markup = `${overview(d)}<div class="metrics"><div class="metric"><strong>${display(d.summary.questions)}</strong><span>Workflows need you</span></div><div class="metric"><strong>${display(d.summary.approvals)}</strong><span>Pending approvals</span></div><div class="metric"><strong>${display(d.summary.taxReviewsShown)}</strong><span>Tax reviews shown</span></div></div>${d.unavailable.length ? `<p class="error">Unavailable: ${esc(d.unavailable.join(", "))}. Refresh to retry.</p>` : ""}<div class="layout"><div><h2>Needs your attention</h2>${d.questions.map((r) => `<article class="card"><div class="tag">Workflow · ${esc(human(r.blockedReason))}</div><strong>${esc(r.title)}</strong><p>${esc(r.blockedDetail || r.steps?.find((s) => s.active)?.title || "Review the current step.")}</p><button data-run="${esc(r.publicId)}">Review question</button></article>`).join("")}${d.approvals.map((e) => `<article class="card"><div class="tag">Automation approval</div><strong>${esc(e.ruleName || e.rule?.name || "Automation")}</strong><p>${described(e.transaction?.description || "Review planned actions", facts(e.transaction))}</p><button data-execution="${esc(e.publicId)}">Review changes</button></article>`).join("")}${d.taxReviews.map((t) => `<article class="card"><div class="tag">Tax review</div><strong>${esc(t.title)}</strong><p>${esc(t.detail)}</p><button data-tax="${esc(t.key)}">Discuss in chat</button></article>`).join("")}${!d.questions.length && !d.approvals.length && !d.taxReviews.length ? '<div class="empty">No items returned by the available sources.</div>' : ""}<div class="row">${d.pagination.page > 1 ? '<button id="previous">Previous approvals</button>' : ""}${d.pagination.hasNext ? '<button id="next">More approvals</button>' : ""}</div><p class="muted notice">Tax reviews are a bounded list. Approval totals include all pages.</p><h2>In progress</h2>${
             d.runs
               .filter((r) => !r.blockedReason)
               .map(
@@ -1136,37 +1323,55 @@
               .join("") || '<div class="empty">No other active workflows.</div>'
           }</div><aside class="detail">${review()}</aside></div>`;
           content.innerHTML = state.markup;
+          content.querySelectorAll("[data-intent]").forEach((button) => {
+            button.onclick = () =>
+              action(
+                async (revision) => {
+                  const prompt = intentPrompt(button.dataset.intent);
+                  guard(revision);
+                  await ask(prompt);
+                  return "Sent to chat.";
+                },
+                { kind: "ask" },
+              );
+          });
           content.querySelectorAll("[data-execution]").forEach(
             (b) =>
               (b.onclick = () =>
-                action(async (revision) => {
-                  const companyId = state.data.companyId,
-                    detail = await tool("get_norman_approval_data", {
-                      execution_id: b.dataset.execution,
-                    });
-                  guard(revision);
-                  if (detail.companyId !== companyId) {
-                    state.refreshWanted = true;
-                    throw Error(
-                      "Company changed. Refresh to load current decisions.",
-                    );
-                  }
-                  setDetail(detail);
-                  render();
-                }, { kind: "open" })),
+                action(
+                  async (revision) => {
+                    const companyId = state.data.companyId,
+                      detail = await tool("get_norman_approval_data", {
+                        execution_id: b.dataset.execution,
+                      });
+                    guard(revision);
+                    if (detail.companyId !== companyId) {
+                      state.refreshWanted = true;
+                      throw Error(
+                        "Company changed. Refresh to load current decisions.",
+                      );
+                    }
+                    setDetail(detail);
+                    render();
+                  },
+                  { kind: "open" },
+                )),
           );
           content.querySelectorAll("[data-run]").forEach(
             (b) =>
               (b.onclick = () =>
-                action(async (revision) => {
-                  const companyId = state.data.companyId;
-                  const r = await tool("get_workflow_run", {
-                    run_id: b.dataset.run,
-                  });
-                  guard(revision);
-                  setDetail({ kind: "workflow", companyId, run: r });
-                  render();
-                }, { kind: "open" })),
+                action(
+                  async (revision) => {
+                    const companyId = state.data.companyId;
+                    const r = await tool("get_workflow_run", {
+                      run_id: b.dataset.run,
+                    });
+                    guard(revision);
+                    setDetail({ kind: "workflow", companyId, run: r });
+                    render();
+                  },
+                  { kind: "open" },
+                )),
           );
           content
             .querySelectorAll("[data-tax]")
@@ -1205,54 +1410,57 @@
             const b = document.getElementById(id);
             if (b)
               b.onclick = () =>
-                action(async (revision, job) => {
-                  if (
-                    id === "approve" &&
-                    (!state.consent ||
-                      state.consent !== reviewKey(state.detail) ||
-                      state.reviewStale)
-                  )
-                    return "Confirm that you reviewed every listed action first.";
-                  const executionId = state.detail.execution.publicId,
-                    companyId = state.data.companyId,
-                    reviewed = reviewKey(state.detail);
-                  if (id === "approve") {
+                action(
+                  async (revision, job) => {
+                    if (
+                      id === "approve" &&
+                      (!state.consent ||
+                        state.consent !== reviewKey(state.detail) ||
+                        state.reviewStale)
+                    )
+                      return "Confirm that you reviewed every listed action first.";
+                    const executionId = state.detail.execution.publicId,
+                      companyId = state.data.companyId,
+                      reviewed = reviewKey(state.detail);
+                    if (id === "approve") {
+                      const fresh = await tool("get_norman_approval_data", {
+                        execution_id: executionId,
+                      });
+                      guard(revision);
+                      if (
+                        !fresh.canApprove ||
+                        fresh.currentUnavailable ||
+                        fresh.companyId !== companyId ||
+                        reviewKey(fresh) !== reviewed
+                      ) {
+                        if (fresh.companyId === companyId) setDetail(fresh);
+                        else {
+                          setDetail(null);
+                          state.refreshWanted = true;
+                        }
+                        render();
+                        throw Error(REVIEW_CHANGED);
+                      }
+                    }
+                    guard(revision);
+                    state.consent = "";
+                    job.sent = { executionId };
+                    await tool(name, { execution_id: executionId });
+                    guard(revision);
                     const fresh = await tool("get_norman_approval_data", {
                       execution_id: executionId,
                     });
                     guard(revision);
-                    if (
-                      !fresh.canApprove ||
-                      fresh.currentUnavailable ||
-                      fresh.companyId !== companyId ||
-                      reviewKey(fresh) !== reviewed
-                    ) {
-                      if (fresh.companyId === companyId) setDetail(fresh);
-                      else {
-                        setDetail(null);
-                        state.refreshWanted = true;
-                      }
-                      render();
-                      throw Error(REVIEW_CHANGED);
+                    if (fresh.companyId !== companyId) {
+                      setDetail(null);
+                      state.refreshWanted = true;
+                      throw stale();
                     }
-                  }
-                  guard(revision);
-                  state.consent = "";
-                  job.sent = { executionId };
-                  await tool(name, { execution_id: executionId });
-                  guard(revision);
-                  const fresh = await tool("get_norman_approval_data", {
-                    execution_id: executionId,
-                  });
-                  guard(revision);
-                  if (fresh.companyId !== companyId) {
-                    setDetail(null);
-                    state.refreshWanted = true;
-                    throw stale();
-                  }
-                  setDetail(fresh);
-                  await refresh(state.data.pagination.page, revision);
-                }, { kind: id });
+                    setDetail(fresh);
+                    await refresh(state.data.pagination.page, revision);
+                  },
+                  { kind: id },
+                );
           }
           const a = document.querySelector("#approval-ask");
           if (a)
@@ -1303,42 +1511,45 @@
             };
           if (answer)
             answer.onclick = () =>
-              action(async (revision, job) => {
-                const text = state.answer.trim(),
-                  run = state.detail.run,
-                  // The question this draft was written or confirmed for.
-                  bound = state.answerFor || questionKey(run);
-                if (!text) throw Error("Please enter your answer.");
-                if (draftChanged()) throw Error(QUESTION_CHANGED);
-                const fresh = await tool("get_workflow_run", {
-                  run_id: run.publicId,
-                });
-                guard(revision);
-                if (
-                  fresh.state !== "active" ||
-                  fresh.blockedReason !== "user_input" ||
-                  fresh.canChat !== true ||
-                  questionKey(fresh) !== bound
-                ) {
-                  setDetail({
-                    kind: "workflow",
-                    companyId: state.data.companyId,
-                    run: fresh,
+              action(
+                async (revision, job) => {
+                  const text = state.answer.trim(),
+                    run = state.detail.run,
+                    // The question this draft was written or confirmed for.
+                    bound = state.answerFor || questionKey(run);
+                  if (!text) throw Error("Please enter your answer.");
+                  if (draftChanged()) throw Error(QUESTION_CHANGED);
+                  const fresh = await tool("get_workflow_run", {
+                    run_id: run.publicId,
                   });
-                  render();
-                  throw Error(
-                    fresh.canChat === true ? QUESTION_CHANGED : STARTER_ONLY,
-                  );
-                }
-                job.sent = { runId: run.publicId };
-                await tool("answer_workflow_question", {
-                  run_id: run.publicId,
-                  answer: text,
-                });
-                guard(revision);
-                setDetail(null);
-                await refresh(state.data.pagination.page, revision);
-              }, { kind: "answer" });
+                  guard(revision);
+                  if (
+                    fresh.state !== "active" ||
+                    fresh.blockedReason !== "user_input" ||
+                    fresh.canChat !== true ||
+                    questionKey(fresh) !== bound
+                  ) {
+                    setDetail({
+                      kind: "workflow",
+                      companyId: state.data.companyId,
+                      run: fresh,
+                    });
+                    render();
+                    throw Error(
+                      fresh.canChat === true ? QUESTION_CHANGED : STARTER_ONLY,
+                    );
+                  }
+                  job.sent = { runId: run.publicId };
+                  await tool("answer_workflow_question", {
+                    run_id: run.publicId,
+                    answer: text,
+                  });
+                  guard(revision);
+                  setDetail(null);
+                  await refresh(state.data.pagination.page, revision);
+                },
+                { kind: "answer" },
+              );
           state.renderedSelection = selectionKey(state.detail);
           syncControls();
           void syncContext();
@@ -1389,12 +1600,17 @@
             if (!p) {
               // A host that answers ui/initialize after our 5 s wait still
               // gets the initialized notification it waits for.
-              if (m.id === state.initId && m.result && !m.error) connected();
+              if (m.id === state.initId && m.result && !m.error)
+                connected(m.result);
               return;
             }
             clearTimeout(p.timer);
             state.pending.delete(m.id);
-            m.error ? p.reject(Error(m.error.message)) : p.resolve(m.result);
+            if (m.error) {
+              const error = Error(m.error.message);
+              error.code = m.error.code;
+              p.reject(error);
+            } else p.resolve(m.result);
             return;
           }
           const request = m.id !== undefined && m.id !== null;
@@ -1488,9 +1704,10 @@
           updateFreshness();
         }
         window.addEventListener("pagehide", dispose, { once: true });
-        function connected() {
+        function connected(result) {
           if (state.ready || state.disposed) return;
           state.ready = true;
+          state.hostCapabilities = result?.hostCapabilities || {};
           parent.postMessage(
             {
               jsonrpc: "2.0",
@@ -1518,7 +1735,7 @@
         (async () => {
           state.initId = state.id;
           try {
-            await rpc(
+            const result = await rpc(
               "ui/initialize",
               {
                 protocolVersion: "2026-01-26",
@@ -1529,7 +1746,7 @@
               },
               5000,
             );
-            connected();
+            connected(result);
           } catch {}
           if (state.disposed) return;
           adoptToolOutput();

@@ -12,10 +12,12 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field
 
 from norman_mcp import config
+from norman_mcp.apps.inbox_overview import load_overview
 from norman_mcp.context import Context, set_api_company_id
 
 # Bump when the HTML changes: hosts cache widget templates by URI.
-INBOX_URI = "ui://norman/inbox-v2.html"
+INBOX_URI = "ui://norman/inbox-v3.html"
+PREVIOUS_INBOX_URI = "ui://norman/inbox-v2.html"
 READ = ToolAnnotations(
     read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False
 )
@@ -116,13 +118,14 @@ async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
             params={"status": "awaiting_review", "page": number, "page_size": PAGE_SIZE},
         )
 
-    runs, executions, tax_runs = await asyncio.gather(
+    runs, executions, tax_runs, overview = await asyncio.gather(
         read(api, "assistant/workflow-runs/"),
         executions_page(page),
         # The dedicated runs list, not the approvals aggregate: that one is
         # capped at 50 items across all collectors, so newer rule approvals
         # could hide every prepared UStVA.
         read_list(api, f"companies/{company}/autofiling/runs/"),
+        load_overview(api, str(company)),
     )
     if page > 1 and executions.get("status_code") == 404:
         # Deciding the last item on the last page empties that page and the API
@@ -131,7 +134,7 @@ async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
         last = max(1, math.ceil((first.get("count") or 0) / PAGE_SIZE)) if not first.get("error") else 1
         page = min(page - 1, last)
         executions = first if page == 1 else await executions_page(page)
-    for data in (runs, executions, tax_runs):
+    for data in (runs, executions, tax_runs, overview):
         if isinstance(data, dict) and data.get("status_code") == 401:
             return {"error": data["error"], "reconnect": True}
     # Active workflows are NOT necessarily waiting on the user. The old
@@ -145,6 +148,22 @@ async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
         if tax_failed
         else [tax_review(r) for r in tax_runs if isinstance(r, dict) and r.get("status") in TAX_REVIEW_STATUSES]
     )
+    overview_names = {
+        "bankBalances": "bank balances",
+        "transactionsCount": "transactions",
+        "overdueInvoices": "overdue invoices",
+        "unmatchedDocuments": "unattached documents",
+        "unreviewedTransactions": "transactions awaiting review",
+    }
+    availability = {
+        "workflows": not bool(runs.get("error")),
+        "approvals": not bool(executions.get("error")),
+        "tax reviews": not tax_failed,
+        **{
+            overview_names[key]: available
+            for key, available in overview.pop("sourceAvailability").items()
+        },
+    }
     return {
         "view": "inbox",
         "companyId": str(company),
@@ -153,21 +172,15 @@ async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
         "runs": active,
         "approvals": reviews,
         "taxReviews": tax,
+        "overview": overview,
         "summary": {
             "questions": None if runs.get("error") else len(questions),
             "approvals": None if executions.get("error") else executions.get("count"),
             "taxReviewsShown": None if tax_failed else len(tax),
         },
         "pagination": {"page": page, "hasNext": bool(executions.get("next"))},
-        "unavailable": [
-            name
-            for name, failed in (
-                ("workflows", bool(runs.get("error"))),
-                ("approvals", bool(executions.get("error"))),
-                ("tax reviews", tax_failed),
-            )
-            if failed
-        ],
+        "sourceAvailability": availability,
+        "unavailable": [name for name, available in availability.items() if not available],
     }
 
 
@@ -179,6 +192,34 @@ def entity_label(data: Any) -> str | None:
     if name and code:
         return f"{code} {name}"
     return str(name) if name else None
+
+
+def overview_text(overview: dict[str, Any]) -> str:
+    """Useful current status for clients that do not display the Inbox UI."""
+
+    def count(value: Any) -> str:
+        return "unavailable" if value is None else str(value)
+
+    actions = overview["actions"]
+    period = overview["period"]
+    text = (
+        f" {count(actions['overdueInvoices'])} overdue unpaid invoices; "
+        f"{count(actions['unmatchedDocuments'])} unattached invoice/receipt documents; "
+        f"{count(actions['unreviewedTransactions'])} unfinalized transactions (UNVERIFIED, all history). "
+        f"For {period['from']} to {period['to']}: "
+        f"{count(overview['transactionsCount'])} transactions."
+    )
+    balances = overview["bankBalances"]
+    if balances["status"] == "available":
+        amounts = ", ".join(f"{v['amount']} {v['currency']}" for v in balances["values"])
+        text += f" Latest synced bank balances: {amounts}."
+        if balances.get("partial"):
+            text += " Some bank snapshots are missing."
+    elif balances["status"] == "no_data":
+        text += " No synced bank balances available."
+    else:
+        text += " Bank balances unavailable."
+    return text
 
 
 async def entity_labels(api: Any, company: str, wanted: set[tuple[str, str]]) -> dict[tuple[str, str], str]:
@@ -195,31 +236,45 @@ async def entity_labels(api: Any, company: str, wanted: set[tuple[str, str]]) ->
 
 
 def register_inbox(mcp: Any) -> None:
+    resource_meta = {
+        "ui": {"prefersBorder": False, "csp": {"connectDomains": [], "resourceDomains": []}},
+        "openai/widgetDescription": (
+            "Norman's Inbox for the selected company: bank balances, bookkeeping tasks, "
+            "questions, pending automation approvals and tax reviews. Nothing is approved without "
+            "explicit user consent."
+        ),
+        "openai/widgetPrefersBorder": False,
+        "openai/widgetCSP": {"connect_domains": [], "resource_domains": []},
+    }
+
     @mcp.resource(
         INBOX_URI,
         name="norman-inbox",
         title="Norman Inbox",
         mime_type="text/html;profile=mcp-app",
-        meta={
-            "ui": {"prefersBorder": False, "csp": {"connectDomains": [], "resourceDomains": []}},
-            # The same hints the other Norman widgets give ChatGPT.
-            "openai/widgetDescription": (
-                "Norman's Inbox for the selected company: workflows waiting for an answer, "
-                "pending automation approvals and tax reviews. Nothing is approved without "
-                "explicit user consent."
-            ),
-            "openai/widgetPrefersBorder": False,
-            "openai/widgetCSP": {"connect_domains": [], "resource_domains": []},
-        },
+        meta=resource_meta,
     )
     async def inbox_resource() -> str:
         return Path(__file__).with_name("inbox.html").read_text(encoding="utf-8")
+
+    # Previously opened clients can still resolve their cached resource URI.
+    mcp.resource(
+        PREVIOUS_INBOX_URI,
+        name="norman-inbox-v2",
+        title="Norman Inbox",
+        mime_type="text/html;profile=mcp-app",
+        meta=resource_meta,
+    )(inbox_resource)
 
     @mcp.tool(title="Get Norman Inbox", annotations=READ)
     async def get_norman_inbox_data(
         ctx: Context, page: int = Field(default=1, ge=1)
     ) -> dict[str, Any]:
-        """Read questions blocking workflows, pending automation approvals and tax reviews.
+        """Read current bank balances, bookkeeping counts, workflow questions and approvals.
+        Bookkeeping tasks include overdue invoices, unattached invoice/receipt documents,
+        transactions with status UNVERIFIED awaiting finalization across all history.
+        Transaction totals cover the previous and current calendar months.
+        Balances are latest synced bank snapshots grouped by currency.
         Approval count comes from the paginated source, not visible rows. Tax reviews are the
         company's recent Tax Autopilot runs waiting on the user. Missing sections are
         unavailable, never zero.
@@ -250,6 +305,9 @@ def register_inbox(mcp: Any) -> None:
             f"{counts['approvals']} pending automation approvals; "
             f"{counts['taxReviewsShown']} tax reviews."
         )
+        overview = data.get("overview")
+        if overview:
+            text += overview_text(overview)
         if data.get("unavailable"):
             text += " Unavailable sections: " + ", ".join(data["unavailable"]) + "."
         if not data.get("error"):

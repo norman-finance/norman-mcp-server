@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from mcp.server.mcpserver import MCPServer
 
-from norman_mcp.apps.inbox import INBOX_URI, load_inbox, register_inbox
+from norman_mcp.apps.inbox import INBOX_URI, PREVIOUS_INBOX_URI, load_inbox, register_inbox
 
 COMPANY = "11111111-1111-4111-8111-111111111111"
 EXECUTION = "22222222-2222-4222-8222-222222222222"
@@ -55,6 +55,17 @@ class Api:
             }
         if url.endswith(f"transactions/{TRANSACTION}/"):
             return {"vatRate": "7", "description": "Receipt", "secretField": "private"}
+        if url.endswith(f"companies/{COMPANY}/balance/"):
+            return {
+                "bankAccounts": ["account"],
+                "sumsByCurrency": [{"currency": "EUR", "sumAmount": "120.50"}],
+            }
+        if url.endswith("accounting/transactions/"):
+            return {"count": 4 if kwargs["params"].get("status") else 213, "results": []}
+        if url.endswith(f"companies/{COMPANY}/invoices/"):
+            return {"count": 83, "results": []}
+        if url.endswith("attachments/"):
+            return {"count": 11 if kwargs["params"]["has_type"] == "receipt" else 15, "results": []}
         raise AssertionError(url)
 
 
@@ -64,7 +75,15 @@ def test_inbox_counts_all_approvals_and_only_actual_blocked_workflows():
     assert data["summary"] == {"questions": 1, "approvals": 51, "taxReviewsShown": 1}
     assert [r["publicId"] for r in data["questions"]] == ["question"]
     assert data["pagination"] == {"page": 2, "hasNext": True}
+    assert len(api.calls) == 9
     assert all(call[0] == "GET" for call in api.calls)
+    assert data["overview"]["actions"] == {
+        "overdueInvoices": 83,
+        "unmatchedDocuments": 26,
+        "unreviewedTransactions": 4,
+    }
+    assert all(data["sourceAvailability"].values())
+    assert "private" not in str(data)
     assert api.calls[1][2]["params"]["page"] == 2
 
 
@@ -105,6 +124,20 @@ def test_entrypoints_and_approval_review_are_read_only():
     api.calls.clear()
     assert "error" in asyncio.run(tools["get_norman_approval_data"].fn(ctx, "../other-company"))
     assert api.calls == []
+
+
+def test_previously_opened_inbox_resource_uri_still_resolves():
+    mcp = MCPServer("inbox")
+    register_inbox(mcp)
+
+    async def read_templates():
+        current = list(await mcp.read_resource(INBOX_URI))[0].content
+        previous = list(await mcp.read_resource(PREVIOUS_INBOX_URI))[0].content
+        return current, previous
+
+    current, previous = asyncio.run(read_templates())
+    assert current == previous
+    assert "Show my financial status" in previous
 
 
 # --- Regression tests for the review of #148 ---------------------------------
@@ -160,6 +193,36 @@ def test_company_lookup_runs_off_the_event_loop():
     api = Api()
     asyncio.run(load_inbox(api))
     assert api.company_threads and threading.main_thread() not in api.company_threads
+
+
+def test_non_ui_clients_receive_bookkeeping_counts_and_bank_balances():
+    mcp = MCPServer("inbox")
+    register_inbox(mcp)
+    ctx = SimpleNamespace(request_context=SimpleNamespace(lifespan_context={"api": Api()}))
+    result = asyncio.run(mcp._tool_manager._tools["open_norman_inbox"].fn(ctx))
+    text = result.content[0].text
+    assert "83 overdue unpaid invoices" in text
+    assert "26 unattached invoice/receipt documents" in text
+    assert "4 unfinalized transactions (UNVERIFIED, all history)" in text
+    assert "213 transactions." in text
+    assert "120.50 EUR" in text
+    assert "do not claim that a screen opened" in text
+
+
+def test_overview_auth_failure_reconnects_without_exposing_an_old_summary():
+    class CounterExpired(Api):
+        async def arequest(self, method, url, **kwargs):
+            if (
+                url.endswith("transactions/")
+                and kwargs.get("params", {}).get("status") == "UNVERIFIED"
+            ):
+                return {"error": "secret upstream token", "status_code": 401}
+            return await super().arequest(method, url, **kwargs)
+
+    data = asyncio.run(load_inbox(CounterExpired()))
+    assert data["reconnect"] is True
+    assert "error" in data and "secret" not in str(data)
+    assert "overview" not in data and "summary" not in data
 
 
 CATEGORY = "44444444-4444-4444-8444-444444444444"
