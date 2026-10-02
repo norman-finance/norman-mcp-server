@@ -286,3 +286,29 @@ def test_explicit_zero_and_negative_snapshots_are_valid_amounts():
     }
     assert data["transactionsCount"] == data["actions"]["unreviewedTransactions"] == 0
     assert all(data["sourceAvailability"].values())
+
+
+@pytest.mark.parametrize("source,field", [
+    ("transactions", "transactionsCount"),
+    ("overdue", "overdueInvoices"),
+    ("receipts", "unmatchedDocuments"),
+    ("invoices", "unmatchedDocuments"),
+    ("unreviewed", "unreviewedTransactions"),
+])
+def test_rejected_source_never_reuses_its_count_or_claims_zero(source, field):
+    api = API()
+    # The API boundary may reject a contaminated source. Even if the failed
+    # payload retains count/results, those values cannot be trusted as totals.
+    api.responses[source] = {
+        "error": "Active records unavailable", "status_code": 502,
+        "count": 731, "results": [{"publicId": "deleted-row"}],
+    }
+
+    data = load(api)
+
+    actual = data["transactionsCount"] if field == "transactionsCount" else data["actions"][field]
+    assert actual is None
+    assert data["sourceAvailability"][field] is False
+    assert "731" not in json.dumps(data)
+    assert "deleted-row" not in json.dumps(data)
+    assert data["bankBalances"]["status"] == "available"

@@ -545,3 +545,34 @@ def test_app_contract_survives_real_mcp_protocol_serialization() -> None:
                 assert "ui/notifications/tool-result" in content.contents[0].text
 
     asyncio.run(exercise_protocol())
+
+
+def test_deleted_transaction_references_do_not_make_a_document_look_matched():
+    from norman_mcp.apps.public import _document_row
+
+    row = _document_row({"publicId": "document", "transactions": [
+        {"publicId": "old", "deletedAt": "2026-10-01T10:00:00Z"},
+    ]})
+    assert row["linked"] is False
+    assert row["transactionIds"] == []
+    assert row["status"] == "Needs match"
+    mixed = _document_row({"transactions": [
+        {"publicId": "old", "isDeleted": True}, {"publicId": "live"}, "other-live",
+    ]})
+    assert mixed["transactionIds"] == ["live", "other-live"]
+    assert mixed["linked"] is True
+
+
+@pytest.mark.parametrize("documents,expected", [
+    ({"attachment": {"publicId": "old", "deleted_at": "2026-10-01"}}, False),
+    ({"additionalAttachments": [{"publicId": "old", "isDeleted": True}]}, False),
+    ({"additionalAttachments": [{"publicId": "old", "isDeleted": True}, "live"]}, True),
+    ({"attachment": {"publicId": "live", "deletedAt": None}}, True),
+    ({"attachment": {"isDeleted": True}, "documentNotRequired": True}, True),
+])
+def test_reconciliation_ignores_deleted_document_evidence(documents, expected):
+    from norman_mcp.apps.public import _transaction_row
+
+    row = _transaction_row({"publicId": "transaction", **documents})
+    assert row["hasDocument"] is expected
+    assert ("Missing document" in row["issues"]) is not expected

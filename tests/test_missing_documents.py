@@ -94,3 +94,28 @@ def test_mismatched_active_company_does_not_read_or_relabel_another_company():
     api = SimpleNamespace(company_id="different", arequest=AsyncMock())
     assert run(api)["status"] == "unavailable"
     api.arequest.assert_not_called()
+
+
+@pytest.mark.parametrize("marker", [{"deletedAt": "2026-10-01T10:00:00Z"}, {"is_deleted": True}])
+def test_deleted_transaction_invalidates_completeness_instead_of_inflating_totals(marker):
+    api = SimpleNamespace(company_id=COMPANY, arequest=AsyncMock(return_value={
+        "count": 2, "results": [tx("active"), tx("deleted", **marker)], "next": None,
+    }))
+    result = run(api)
+    assert result["status"] == "unavailable"
+    assert "totalTransactions" not in result and "totalMissing" not in result
+    assert "deleted" not in str(result)
+
+
+@pytest.mark.parametrize("documents,missing", [
+    ({"attachment": {"publicId": "old", "deletedAt": "2026-10-01T10:00:00Z"}}, 1),
+    ({"invoice": {"publicId": "old", "status": "Removed"}}, 1),
+    ({"invoice": {"publicId": "live", "status": "cancelled"}}, 0),
+    ({"attachment": {"publicId": "live", "deletedAt": None}}, 0),
+    ({"invoice": {"publicId": "old", "status": "removed"}, "documentNotRequired": True}, 0),
+])
+def test_deleted_document_references_do_not_satisfy_receipt_completeness(documents, missing):
+    api = SimpleNamespace(company_id=COMPANY, arequest=AsyncMock(return_value={
+        "count": 1, "results": [tx("active", **documents)], "next": None,
+    }))
+    assert run(api)["totalMissing"] == missing

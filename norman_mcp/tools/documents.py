@@ -887,6 +887,11 @@ def register_document_tools(mcp):
             f"api/v1/companies/{company_id}/attachments/{attachment_id}/",
         )
         detail = api._make_request("GET", detail_url)
+        if not isinstance(detail, dict) or not detail or detail.get("error") or detail.get("errors"):
+            failure = detail if isinstance(detail, dict) and detail else {"error": "Attachment details unavailable."}
+            return CallToolResult(isError=True, content=[
+                TextContent(type="text", text=json.dumps(failure, ensure_ascii=False))
+            ])
         file_field = detail.get("file") or ""
         ext = os.path.splitext(file_field)[1].lower() if file_field else ""
 
@@ -895,6 +900,11 @@ def register_document_tools(mcp):
             f"api/v1/companies/{company_id}/attachments/{attachment_id}/download/",
         )
         dl_resp = api._make_request("GET", dl_endpoint)
+        if not isinstance(dl_resp, dict) or not dl_resp or dl_resp.get("error") or dl_resp.get("errors"):
+            failure = dl_resp if isinstance(dl_resp, dict) and dl_resp else {"error": "Attachment download unavailable."}
+            return CallToolResult(isError=True, content=[
+                TextContent(type="text", text=json.dumps(failure, ensure_ascii=False))
+            ])
         presigned_url = dl_resp.get("url", "")
 
         if ext not in _IMAGE_EXTENSIONS or not presigned_url:

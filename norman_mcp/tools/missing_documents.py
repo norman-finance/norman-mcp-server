@@ -6,6 +6,7 @@ from urllib.parse import urljoin
 from uuid import UUID
 
 from norman_mcp import config
+from norman_mcp.api.active_records import is_deleted_record
 
 
 def _valid_scope(company_id: str, date_from: str | None, date_to: str | None) -> bool:
@@ -27,7 +28,7 @@ def _page(response: Any, expected: int | None, seen: set[str]) -> tuple[list[dic
     if expected is not None and count != expected:
         return None
     for tx in rows:
-        if not isinstance(tx, dict):
+        if not isinstance(tx, dict) or is_deleted_record(tx):
             return None
         pk = tx.get("publicId", tx.get("public_id"))
         # All three fields are required by TransactionListSerializer. Missing
@@ -89,7 +90,10 @@ async def missing_document_transactions(
 
 def needs_document(tx: dict) -> bool:
     exempt = tx.get("documentNotRequired", tx.get("document_not_required"))
-    return not tx["attachment"] and not tx["invoice"] and exempt is not True
+    attachment, invoice = tx["attachment"], tx["invoice"]
+    has_attachment = bool(attachment) and not is_deleted_record(attachment)
+    has_invoice = bool(invoice) and not is_deleted_record(invoice, invoice=True)
+    return not has_attachment and not has_invoice and exempt is not True
 
 
 def category_name(tx: dict) -> str | None:

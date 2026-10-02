@@ -18,6 +18,7 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field
 
 from norman_mcp import config
+from norman_mcp.api.active_records import is_deleted_record
 from norman_mcp.context import Context
 
 APP_RESOURCE_URI = "ui://norman/accounting-workbench-v3.html"
@@ -95,6 +96,7 @@ def _limited(rows: Iterable[Dict[str, Any]], limit: int) -> list[Dict[str, Any]]
 def _document_row(item: Dict[str, Any]) -> Dict[str, Any]:
     transactions = _first(item, "transactions", default=[])
     transactions = transactions if isinstance(transactions, list) else []
+    transactions = [value for value in transactions if value and not is_deleted_record(value)]
     linked = bool(transactions)
     return {
         "id": str(_first(item, "public_id", "publicId", "pk", default="")),
@@ -111,7 +113,11 @@ def _document_row(item: Dict[str, Any]) -> Dict[str, Any]:
         "vatRate": _first(item, "vat_rate", "vatRate", default=None),
         "description": str(_first(item, "description", default="")),
         "linked": linked,
-        "transactionIds": [str(value) for value in transactions],
+        "transactionIds": [
+            str(_first(value, "publicId", "public_id", "pk", default=""))
+            if isinstance(value, dict) else str(value)
+            for value in transactions
+        ],
         "status": "Linked" if linked else "Needs match",
     }
 
@@ -131,7 +137,12 @@ def _transaction_row(item: Dict[str, Any]) -> Dict[str, Any]:
     document_not_required = bool(
         _first(item, "document_not_required", "documentNotRequired", default=False)
     )
-    has_document = bool(attachment) or bool(extras) or document_not_required
+    has_attachment = bool(attachment) and not is_deleted_record(attachment)
+    has_extras = (
+        any(value and not is_deleted_record(value) for value in extras)
+        if isinstance(extras, list) else bool(extras) and not is_deleted_record(extras)
+    )
+    has_document = has_attachment or has_extras or document_not_required
     user_status = str(_first(item, "user_status", "userStatus", "status", default=""))
     categorization_status = str(
         _first(item, "categorization_status", "categorizationStatus", default="")

@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 
 from ..config.settings import config
 from ..security.utils import validate_input, validate_url
+from .active_records import enforce_active_records
 from mcp.server.auth.middleware.auth_context import get_access_token
 from norman_mcp.context import (
     get_api_company_id,
@@ -498,7 +499,7 @@ class NormanAPI:
             # Attempt to parse JSON response, but handle non-JSON responses gracefully
             try:
                 if response.content:
-                    return response.json()
+                    return enforce_active_records(method, url, response.json())
                 return {}
             except ValueError:
                 # Not JSON, return content as string if it's not binary

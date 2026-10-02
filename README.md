@@ -70,6 +70,13 @@ errors omit signed URLs, and temporary downloads are cleaned up after use or can
 
 Norman is built as a multi-market European accounting platform. Market-specific capabilities are added as Norman expands; current German coverage includes SKR03/SKR04, DATEV, ELSTER, ZUGFeRD, and GmbH/UG workflows.
 
+Operational transaction, invoice and attachment reads use the API's active-only
+querysets. If an upstream response nevertheless contains an explicit deletion
+marker (including invoice status `removed`), MCP returns an unavailable section
+instead of exposing deleted rows or presenting stale pagination totals. A deleted
+detail returns not found. Archived products, cancelled invoices and ledger/audit
+history keep their existing semantics; financial aggregates are calculated by the API.
+
 <br/>
 
 #### Invoice appearance and updates

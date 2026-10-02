@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from norman_mcp.api.active_records import enforce_active_records
 from norman_mcp.security.utils import validate_url
 
 HEADERS = {"User-Agent": "NormanMCPServer/0.1.0", "X-Requested-With": "XMLHttpRequest"}
@@ -57,7 +58,7 @@ class GrantAPI:
         except ValueError:
             return {"error": "Norman returned an invalid response."}
         return (
-            data
+            enforce_active_records(method, url, data)
             if isinstance(data, (dict, list))
             else {"error": "Norman returned an unexpected response."}
         )
