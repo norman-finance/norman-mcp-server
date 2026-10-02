@@ -22,6 +22,10 @@ async function fixture(
     hostCapabilities = { message: { text: {} } },
     hostContext = {},
     legacyGlobals = null,
+    iframeHeight = 960,
+    resizeOnNotification = false,
+    initializeDelay = 0,
+    waitForReview = true,
   } = {},
 ) {
   const page = await browser.newPage({ viewport: { width, height: 1000 } });
@@ -32,10 +36,10 @@ async function fixture(
     await page.clock.pauseAt(new Date("2026-09-30T10:00:01Z"));
   }
   await page.setContent(
-    '<iframe title="Norman Inbox" style="border:0;width:100%;height:960px"></iframe>',
+    `<iframe title="Norman Inbox" style="border:0;width:100%;height:${iframeHeight}px"></iframe>`,
   );
   await page.evaluate(
-    ({ pushOnInit, hold, overview, hostCapabilities, hostContext }) => {
+    ({ pushOnInit, hold, overview, hostCapabilities, hostContext, resizeOnNotification, initializeDelay }) => {
       window.calls = [];
       window.mode = "";
       window.hooks = {};
@@ -138,6 +142,11 @@ async function fixture(
         if (e.source !== document.querySelector("iframe").contentWindow) return;
         const m = e.data;
         window.calls.push(m);
+        if (resizeOnNotification && m.method === "ui/notifications/size-changed") {
+          const height = m.params?.height;
+          if (Number.isFinite(height) && height > 0)
+            document.querySelector("iframe").style.height = `${height}px`;
+        }
         if (m.method === "ui/notifications/initialized" && pushOnInit) {
           // Spec host: tool-input, then the result of the tool that opened
           // the View, right after initialization.
@@ -167,8 +176,13 @@ async function fixture(
         // Answer requests only; the View's own replies carry no method.
         if (!m.id || !m.method) return;
         let result = {};
-        if (m.method === "ui/initialize")
+        if (m.method === "ui/initialize") {
           result = { hostCapabilities: window.hostCapabilities, hostContext: window.hostContext };
+          if (initializeDelay) {
+            setTimeout(() => e.source.postMessage({ jsonrpc: "2.0", id: m.id, result }, "*"), initializeDelay);
+            return;
+          }
+        }
         if (m.method === "ui/update-model-context") {
           if (window.contextError) {
             e.source.postMessage(
@@ -264,7 +278,7 @@ async function fixture(
         e.source.postMessage({ jsonrpc: "2.0", id: m.id, result }, "*");
       });
     },
-    { pushOnInit, hold, overview, hostCapabilities, hostContext },
+    { pushOnInit, hold, overview, hostCapabilities, hostContext, resizeOnNotification, initializeDelay },
   );
   const html = readFileSync(
     join(__dirname, "../norman_mcp/apps/inbox.html"),
@@ -275,7 +289,8 @@ async function fixture(
     .locator("iframe")
     .evaluate((frame, html) => (frame.srcdoc = html), html);
   const ui = page.frameLocator("iframe");
-  await ui.getByRole("button", { name: "Review changes" }).waitFor();
+  if (waitForReview) await ui.getByRole("button", { name: "Review changes" }).waitFor();
+  else await ui.locator("#content").waitFor();
   if (settle) await idle(page);
   return { page, ui, errors };
 }
@@ -1057,6 +1072,7 @@ test("host without ui/initialize renders window.openai tool output and polls thr
         "ui/initialize",
         "ui/notifications/initialized",
         "ui/update-model-context",
+        "ui/notifications/size-changed",
       ],
     );
     assert.deepEqual(errors, []);
@@ -2935,14 +2951,16 @@ test("legacy OpenAI globals initialize theme and insets and update them without 
   try {
     await page.emulateMedia({ colorScheme: "light" });
     assert.equal(await ui.locator("svg.brand path").evaluate((path) => getComputedStyle(path).fill), "rgb(255, 255, 255)");
-    assert.equal(await ui.locator("#inbox-scroll").evaluate((element) => element.clientHeight), 600);
+    const initialHeight = await ui.locator("#inbox-scroll").evaluate((element) => element.clientHeight);
+    assert.ok(initialHeight > 200 && initialHeight <= 600);
     assert.ok(await ui.locator("#inbox-scroll").evaluate((element) => parseFloat(getComputedStyle(element).paddingTop) >= 88));
     assert.ok(await ui.locator("#inbox-scroll").evaluate((element) => parseFloat(getComputedStyle(element).paddingBottom) >= 72));
     await page.frames()[1].evaluate(() => window.dispatchEvent(new CustomEvent("openai:set_globals", {
       detail: { globals: { theme: "light", maxHeight: 460,
         safeArea: { insets: { top: 24, right: 0, bottom: 36, left: 0 } } } },
     })));
-    await until(page, () => document.querySelector("#inbox-scroll").clientHeight === 460);
+    await until(page, () => getComputedStyle(document.querySelector("#inbox-scroll")).maxHeight === "460px");
+    assert.ok(await ui.locator("#inbox-scroll").evaluate((element) => element.clientHeight <= 460));
     assert.notEqual(await ui.locator("svg.brand path").evaluate((path) => getComputedStyle(path).fill), "rgb(255, 255, 255)");
     const insets = await ui.locator("#inbox-scroll").evaluate((element) => {
       const style = getComputedStyle(element);
@@ -3102,6 +3120,72 @@ test("late previous-company host snapshots cannot undo a completed local company
     assert.equal((await chatScopes(page)).at(-1).companyId, "22222222-2222-4222-8222-222222222222");
     assert.equal((await toolCalls(page, "switch_company")).length, 1);
     assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("flexible maxHeight hosts grow an initially short iframe to the content limit without resize loops", async () => {
+  const { page, ui, errors } = await fixture(390, {
+    overview: true, iframeHeight: 160, resizeOnNotification: true,
+    hostContext: { displayMode: "fullscreen", platform: "mobile", containerDimensions: { maxHeight: 550 } },
+  });
+  try {
+    await page.waitForFunction(() => document.querySelector("iframe").clientHeight === 550);
+    const dimensions = await ui.locator("#inbox-scroll").evaluate((element) => ({
+      height: element.clientHeight, extent: element.scrollHeight, viewport: innerHeight,
+    }));
+    assert.equal(dimensions.height, 550);
+    assert.equal(dimensions.viewport, 550);
+    assert.ok(dimensions.extent > dimensions.height);
+    const notifications = () => page.evaluate(() => window.calls.filter((call) => call.method === "ui/notifications/size-changed").map((call) => call.params.height));
+    assert.equal((await notifications()).at(-1), 550);
+    const before = (await notifications()).length;
+    await ui.locator("#bookkeeping-help-toggle").click();
+    await page.frames()[1].evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await flush(page);
+    assert.equal((await notifications()).length, before);
+    // A host may temporarily give the view a fixed, smaller container. Restoring
+    // the prior maximum must advertise 550 again, despite identical old content.
+    await page.evaluate(() => {
+      document.querySelector("iframe").style.height = "160px";
+      window.pushHostContext({ containerDimensions: { height: 160 } });
+    });
+    await until(page, () => document.querySelector("#inbox-scroll").clientHeight === 160);
+    await flush(page);
+    assert.equal((await notifications()).length, before);
+    await page.evaluate(() => window.pushHostContext({ containerDimensions: { maxHeight: 550 } }));
+    await page.waitForFunction(() => document.querySelector("iframe").clientHeight === 550);
+    assert.equal((await notifications()).at(-1), 550);
+    assert.equal((await notifications()).length, before + 1);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("flexible hosts receive natural initial height even if observation preceded UI initialization", async () => {
+  const { page, ui, errors } = await fixture(1100, {
+    iframeHeight: 160, resizeOnNotification: true, initializeDelay: 150,
+    hold: ["get_norman_inbox_data"], settle: false, waitForReview: false,
+    hostContext: { displayMode: "inline", containerDimensions: { maxHeight: 550 } },
+  });
+  try {
+    await until(page, () => window.__inboxTestState.ready);
+    await page.waitForFunction(() => window.calls.some((call) => call.method === "ui/notifications/size-changed"));
+    const initial = await ui.locator("#inbox-scroll").evaluate((element) => ({
+      height: element.clientHeight, extent: element.scrollHeight, viewport: innerHeight,
+    }));
+    assert.ok(initial.height > 160 && initial.height < 550, JSON.stringify(initial));
+    assert.equal(initial.viewport, initial.height);
+    assert.ok(Math.abs(initial.extent - initial.height) <= 2);
+    assert.equal(await page.frames()[1].evaluate(() => window.__inboxTestState.data), null);
+    const calls = await toolCalls(page, "get_norman_inbox_data");
+    assert.equal(calls.length, 1);
+    await page.evaluate(() => { window.holdNames = []; window.release(); });
+    await idle(page);
+    assert.equal(await ui.getByRole("button", { name: "Review changes", exact: true }).isEnabled(), true);
     assert.deepEqual(errors, []);
   } finally {
     await page.close();
