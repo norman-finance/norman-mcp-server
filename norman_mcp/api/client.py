@@ -11,6 +11,7 @@ from .active_records import enforce_active_records
 from mcp.server.auth.middleware.auth_context import get_access_token
 from norman_mcp.context import (
     get_api_company_id,
+    get_bound_company_id,
     get_api_token,
     get_oauth_provider,
     set_api_company_id,
@@ -55,6 +56,9 @@ class NormanAPI:
         pinned whichever company happened to be looked up first and handed it to
         every later caller.
         """
+        bound = get_bound_company_id()
+        if bound:
+            return bound
         if self.token_source == "env":
             return self._env_company_id
 

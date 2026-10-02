@@ -1,4 +1,5 @@
 from contextvars import ContextVar
+from contextlib import contextmanager
 from typing import Optional
 
 from mcp.server.mcpserver import Context
@@ -41,6 +42,21 @@ _api_client = None
 # Per-request identity. Never make these module globals again.
 _api_token: ContextVar[Optional[str]] = ContextVar("norman_api_token", default=None)
 _api_company_id: ContextVar[Optional[str]] = ContextVar("norman_api_company_id", default=None)
+_bound_company_id: ContextVar[Optional[str]] = ContextVar("norman_bound_company_id", default=None)
+
+
+def get_bound_company_id() -> Optional[str]:
+    return _bound_company_id.get()
+
+
+@contextmanager
+def bind_company(company_id: str):
+    """Pin one tool invocation, including worker threads, without switching the grant."""
+    token = _bound_company_id.set(company_id)
+    try:
+        yield
+    finally:
+        _bound_company_id.reset(token)
 
 def set_api_client(client):
     """Set the global API client."""

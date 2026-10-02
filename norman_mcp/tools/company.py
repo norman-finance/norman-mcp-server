@@ -5,6 +5,7 @@ from datetime import date
 from pydantic import Field
 
 from mcp.types import ToolAnnotations
+from norman_mcp.tools.company_scope import company_scoped
 from norman_mcp.context import Context
 from norman_mcp import config
 from norman_mcp.tools.results import as_object
@@ -46,6 +47,7 @@ def register_company_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def get_company_details(ctx: Context) -> Dict[str, Any]:
         """Get detailed information about the user's company."""
         api = ctx.request_context.lifespan_context["api"]
@@ -125,6 +127,7 @@ def register_company_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def get_company_balance(ctx: Context) -> Dict[str, Any]:
         """
         Get the current balance of the company.

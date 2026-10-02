@@ -6,6 +6,7 @@ from urllib.parse import quote, urljoin
 
 from mcp.types import ToolAnnotations
 
+from norman_mcp.tools.company_scope import company_scoped
 from norman_mcp import config
 from mcp.server.mcpserver.exceptions import ToolError
 from norman_mcp.context import Context
@@ -62,6 +63,7 @@ def _register_email_tools(mcp):  # noqa: ANN001, ANN202
     """The emails to clients: what went out, the reminder rule and the company's wording."""
 
     @mcp.tool(title="List Invoice Emails", annotations=READ)
+    @company_scoped
     async def list_invoice_emails(ctx: Context, invoice_id: str) -> dict:
         """List every email to the client about an invoice or quote, newest first.
 
@@ -77,6 +79,7 @@ def _register_email_tools(mcp):  # noqa: ANN001, ANN202
         return await api.arequest("GET", company_url + f"invoices/{quote(invoice_id, safe='')}/emails/")
 
     @mcp.tool(title="Skip Planned Invoice Reminder", annotations=REPLACE)
+    @company_scoped
     async def skip_invoice_reminder(ctx: Context, invoice_id: str, email_id: str) -> dict:
         """Stop a planned reminder: an email with status "scheduled" from list_invoice_emails.
 
@@ -91,12 +94,14 @@ def _register_email_tools(mcp):  # noqa: ANN001, ANN202
         )
 
     @mcp.tool(title="Get Invoice Email Settings", annotations=READ)
+    @company_scoped
     async def get_invoice_email_settings(ctx: Context) -> dict:
         """Read the company's reminder rule (steps, days, fees) and whether it gets a copy of client emails."""
         api, company_url = _company_api(ctx)
         return await api.arequest("GET", company_url + "invoices/email-settings/")
 
     @mcp.tool(title="Update Invoice Email Settings", annotations=EMAIL_SETTINGS)
+    @company_scoped
     async def update_invoice_email_settings(ctx: Context, changes: EmailSettings) -> dict:
         """Change the company's reminder rule or its own copy of client emails.
 
@@ -115,6 +120,7 @@ def _register_email_tools(mcp):  # noqa: ANN001, ANN202
         return await api.arequest("PATCH", company_url + "invoices/email-settings/", json_data=patch)
 
     @mcp.tool(title="List Invoice Email Templates", annotations=READ)
+    @company_scoped
     async def list_invoice_email_templates(ctx: Context, language: EMAIL_LANGUAGE = "de") -> dict:
         """List the email wording for each document type and reminder step in one language.
 
@@ -128,6 +134,7 @@ def _register_email_tools(mcp):  # noqa: ANN001, ANN202
         return {"templates": templates} if isinstance(templates, list) else templates
 
     @mcp.tool(title="Save Invoice Email Template", annotations=SETTINGS)
+    @company_scoped
     async def save_invoice_email_template(ctx: Context, template: EmailTemplate) -> dict:
         """Save the company's wording for one kind of email in one language.
 
@@ -140,6 +147,7 @@ def _register_email_tools(mcp):  # noqa: ANN001, ANN202
         )
 
     @mcp.tool(title="Reset Invoice Email Template", annotations=REPLACE)
+    @company_scoped
     async def reset_invoice_email_template(ctx: Context, key: str, language: EMAIL_LANGUAGE) -> dict:
         """Delete the company's wording for one email and go back to Norman's default text."""
         api, company_url = _company_api(ctx)
@@ -162,18 +170,21 @@ def register_invoice_management_tools(mcp, enrich=None):
     _register_email_tools(mcp)
 
     @mcp.tool(title="List Invoice Templates", annotations=READ)
+    @company_scoped
     async def list_invoice_templates(ctx: Context) -> dict:
         """List templates, appearance choices, defaults and the active company's plan access."""
         api, company_url = _company_api(ctx)
         return await api.arequest("GET", company_url + "invoices/document-templates/")
 
     @mcp.tool(title="Get Invoice Settings", annotations=READ)
+    @company_scoped
     async def get_invoice_settings(ctx: Context) -> dict:
         """Read the active company's logo and defaults for future invoices and quotes."""
         api, company_url = _company_api(ctx)
         return await api.arequest("GET", company_url + "invoices/settings/")
 
     @mcp.tool(title="Update Invoice Settings", annotations=SETTINGS)
+    @company_scoped
     async def update_invoice_settings(ctx: Context, changes: InvoiceSettings) -> dict:
         """Change company defaults for future invoices and quotes. Existing documents keep their design.
 
@@ -188,6 +199,7 @@ def register_invoice_management_tools(mcp, enrich=None):
         return await api.arequest("PATCH", company_url + "invoices/settings/", json_data=patch)
 
     @mcp.tool(title="Update Invoice or Quote", annotations=EDIT)
+    @company_scoped
     async def update_invoice(ctx: Context, invoice_id: str, changes: InvoiceChanges) -> dict:
         """Update invoice/quote fields, lines, dates, branding, payment or email settings.
 
@@ -217,6 +229,7 @@ def register_invoice_management_tools(mcp, enrich=None):
         )
 
     @mcp.tool(title="Update Recurring Invoice", annotations=EDIT)
+    @company_scoped
     async def update_recurring_invoice(ctx: Context, recurring_invoice_id: str, changes: RecurringChanges) -> dict:
         """Update a recurring invoice: its template, its rule or its mode.
 
@@ -251,6 +264,7 @@ def register_invoice_management_tools(mcp, enrich=None):
         )
 
     @mcp.tool(title="Duplicate Invoice or Quote", annotations=EDIT)
+    @company_scoped
     async def duplicate_invoice(ctx: Context, document_id: str) -> dict:
         """Copy an invoice or a quote into a new draft of the same kind.
 
@@ -262,6 +276,7 @@ def register_invoice_management_tools(mcp, enrich=None):
         return await _derive(ctx, document_id, "duplicate", {})
 
     @mcp.tool(title="Cancel Invoice", annotations=EDIT)
+    @company_scoped
     async def cancel_invoice(
         ctx: Context,
         invoice_id: str,
@@ -280,6 +295,7 @@ def register_invoice_management_tools(mcp, enrich=None):
         return await _derive(ctx, invoice_id, "cancel", _derivation_payload(issued=issued, message=message))
 
     @mcp.tool(title="Create Credit Note", annotations=EDIT)
+    @company_scoped
     async def create_credit_note(
         ctx: Context,
         invoice_id: str,
@@ -304,6 +320,7 @@ def register_invoice_management_tools(mcp, enrich=None):
         )
 
     @mcp.tool(title="Create Delivery Note", annotations=EDIT)
+    @company_scoped
     async def create_delivery_note(
         ctx: Context,
         document_id: str,

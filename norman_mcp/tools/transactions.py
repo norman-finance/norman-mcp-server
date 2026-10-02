@@ -7,6 +7,7 @@ from datetime import datetime
 from pydantic import Field
 
 from mcp.types import ToolAnnotations
+from norman_mcp.tools.company_scope import company_scoped
 from norman_mcp.context import Context
 from norman_mcp import config
 
@@ -101,6 +102,7 @@ def register_transaction_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def search_transactions(
         ctx: Context,
         description: Optional[str] = Field(
@@ -205,6 +207,7 @@ def register_transaction_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def get_transaction(
         ctx: Context,
         transaction_id: str = Field(
@@ -231,6 +234,7 @@ def register_transaction_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def get_flat_rates(
         ctx: Context,
         year: int = Field(description="Tax year, e.g. 2026"),
@@ -275,6 +279,7 @@ def register_transaction_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def create_transaction(
         ctx: Context,
         amount: float = Field(
@@ -427,6 +432,7 @@ def register_transaction_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def update_transaction(
         ctx: Context,
         transaction_id: str = Field(
@@ -610,6 +616,7 @@ def register_transaction_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def delete_transaction(
         ctx: Context,
         transaction_id: str = Field(
@@ -644,6 +651,7 @@ def register_transaction_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def categorize_transaction(
         ctx: Context,
         transaction_amount: float = Field(description="Amount of the transaction"),
@@ -686,6 +694,7 @@ def register_transaction_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def change_transaction_verification(
         ctx: Context,
         transaction_id: str = Field(

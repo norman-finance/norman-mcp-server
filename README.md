@@ -77,6 +77,17 @@ instead of exposing deleted rows or presenting stale pagination totals. A delete
 detail returns not found. Archived products, cancelled invoices and ledger/audit
 history keep their existing semantics; financial aggregates are calculated by the API.
 
+An active-company selection belongs to the MCP connection, so another chat using
+the same connection can change it. Inbox checks the selection again before
+sending a task. Its hidden `taskScope.expectedCompanyId` must be passed as
+`expected_company_id` to the bookkeeping tools that advertise that optional
+argument, on every call in the task. A mismatch returns `company_context_changed`
+before the tool reads or changes records; do not retry without the assertion.
+Matching calls pin the company for the entire invocation, including worker-thread
+requests, without switching the connection. Scoped object results include
+`company_context`; legacy calls that omit the argument keep their existing shape.
+Company IDs stay in tool/app context, not in the visible Inbox message.
+
 <br/>
 
 #### Invoice appearance and updates

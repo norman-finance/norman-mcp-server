@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 from pydantic import Field
 
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
+from norman_mcp.tools.company_scope import company_scoped
 from norman_mcp.context import Context
 from norman_mcp import config
 from norman_mcp.files.download import FileDownloadError, download_file
@@ -223,6 +224,7 @@ def register_document_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def request_file_upload(
         ctx: Context,
         description: Optional[str] = Field(
@@ -268,6 +270,7 @@ def register_document_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def upload_bulk_attachments(
         ctx: Context,
         file_urls: Optional[List[str]] = Field(default=None, description="BEST OPTION: List of HTTP(S) URLs. The server downloads each file directly — nothing goes through the LLM context."),
@@ -397,6 +400,7 @@ def register_document_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def upload_structured_attachments(
         ctx: Context,
         documents: List[Dict[str, Any]] = Field(
@@ -507,6 +511,7 @@ def register_document_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def list_attachments(
         ctx: Context,
         file_name: Optional[str] = Field(default=None, description="Filter by file name (case insensitive partial match)"),
@@ -563,6 +568,7 @@ def register_document_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def create_attachment(
         ctx: Context,
         file_url: Optional[str] = Field(default=None, description="BEST OPTION: HTTP(S) download URL, including a valid presigned URL with query parameters. Must be accessible without additional headers. The server downloads it directly; the file does not go through the LLM context."),
@@ -761,6 +767,7 @@ def register_document_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def link_attachment_transaction(
         ctx: Context,
         attachment_id: str = Field(description="ID of the attachment"),
@@ -802,6 +809,7 @@ def register_document_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def delete_attachment(
         ctx: Context,
         attachment_id: str = Field(description="ID of the attachment to delete"),
@@ -864,6 +872,7 @@ def register_document_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def get_attachment_preview(
         ctx: Context,
         attachment_id: str = Field(description="Public ID of the attachment to preview"),

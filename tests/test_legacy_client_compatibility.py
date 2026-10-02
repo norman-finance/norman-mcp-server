@@ -12,6 +12,10 @@ category-template display title, the bounded SKR suggestion description and the
 corporate people tool's government-identifier boundary. Only those 16 legacy
 tool signatures were updated; request methods, tool names and unrelated
 schemas remain covered by the original oracle.
+
+The company assertion adds one optional nullable input and a routing note. Strip
+only that reviewed addition when comparing against the old digest: every prior
+argument, output schema, annotation and description must still match exactly.
 """
 
 import asyncio
@@ -19,6 +23,7 @@ import hashlib
 import json
 import os
 import sys
+from copy import deepcopy
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -33,6 +38,7 @@ from norman_mcp.context import (
     set_oauth_provider,
 )
 from norman_mcp.server import create_app, create_cors_app
+from norman_mcp.tools.company_scope import COMPANY_SCOPE_DESCRIPTION
 
 VERSIONS = ("2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25")
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -83,7 +89,19 @@ def digest(value):
 
 
 def assert_inventory(result, catalog, key):
-    actual = {item[key]: digest(item) for item in result[catalog]}
+    actual = {}
+    for item in result[catalog]:
+        projected = deepcopy(item)
+        if catalog == "tools":
+            schema = projected["inputSchema"]
+            guard = schema.get("properties", {}).pop("expected_company_id", None)
+            if guard is not None:
+                assert "expected_company_id" not in schema.get("required", [])
+                assert guard["anyOf"] == [{"type": "string"}, {"type": "null"}]
+                assert guard["default"] is None
+                assert "Inbox" in guard["description"]
+                projected["description"] = projected["description"].removesuffix(COMPANY_SCOPE_DESCRIPTION)
+        actual[item[key]] = digest(projected)
     expected = ORACLE[catalog]
     assert expected.keys() <= actual.keys(), f"Legacy {catalog} were removed"
     assert {

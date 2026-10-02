@@ -3,6 +3,7 @@ from typing import Dict, Any, Optional
 from urllib.parse import urljoin
 
 from mcp.types import ToolAnnotations
+from norman_mcp.tools.company_scope import company_scoped
 from norman_mcp.context import Context
 from norman_mcp import config
 
@@ -30,6 +31,7 @@ def register_bill_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def list_bills(
         ctx: Context,
         status: Optional[str] = None
@@ -60,6 +62,7 @@ def register_bill_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def get_bill(
         ctx: Context,
         bill_id: str
@@ -89,6 +92,7 @@ def register_bill_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def update_bill(
         ctx: Context,
         bill_id: str,
@@ -130,6 +134,7 @@ def register_bill_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def mark_bill_paid(
         ctx: Context,
         bill_id: str
@@ -162,6 +167,7 @@ def register_bill_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def pay_bill(
         ctx: Context,
         bill_id: str,
@@ -205,6 +211,7 @@ def register_bill_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def delete_bill(
         ctx: Context,
         bill_id: str

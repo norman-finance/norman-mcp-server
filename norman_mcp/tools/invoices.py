@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from pydantic import Field
 
+from norman_mcp.tools.company_scope import company_scoped
 from norman_mcp import config
 from norman_mcp.context import Context
 from norman_mcp.tools.contracts import register_contract_tools
@@ -76,6 +77,7 @@ def register_invoice_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def create_invoice(
         ctx: Context,
         client_id: str | None,
@@ -302,6 +304,7 @@ def register_invoice_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def make_invoice_recurring(
         ctx: Context,
         invoice_id: str,
@@ -334,6 +337,7 @@ def register_invoice_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def create_recurring_invoice(
         ctx: Context,
         client_id: str,
@@ -486,6 +490,7 @@ def register_invoice_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def get_recurring_invoice(
         ctx: Context,
         recurring_invoice_id: str,
@@ -519,6 +524,7 @@ def register_invoice_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def list_recurring_invoices(
         ctx: Context,
         status: Optional[Literal["active", "paused", "ended"]] = None,
@@ -557,6 +563,7 @@ def register_invoice_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def pause_recurring_invoice(ctx: Context, recurring_invoice_id: str) -> Dict[str, Any]:
         """
         Pause a recurring invoice: Norman makes no invoices until it is resumed.
@@ -575,6 +582,7 @@ def register_invoice_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def resume_recurring_invoice(ctx: Context, recurring_invoice_id: str) -> Dict[str, Any]:
         """
         Resume a paused recurring invoice. It carries on from the next date; dates missed
@@ -594,6 +602,7 @@ def register_invoice_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def end_recurring_invoice(ctx: Context, recurring_invoice_id: str) -> Dict[str, Any]:
         """
         End a recurring invoice for good, including ongoing contract billing. Invoices it
@@ -614,6 +623,7 @@ def register_invoice_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def get_invoice(
         ctx: Context,
         invoice_id: str
@@ -650,6 +660,7 @@ def register_invoice_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def send_invoice(
         ctx: Context,
         invoice_id: str,
@@ -706,6 +717,7 @@ def register_invoice_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def send_invoice_overdue_reminder(
         ctx: Context,
         invoice_id: str,
@@ -768,6 +780,7 @@ def register_invoice_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def link_transaction(
         ctx: Context,
         invoice_id: str,
@@ -814,6 +827,7 @@ def register_invoice_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def get_einvoice_xml(
         ctx: Context,
         invoice_id: str
@@ -856,6 +870,7 @@ def register_invoice_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def list_invoices(
         ctx: Context,
         status: Optional[
@@ -920,6 +935,7 @@ def register_invoice_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def get_invoice_preview(
         ctx: Context,
         invoice_id: str = Field(description="Public ID of the invoice to preview"),

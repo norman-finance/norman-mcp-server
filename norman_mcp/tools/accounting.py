@@ -17,6 +17,7 @@ from urllib.parse import urljoin
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
+from norman_mcp.tools.company_scope import company_scoped
 from norman_mcp import config
 from norman_mcp.context import Context
 
@@ -270,6 +271,7 @@ def register_accounting_tools(mcp: Any) -> None:
     """Register Assets, Ledger, Chart of Accounts and year setup tools."""
 
     @mcp.tool(title="Get Accounting Setup", annotations=READ_ONLY)
+    @company_scoped
     async def get_accounting_setup(
         ctx: Context,
         fiscal_year_begin: str = Field(
@@ -295,6 +297,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Analyze Accounting Migration Files", annotations=READ_ONLY)
+    @company_scoped
     async def analyze_accounting_cutover_documents(
         ctx: Context,
         file_refs: list[str] = Field(
@@ -318,6 +321,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Preview Accounting Migration", annotations=READ_ONLY)
+    @company_scoped
     async def preview_accounting_cutover(
         ctx: Context,
         mode: str = Field(description="formation, year_start or mid_year"),
@@ -386,6 +390,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Apply Accounting Migration", annotations=DESTRUCTIVE)
+    @company_scoped
     async def apply_accounting_cutover(
         ctx: Context,
         mode: str = Field(description="formation, year_start or mid_year"),
@@ -460,6 +465,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Prepare Accounts for Accounting Migration", annotations=DESTRUCTIVE)
+    @company_scoped
     async def prepare_accounting_cutover_accounts(
         ctx: Context,
         review_token: str = Field(
@@ -521,6 +527,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="List Chart of Accounts Templates", annotations=READ_ONLY)
+    @company_scoped
     async def list_chart_of_accounts_templates(ctx: Context) -> Dict[str, Any]:
         """List account frameworks available for the selected company and country."""
         api, _company_id, error = _api_and_company(ctx)
@@ -533,6 +540,7 @@ def register_accounting_tools(mcp: Any) -> None:
         return as_object(await _request(api, "GET", url))
 
     @mcp.tool(title="List Chart of Accounts", annotations=READ_ONLY)
+    @company_scoped
     async def list_chart_of_accounts(
         ctx: Context,
         search: Optional[str] = Field(
@@ -598,6 +606,7 @@ def register_accounting_tools(mcp: Any) -> None:
         return await _request(api, "GET", url, params=params)
 
     @mcp.tool(title="Create Chart of Accounts Account", annotations=WRITE)
+    @company_scoped
     async def create_chart_of_accounts_account(
         ctx: Context,
         code: str = Field(description="Unique account code in the selected framework"),
@@ -646,6 +655,7 @@ def register_accounting_tools(mcp: Any) -> None:
         return await _request(api, "POST", url, json_data=payload)
 
     @mcp.tool(title="Update Chart of Accounts Account", annotations=DESTRUCTIVE)
+    @company_scoped
     async def update_chart_of_accounts_account(
         ctx: Context,
         account_id: str = Field(
@@ -699,6 +709,7 @@ def register_accounting_tools(mcp: Any) -> None:
         return await _request(api, "PATCH", url, json_data=payload)
 
     @mcp.tool(title="Get E-Bilanz Positions", annotations=READ_ONLY)
+    @company_scoped
     async def get_ebilanz_positions(
         ctx: Context,
         fiscal_year: int = Field(
@@ -729,6 +740,7 @@ def register_accounting_tools(mcp: Any) -> None:
         return await _request(api, "GET", url, params=params)
 
     @mcp.tool(title="Deactivate Chart of Accounts Account", annotations=DESTRUCTIVE)
+    @company_scoped
     async def deactivate_chart_of_accounts_account(
         ctx: Context,
         account_id: str = Field(
@@ -754,6 +766,7 @@ def register_accounting_tools(mcp: Any) -> None:
         return await _request(api, "DELETE", url)
 
     @mcp.tool(title="Switch Account Framework", annotations=DESTRUCTIVE)
+    @company_scoped
     async def switch_account_framework(
         ctx: Context,
         framework_code: str = Field(
@@ -787,6 +800,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="List Assets", annotations=READ_ONLY)
+    @company_scoped
     async def list_assets(
         ctx: Context, page: int = Field(default=1, ge=1)
     ) -> Dict[str, Any]:
@@ -802,6 +816,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Get Asset", annotations=READ_ONLY)
+    @company_scoped
     async def get_asset(ctx: Context, asset_id: str) -> Dict[str, Any]:
         """Get an asset including source transaction, useful life and annual depreciation."""
         api, company_id, error = _api_and_company(ctx)
@@ -812,6 +827,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Create Asset", annotations=WRITE)
+    @company_scoped
     async def create_asset(
         ctx: Context,
         name: str,
@@ -881,6 +897,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Update Asset", annotations=WRITE)
+    @company_scoped
     async def update_asset(
         ctx: Context,
         asset_id: str,
@@ -946,6 +963,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Delete Asset", annotations=DESTRUCTIVE)
+    @company_scoped
     async def delete_asset(
         ctx: Context, asset_id: str, confirmed: bool = False
     ) -> Dict[str, Any]:
@@ -963,6 +981,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="List Ledger Journal", annotations=READ_ONLY)
+    @company_scoped
     async def list_ledger_journal(
         ctx: Context,
         date_from: Optional[str] = None,
@@ -1000,6 +1019,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="List Ledger Account Balances", annotations=READ_ONLY)
+    @company_scoped
     async def list_ledger_account_balances(
         ctx: Context,
         date_from: Optional[str] = None,
@@ -1017,6 +1037,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Get Ledger Account", annotations=READ_ONLY)
+    @company_scoped
     async def get_ledger_account(
         ctx: Context,
         account_code: str,
@@ -1035,6 +1056,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="List Ledger Open Items", annotations=READ_ONLY)
+    @company_scoped
     async def list_ledger_open_items(
         ctx: Context,
         date_from: Optional[str] = None,
@@ -1052,6 +1074,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Get Cash Book", annotations=READ_ONLY)
+    @company_scoped
     async def get_cash_book(
         ctx: Context,
         year: int = Field(ge=2000, le=2100),
@@ -1096,6 +1119,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Get Ledger Profit and Loss", annotations=READ_ONLY)
+    @company_scoped
     async def get_ledger_profit_and_loss(
         ctx: Context,
         date_from: str,
@@ -1116,6 +1140,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Get Ledger Balance Sheet", annotations=READ_ONLY)
+    @company_scoped
     async def get_ledger_balance_sheet(
         ctx: Context,
         date_from: str,
@@ -1136,6 +1161,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Create Manual Ledger Entry", annotations=WRITE)
+    @company_scoped
     async def create_manual_ledger_entry(
         ctx: Context,
         booking_date: str,
@@ -1186,6 +1212,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Get Manual Ledger Entry", annotations=READ_ONLY)
+    @company_scoped
     async def get_manual_ledger_entry(ctx: Context, entry_id: str) -> Dict[str, Any]:
         """Get a manual posting and its immutable reversal links."""
         api, company_id, error = _api_and_company(ctx)
@@ -1198,6 +1225,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Reverse Manual Ledger Entry", annotations=DESTRUCTIVE)
+    @company_scoped
     async def reverse_manual_ledger_entry(
         ctx: Context,
         entry_id: str,
@@ -1227,6 +1255,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="List Annual Closes", annotations=READ_ONLY)
+    @company_scoped
     async def list_annual_closes(ctx: Context) -> Dict[str, Any]:
         """List fiscal-year close workspaces and their current status."""
         api, company_id, error = _api_and_company(ctx)
@@ -1237,6 +1266,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Create Annual Close", annotations=WRITE)
+    @company_scoped
     async def create_annual_close(
         ctx: Context,
         fiscal_year_begin: str = Field(
@@ -1261,6 +1291,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Get Annual Close", annotations=READ_ONLY)
+    @company_scoped
     async def get_annual_close(ctx: Context, annual_close_id: str) -> Dict[str, Any]:
         """Get one annual-close workspace and its Draft/locked/submitted status."""
         api, company_id, error = _api_and_company(ctx)
@@ -1273,6 +1304,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Create Annual Close Entry", annotations=WRITE)
+    @company_scoped
     async def create_annual_close_entry(
         ctx: Context,
         annual_close_id: str,
@@ -1305,6 +1337,7 @@ def register_accounting_tools(mcp: Any) -> None:
         )
 
     @mcp.tool(title="Get Annual Close Workbook", annotations=READ_ONLY)
+    @company_scoped
     async def get_annual_close_workbook(
         ctx: Context, annual_close_id: str
     ) -> Dict[str, Any]:

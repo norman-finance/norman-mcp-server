@@ -5,6 +5,7 @@ from urllib.parse import urljoin
 from pydantic import Field
 
 from mcp.types import ToolAnnotations
+from norman_mcp.tools.company_scope import company_scoped
 from norman_mcp.context import Context
 from norman_mcp import config
 
@@ -74,6 +75,7 @@ def register_rule_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def list_rules(ctx: Context) -> Dict[str, Any]:
         """
         List the company's automation rules together with usage stats and the
@@ -100,6 +102,7 @@ def register_rule_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def preview_rule(
         ctx: Context,
         conditions: List[Dict[str, str]] = Field(description=CONDITION_FIELDS_HELP),
@@ -138,6 +141,7 @@ def register_rule_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def create_rule(
         ctx: Context,
         name: str = Field(description="Short human-readable rule name, e.g. 'Telekom -> Internet costs'"),
@@ -188,6 +192,7 @@ def register_rule_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def update_rule(
         ctx: Context,
         rule_id: str = Field(description="Rule publicId from list_rules"),
@@ -233,6 +238,7 @@ def register_rule_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def delete_rule(
         ctx: Context,
         rule_id: str = Field(description="Rule publicId from list_rules"),
@@ -262,6 +268,7 @@ def register_rule_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def apply_rule_to_existing(
         ctx: Context,
         rule_id: str = Field(description="Rule publicId from list_rules or a create_rule response"),
@@ -289,6 +296,7 @@ def register_rule_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def list_rule_executions(
         ctx: Context,
         status: Optional[str] = Field(
@@ -332,6 +340,7 @@ def register_rule_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def list_pending_approvals(ctx: Context) -> Dict[str, Any]:
         """
         Everything an agent prepared and is waiting on the user for, in one
@@ -361,6 +370,7 @@ def register_rule_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def undo_rule_execution(
         ctx: Context,
         execution_id: str = Field(description="Execution publicId from list_rule_executions"),
@@ -393,6 +403,7 @@ def register_rule_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def list_agents(ctx: Context) -> Dict[str, Any]:
         """
         The prebuilt agents shelf with each card's state and counters: AI
@@ -419,6 +430,7 @@ def register_rule_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def toggle_agent(
         ctx: Context,
         key: str = Field(description="Card key from list_agents, e.g. vat_readiness"),
@@ -451,6 +463,7 @@ def register_rule_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def approve_rule_execution(
         ctx: Context,
         execution_id: str = Field(description="Execution publicId from list_rule_executions"),
@@ -478,6 +491,7 @@ def register_rule_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def dismiss_rule_execution(
         ctx: Context,
         execution_id: str = Field(description="Execution publicId from list_rule_executions"),

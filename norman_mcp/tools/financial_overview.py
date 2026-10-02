@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 
 from mcp.types import ToolAnnotations
 
+from norman_mcp.tools.company_scope import company_scoped
 from norman_mcp import config
 from norman_mcp.context import Context
 
@@ -18,6 +19,7 @@ def register_financial_overview_tools(mcp):
             readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False
         ),
     )
+    @company_scoped
     async def get_financial_overview(
         ctx: Context,
         date_from: Optional[str] = None,

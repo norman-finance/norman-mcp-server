@@ -5,6 +5,7 @@ from urllib.parse import urljoin
 from pydantic import Field
 
 from mcp.types import ToolAnnotations
+from norman_mcp.tools.company_scope import company_scoped
 from norman_mcp.context import Context
 from norman_mcp import config
 
@@ -77,6 +78,7 @@ def register_workflow_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def list_workflows(ctx: Context) -> Dict[str, Any]:
         """
         The workflows this company can run, each with its steps, its default
@@ -124,6 +126,7 @@ def register_workflow_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def get_workflow_run(
         ctx: Context,
         run_id: str = Field(description="Workflow run publicId from list_workflows or start_workflow"),
@@ -154,6 +157,7 @@ def register_workflow_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def start_workflow(
         ctx: Context,
         workflow_key: str = Field(description="Workflow key from list_workflows, e.g. month-end-close"),
@@ -198,6 +202,7 @@ def register_workflow_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def answer_workflow_question(
         ctx: Context,
         run_id: str = Field(description="publicId of a run whose blockedReason is user_input"),
@@ -234,6 +239,7 @@ def register_workflow_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def complete_workflow_step(
         ctx: Context,
         run_id: str = Field(description="Workflow run publicId"),
@@ -273,6 +279,7 @@ def register_workflow_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def continue_workflow(
         ctx: Context,
         run_id: str = Field(description="Workflow run publicId"),
@@ -301,6 +308,7 @@ def register_workflow_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def stop_workflow(
         ctx: Context,
         run_id: str = Field(description="Workflow run publicId"),
@@ -328,6 +336,7 @@ def register_workflow_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def schedule_workflow(
         ctx: Context,
         workflow_key: str = Field(description="Workflow key from list_workflows"),
@@ -381,6 +390,7 @@ def register_workflow_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def unschedule_workflow(
         ctx: Context,
         workflow_key: str = Field(description="Key of a workflow that runs by itself"),
@@ -411,6 +421,7 @@ def register_workflow_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def get_agent_week(ctx: Context) -> Dict[str, Any]:
         """
         What Norman's agents did for this company in the last seven days —

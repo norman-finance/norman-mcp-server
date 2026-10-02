@@ -7,6 +7,7 @@ from pydantic import Field
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from mcp.server.mcpserver.exceptions import ToolError
 
+from norman_mcp.tools.company_scope import company_scoped
 from norman_mcp.context import Context
 from norman_mcp import config
 from norman_mcp.tools.results import as_object, first_text
@@ -59,6 +60,7 @@ def register_tax_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def list_tax_reports(ctx: Context) -> Dict[str, Any]:
         """List all available tax reports."""
         api = ctx.request_context.lifespan_context["api"]
@@ -78,6 +80,7 @@ def register_tax_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def get_tax_report(
         ctx: Context,
         report_id: str = Field(description="Public ID of the tax report to retrieve")
@@ -109,6 +112,7 @@ def register_tax_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def validate_tax_number(
         ctx: Context,
         tax_number: str = Field(description="German business tax number (Steuernummer) to validate"),
@@ -152,6 +156,7 @@ def register_tax_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def generate_finanzamt_preview(
         ctx: Context,
         report_id: str = Field(description="Public ID of the tax report to generate a preview for")
@@ -217,6 +222,7 @@ def register_tax_tools(mcp):
             openWorldHint=True,
         ),
     )
+    @company_scoped
     async def submit_tax_report(
         ctx: Context,
         report_id: str = Field(description="Public ID of the tax report to submit")
@@ -259,6 +265,7 @@ def register_tax_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def list_tax_states(ctx: Context) -> Dict[str, Any]:
         """
         Get list of available tax states.
@@ -281,6 +288,7 @@ def register_tax_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def list_tax_settings(ctx: Context) -> Dict[str, Any]:
         """
         Get list of tax settings for the current company.
@@ -303,6 +311,7 @@ def register_tax_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def update_tax_setting(
         ctx: Context,
         setting_id: str = Field(description="Public ID of the tax setting to update"),
@@ -360,6 +369,7 @@ def register_tax_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def get_company_tax_statistics(ctx: Context) -> Dict[str, Any]:
         """
         Get tax statistics for the company.
@@ -389,6 +399,7 @@ def register_tax_tools(mcp):
             openWorldHint=False,
         ),
     )
+    @company_scoped
     async def get_vat_next_report(ctx: Context) -> Dict[str, Any]:
         """
         Get the VAT amount for the next report period.
