@@ -28,7 +28,6 @@ from norman_mcp.api.client import NormanAPI
 from norman_mcp.api.grant import GrantAPI
 from norman_mcp.apps.inbox import READ, load_inbox, resolve_company
 from norman_mcp.context import Context
-from norman_mcp.security.utils import validate_url
 
 PREFIX = "norman://inbox/"
 DENIED = "Inbox watch is unavailable. Reopen it for the selected company."
@@ -88,12 +87,20 @@ class PinnedAPI(NormanAPI):
         token: str | None = self.provider.get_norman_token(self.watch.token)
         return token
 
-    async def arequest(self, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
+    async def arequest(
+        self,
+        method: str,
+        url: str,
+        params: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
+        files: Any = None,
+        **kwargs: Any,
+    ) -> Any:
         # Native async HTTP lets cancellation close the socket, without leaving
         # requests threads running after a snapshot releases its concurrency slot.
-        if method != "GET" or not validate_url(url):
+        if method != "GET" or json_data is not None or files is not None:
             raise ValueError("Inbox observer only supports trusted API reads.")
-        return await self.grant.arequest(method, url, **kwargs)
+        return await self.grant.arequest(method, url, params=params, **kwargs)
 
     def _refresh_oauth_norman_token(self) -> None:
         # Refresh happens inside arequest, through the watch's grant only.
@@ -229,7 +236,13 @@ class InboxLive:
         )
         # Re-check after awaited reads, and re-check quotas for concurrent opens.
         self.prune()
-        if self.closed or denied or data.get("error") or len(data.get("unavailable", [])) == 3:
+        availability = data.get("sourceAvailability")
+        all_unavailable = (
+            not any(value is True for value in availability.values())
+            if isinstance(availability, dict)
+            else len(data.get("unavailable", [])) == 3
+        )
+        if self.closed or denied or data.get("error") or all_unavailable:
             raise ToolError(DENIED)
         if (
             len(self.watches) >= MAX_WATCHES
@@ -360,7 +373,7 @@ class InboxLive:
 
     async def tick(self) -> None:
         self.prune()
-        # Bounded batches keep API concurrency at 4 watches / 12 source reads.
+        # At most four snapshots run together, each with nine source requests.
         active = [w for w in self.watches.values() if w.listeners]
         for start in range(0, len(active), 4):
             results = await asyncio.gather(

@@ -52,7 +52,13 @@ class API:
             return {"runs": []}
         if url.endswith("rule-executions/"):
             return {"count": self.count, "results": [], "next": None}
-        return {"items": []}
+        if url.endswith("autofiling/runs/"):
+            return []
+        if url.endswith("balance/"):
+            return {"bankAccounts": [], "sumsByCurrency": []}
+        if url.endswith(("transactions/", "invoices/", "attachments/")):
+            return {"count": 0, "results": []}
+        raise AssertionError(url)
 
 
 @pytest.fixture
@@ -79,7 +85,7 @@ async def test_lease_is_opaque_idempotent_bounded_and_expires_with_grant(setup, 
     assert opened["expiresAt"] == provider.tokens["alice"].expires_at
     assert opened["page"] == 2
     assert await service.open(api, 2) == opened
-    assert len(service.watches) == 1 and len(api.calls) == 3
+    assert len(service.watches) == 1 and len(api.calls) == 9
     monkeypatch.setattr(inbox_live, "MAX_PER_GRANT", 1)
     with pytest.raises(ToolError, match="limit"):
         await service.open(api, 3)
@@ -160,7 +166,7 @@ async def test_poll_only_active_leases_and_publish_only_semantic_invalidation(se
     assert not reads  # No connected stream, no API polling.
     watch.listeners = 1
     await service.tick()
-    assert len(reads) == 3 and not received  # asOf alone is not a change.
+    assert len(reads) == 9 and not received  # asOf alone is not a change.
     api.count = 2
     await service.tick()
     assert len(received) == 1 and received[0].uri == uri
