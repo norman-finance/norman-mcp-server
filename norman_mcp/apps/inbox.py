@@ -8,12 +8,13 @@ from typing import Any
 from urllib.parse import urljoin
 from uuid import UUID
 
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field
 
 from norman_mcp import config
 from norman_mcp.apps.inbox_overview import load_overview
-from norman_mcp.context import Context, set_api_company_id
+from norman_mcp.context import Context, get_oauth_provider, set_api_company_id
 
 # Bump when the HTML changes: hosts cache widget templates by URI.
 INBOX_URI = "ui://norman/inbox-v4.html"
@@ -109,6 +110,21 @@ def tax_review(run: dict[str, Any]) -> dict[str, Any]:
 async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
     company = await resolve_company(api)
     if not company:
+        # Company lookup can invalidate this grant after a terminal refresh
+        # failure. Its None result alone also covers valid empty companies and
+        # temporary outages, so use only this caller's provider mapping here.
+        if getattr(api, "token_source", None) == "oauth":
+            access = get_access_token()
+            provider = get_oauth_provider()
+            if (
+                access is not None
+                and provider is not None
+                and not provider.get_norman_token(access.token)
+            ):
+                return {
+                    "error": "Your Norman session expired. Please reconnect Norman.",
+                    "reconnect": True,
+                }
         return {"error": "Please connect Norman and select a company."}
 
     def executions_page(number: int) -> Any:

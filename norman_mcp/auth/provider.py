@@ -827,9 +827,14 @@ class NormanOAuthProvider(OAuthAuthorizationServerProvider):
         """The authorization a token belongs to; unknown tokens stand for themselves."""
         return getattr(self, "token_grants", {}).get(token, token)
 
-    async def revoke_token(self, token: str, token_type_hint: Optional[str] = None) -> None:
-        """Invalidate one connection, including its still-live access aliases."""
-        await asyncio.to_thread(self._invalidate_grant, token)
+    async def revoke_token(
+        self,
+        token: AccessToken | RefreshToken | str,
+        token_type_hint: Optional[str] = None,
+    ) -> None:
+        """Invalidate one connection from an SDK token record or legacy token string."""
+        token_key = token if isinstance(token, str) else token.token
+        await asyncio.to_thread(self._invalidate_grant, token_key)
 
     def _invalidate_grant(self, mapping_key: str) -> None:
         # A client_id is shared by independent users. Invalidate only a stable

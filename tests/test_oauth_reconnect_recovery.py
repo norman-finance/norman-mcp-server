@@ -48,6 +48,7 @@ class Upstream:
         self.revoked = set()
         self.refresh_failure = None
         self.api_reads = []
+        self.company_responses = {}
         self.refresh_calls = []
         self.lock = threading.Lock()
         self.block_entered = None
@@ -107,6 +108,8 @@ class Upstream:
                 return upstream_response(401, {"error": "invalid_token"})
         company = COMPANY_B if grant == "b" else COMPANY_A
         if url.endswith("/companies/"):
+            if grant in self.company_responses:
+                return upstream_response(*self.company_responses[grant])
             return upstream_response(200, {"results": [{"publicId": company}]})
         assert headers["X-Company-Id"] == company
         if url.endswith("/assistant/workflow-runs/"):
@@ -450,3 +453,86 @@ def test_revocation_during_inflight_refresh_does_not_resurrect_grant(reconnect_s
         for access in accesses:
             assert inbox(client, access).status_code == 401
         assert_inbox(inbox(client, b["access_token"]), COMPANY_B)
+
+
+def test_terminal_refresh_during_company_lookup_returns_reconnect_and_preserves_other_grant(
+    reconnect_server,
+):
+    fixture = reconnect_server()
+    with fixture.client as client:
+        registration = register(client)
+        a = authorize(client, registration, "a")
+        b = authorize(client, registration, "b")
+        assert fixture.provider.get_company_for_token(a["access_token"]) is None
+        assert fixture.provider.get_company_for_token(b["access_token"]) is None
+        b_before = {
+            "access": fixture.provider.tokens[b["access_token"]].model_dump(),
+            "refresh": fixture.provider.refresh_tokens[b["refresh_token"]].model_dump(),
+            "norman_access": fixture.provider.get_norman_token(b["access_token"]),
+            "norman_refresh": fixture.provider.token_mapping[b["refresh_token"]],
+            "grant": fixture.provider.grant_for_token(b["access_token"]),
+        }
+        fixture.upstream.revoked.add("a")
+
+        # No seeded company: the actual NormanAPI.company_id lookup must see
+        # the upstream 401 and its terminal refresh failure before Inbox loads.
+        rejected = inbox(client, a["access_token"])
+        assert rejected.status_code == 200, rejected.text
+        result = rejected.json()["result"]
+        assert result["structuredContent"] == {
+            "error": "Your Norman session expired. Please reconnect Norman.",
+            "reconnect": True,
+        }
+        assert result["content"][0]["text"] == result["structuredContent"]["error"]
+        assert fixture.upstream.refresh_calls == ["refresh_a_0"]
+        assert [
+            (url.endswith("/companies/"), token) for url, token, _, _ in fixture.upstream.api_reads
+        ] == [(True, "access_a_0")]
+        assert_removed(fixture.provider, a["refresh_token"], [a["access_token"]])
+        assert inbox(client, a["access_token"]).status_code == 401
+
+        assert fixture.provider.tokens[b["access_token"]].model_dump() == b_before["access"]
+        assert (
+            fixture.provider.refresh_tokens[b["refresh_token"]].model_dump() == b_before["refresh"]
+        )
+        assert fixture.provider.get_norman_token(b["access_token"]) == b_before["norman_access"]
+        assert fixture.provider.token_mapping[b["refresh_token"]] == b_before["norman_refresh"]
+        assert fixture.provider.grant_for_token(b["access_token"]) == b_before["grant"]
+        assert registration["client_id"] in fixture.provider.clients
+        assert_inbox(inbox(client, b["access_token"]), COMPANY_B)
+        assert any(
+            url.endswith("/companies/") and token == "access_b_0"
+            for url, token, _, _ in fixture.upstream.api_reads
+        )
+
+
+@pytest.mark.parametrize("failure", ["empty", "company-unavailable", "refresh-unavailable"])
+def test_company_lookup_without_terminal_auth_failure_does_not_request_reconnect(
+    reconnect_server, failure
+):
+    fixture = reconnect_server()
+    with fixture.client as client:
+        registration = register(client)
+        tokens = authorize(client, registration, "a")
+        before = credentials(fixture.provider)
+        assert fixture.provider.get_company_for_token(tokens["access_token"]) is None
+        if failure == "empty":
+            fixture.upstream.company_responses["a"] = (200, {"results": []})
+        elif failure == "company-unavailable":
+            fixture.upstream.company_responses["a"] = (503, {"error": "private-upstream-detail"})
+        else:
+            fixture.upstream.company_responses["a"] = (401, {"error": "invalid_token"})
+            fixture.upstream.refresh_failure = (503, {"error": "private-upstream-detail"})
+
+        response = inbox(client, tokens["access_token"])
+        assert response.status_code == 200, response.text
+        data = response.json()["result"]["structuredContent"]
+        assert data == {"error": "Please connect Norman and select a company."}
+        assert "private" not in str(data)
+        assert credentials(fixture.provider) == before
+        assert len(fixture.upstream.refresh_calls) == (1 if failure == "refresh-unavailable" else 0)
+        assert all(url.endswith("/companies/") for url, _, _, _ in fixture.upstream.api_reads)
+
+        fixture.upstream.company_responses.clear()
+        fixture.upstream.refresh_failure = None
+        assert_inbox(inbox(client, tokens["access_token"]), COMPANY_A)

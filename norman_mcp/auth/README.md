@@ -26,11 +26,18 @@ start-first deployment overlap.
 ## Recovery
 
 A terminal upstream HTTP 400 with OAuth `invalid_grant` invalidates only that
-connection's access handles, refresh handle and credential aliases. Revocation
-has the same effect, including when a refresh is in flight. Other authorizations
+connection's access handles, refresh handle and credential aliases. Provider-level
+revocation has the same effect, including when a refresh is in flight. It accepts
+SDK token records and legacy token strings; the HTTP revocation endpoint remains
+disabled. Other authorizations
 and the saved OAuth client registration remain available. The client can start
 OAuth again using its existing registration; reinstalling the plugin is not
 required by this server flow.
+
+If company lookup detects this terminal failure before Inbox loads, Inbox returns
+an expired-session message with `reconnect: true`. Its existing UI stops polling
+and clears stale actions. A valid token with no company or a temporary lookup
+failure does not receive that reconnect signal.
 
 Network failures, rate limits, upstream server errors and invalid-client
 configuration errors retain credentials so a temporary failure does not force
@@ -44,5 +51,6 @@ HTTP transports require `NORMAN_OAUTH_CLIENT_ID`; confidential upstream clients
 also use `NORMAN_OAUTH_CLIENT_SECRET`. Configure `NORMAN_MCP_PUBLIC_URL` to the
 public MCP origin used by Norman's registered callback. Persist
 `MCP_OAUTH_STATE_FILE` on a private volume; replacement files have mode 0600.
-Browser-stage logs use a hashed attempt identifier rather than raw state, codes,
-tokens or upstream response bodies.
+Application callback logs use a hashed attempt identifier rather than raw state,
+codes, tokens or upstream response bodies. HTTP access-log configuration is
+unchanged.
