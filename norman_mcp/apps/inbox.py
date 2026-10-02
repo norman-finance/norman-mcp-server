@@ -1,6 +1,7 @@
 """Company-scoped Inbox views. The API owns all decisions and mutations."""
 
 import asyncio
+import base64
 import math
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,7 +9,7 @@ from typing import Any
 from urllib.parse import urljoin
 from uuid import UUID
 
-from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from mcp.types import CallToolResult, Icon, TextContent, ToolAnnotations
 from pydantic import Field
 
 from norman_mcp import config
@@ -236,6 +237,9 @@ async def entity_labels(api: Any, company: str, wanted: set[tuple[str, str]]) ->
 
 
 def register_inbox(mcp: Any) -> None:
+    # Entrypoint icons belong to tools/list, not the HTML document's favicon.
+    icon = Path(__file__).parent.parent / "static" / "norman-icon.svg"
+    icon_src = "data:image/svg+xml;base64," + base64.b64encode(icon.read_bytes()).decode("ascii")
     resource_meta = {
         "ui": {"prefersBorder": False, "csp": {"connectDomains": [], "resourceDomains": []}},
         "openai/widgetDescription": (
@@ -285,6 +289,7 @@ def register_inbox(mcp: Any) -> None:
 
     @mcp.tool(
         title="Open Norman Inbox",
+        icons=[Icon(src=icon_src, mimeType="image/svg+xml", sizes=["any"])],
         annotations=READ,
         meta={
             "ui": {"resourceUri": INBOX_URI},
