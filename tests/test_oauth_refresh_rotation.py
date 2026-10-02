@@ -254,7 +254,11 @@ def test_revoked_grant_returns_oauth_error_instead_of_500(provider, upstream, mo
     assert result.status_code == 400
     assert result.json()["error"] == "invalid_grant"
     assert result.headers["cache-control"] == "no-store"
-    assert provider.token_mapping == before
+    assert provider.token_mapping == {
+        key: value
+        for key, value in before.items()
+        if key in {"mcp_b", "mcp_refresh_b", "refresh_for_mcp_b"}
+    }
 
 
 def test_missing_upstream_mapping_returns_oauth_error(provider, upstream):

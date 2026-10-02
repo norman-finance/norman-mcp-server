@@ -1,53 +1,56 @@
-# Norman MCP OAuth Authentication
+# Norman MCP OAuth authentication
 
-This directory contains the implementation of OAuth 2.0 authentication for the Norman MCP server. 
-This allows users to authenticate with their Norman Finance credentials through a web interface
-instead of providing them as environment variables.
+Norman MCP delegates sign-in to Norman OAuth, then issues MCP access and refresh
+handles bound to that authorization. The MCP server never receives the user's
+password through its own login form.
 
-## How it works
+## Browser flow
 
-The authentication flow works as follows:
+1. The MCP client registers or reuses its saved OAuth client and starts an
+   authorization-code request with PKCE S256.
+2. MCP creates a unique upstream state for this browser attempt, retaining the
+   original client state, registered return URI and PKCE challenge.
+3. Norman authenticates the user and returns to the MCP `/oauth/callback`.
+4. MCP exchanges the Norman code, persists a short-lived MCP code and returns it
+   with the original state to the validated client callback.
+5. The client redeems that code with its PKCE verifier and uses the issued MCP
+   handles to access Norman.
 
-1. When a client connects to the MCP server, they'll be redirected to the OAuth authorization
-   endpoint.
-2. The server will present a login form where the user enters their Norman Finance email and password.
-3. The server sends these credentials to the Norman API to get an access token.
-4. If successful, the server creates an OAuth session and redirects the user back to the client
-   with an authorization code.
-5. The client exchanges this code for an access token and refresh token.
-6. The server maps these tokens to the actual Norman API tokens.
-7. All subsequent API calls use the Norman API token we got from login page.
+Pending browser attempts and codes expire after ten minutes. They are saved in
+`MCP_OAUTH_STATE_FILE` alongside the existing registered clients and credentials,
+so a sequential server restart does not lose a valid reconnect attempt. Expired
+transactions and their associated code credentials are removed. This JSON
+backend is for one process; it does not coordinate concurrent workers or
+start-first deployment overlap.
 
-## Implementation Details
+## Recovery
 
-The implementation consists of several components:
+A terminal upstream HTTP 400 with OAuth `invalid_grant` invalidates only that
+connection's access handles, refresh handle and credential aliases. Provider-level
+revocation has the same effect, including when a refresh is in flight. It accepts
+SDK token records and legacy token strings; the HTTP revocation endpoint remains
+disabled. Other authorizations
+and the saved OAuth client registration remain available. The client can start
+OAuth again using its existing registration; reinstalling the plugin is not
+required by this server flow.
 
-- `provider.py`: Contains the `NormanOAuthProvider` class which implements the `OAuthAuthorizationServerProvider` 
-  protocol from the MCP library. This provider handles token generation, validation, and management.
-  
-- `routes.py`: Defines the routes for the login page and form handlers.
+If company lookup detects this terminal failure before Inbox loads, Inbox returns
+an expired-session message with `reconnect: true`. Its existing UI stops polling
+and clears stale actions. A valid token with no company or a temporary lookup
+failure does not receive that reconnect signal.
 
-- `templates/login.html`: A simple login form with fields for email and password.
+Network failures, rate limits, upstream server errors and invalid-client
+configuration errors retain credentials so a temporary failure does not force
+reauthorization. Valid callback failures return a normalized OAuth error and the
+original state to the registered client. Unknown, expired or replayed attempts
+stay on a generic local error page because they have no validated return target.
 
-## Configuration
+## Configuration and storage
 
-The OAuth implementation is configured in the main server file. It uses the following settings:
-
-- Server URL: `http://{host}:{port}`
-- Scopes: `norman.read` and `norman.write`
-
-## Usage
-
-When a user connects to the MCP server through a compatible client (like MCP Inspector), they'll be
-directed to the login page if they haven't authenticated yet. After entering their Norman Finance
-credentials, they'll be redirected back to the client and can start using the API.
-
-No additional configuration is needed on the client side, as this follows standard OAuth 2.0 flows.
-
-## Security Considerations
-
-- Credentials are never stored in the server. They are used only to obtain tokens from the Norman API.
-- The server maintains a mapping between MCP tokens and Norman API tokens.
-- All communication should be over HTTPS in production.
-- If you configure default credentials via environment variables, these will be used for initial server operation
-  but users will still need to log in through the web interface to get their own tokens. 
+HTTP transports require `NORMAN_OAUTH_CLIENT_ID`; confidential upstream clients
+also use `NORMAN_OAUTH_CLIENT_SECRET`. Configure `NORMAN_MCP_PUBLIC_URL` to the
+public MCP origin used by Norman's registered callback. Persist
+`MCP_OAUTH_STATE_FILE` on a private volume; replacement files have mode 0600.
+Application callback logs use a hashed attempt identifier rather than raw state,
+codes, tokens or upstream response bodies. HTTP access-log configuration is
+unchanged.
