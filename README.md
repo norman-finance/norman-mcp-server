@@ -467,6 +467,18 @@ results and genuine blockers. Financial overview is analysis-only; invoice
 follow-ups prepare drafts. External messages, payments, tax filing and automation
 approvals require a separate decision. The iframe sends a chat request rather
 than calling write tools itself; clients without messaging show a copyable request.
+Below the financial overview, **You can also ask Norman** shows three contextual
+tasks with the remaining suggestions under **Explore more tasks**. Their order
+stays stable for the selected company while the panel refreshes. Spending analysis,
+tax readiness and accountant handover checks are read-only; invoice creation is
+restricted to an unsent draft, and tax previews never authorize filing.
+The additive `capabilities` object contains `ledger` and `taxPreview` discovery
+hints. One company detail read enables Ledger suggestions only for SMEs with an
+SKR03/SKR04 chart. A preview suggestion requires an existing prepared Autopilot
+run with a report ID; a missing suggestion does not mean no tax reports exist.
+Unknown eligibility hides specialized suggestions while general tasks remain
+usable. Raw company details are omitted, and the host and API still enforce
+tool availability and permissions.
 The review card uses existing approve/dismiss/undo tools and refreshes actual
 results. Approval requires a checkbox and re-reads current values and planned
 actions immediately before executing. A changed review requires confirmation
@@ -506,11 +518,11 @@ An expired Norman token (one hour) is refreshed through that grant; a 401 that
 survives the refresh, or a 403, closes the watch. Local grant revocation, company changes and expiry
 end its stream within one second. The observer reads only while a stream is
 connected, with 30 seconds between observation cycles. Each watch observes one
-approval page, workflow state, bounded tax reviews and the Inbox overview; it is not a complete
+approval page, workflow state, bounded tax reviews, discovery capabilities and the Inbox overview; it is not a complete
 company event log and may miss intermediate changes. Financial snapshots are
 never cached in the change bus. There are at most 128 leases/streams, four leases
 and four open streams per OAuth grant, four concurrent snapshot reads (normally
-nine API requests per snapshot) and two per grant. The grant-pinned reader
+ten API requests per snapshot) and two per grant. The grant-pinned reader
 permits only GET requests.
 Tokens refreshed from one authorization
 share its grant, so refreshing does not raise these limits.
