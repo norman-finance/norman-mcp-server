@@ -34,6 +34,12 @@ def test_shared_startup_client_resolves_oauth_identity_per_http_request(monkeypa
         assert self.token_source == "oauth"  # Startup happens outside a bearer context.
         company = self.company_id
         assert self._resolve_norman_token() == "norman-" + company.removeprefix("company-")
+        if url.endswith(f"companies/{company}/"):
+            return {
+                "isSme": company == "company-alice",
+                "chartOfAccounts": {"code": "skr04"},
+                "taxNumber": "private-" + company,
+            }
         if url.endswith("workflow-runs/"):
             return {
                 "runs": [{"publicId": company, "state": "active", "blockedReason": "user_input"}]
@@ -88,6 +94,8 @@ def test_shared_startup_client_resolves_oauth_identity_per_http_request(monkeypa
                 assert "structuredContent" in result, response.text
             data = result.get("structuredContent") or json.loads(result["content"][0]["text"])
             assert data["companyId"] == "company-" + caller
+            assert data["capabilities"] == {"ledger": caller == "alice", "taxPreview": False}
+            assert "private-" not in str(data)
             assert data["questions"][0]["publicId"] == "company-" + caller
             assert data["overview"]["actions"]["unreviewedTransactions"] == (
                 7 if caller == "alice" else 19

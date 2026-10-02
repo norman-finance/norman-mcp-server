@@ -2,6 +2,7 @@ import asyncio
 import threading
 from types import SimpleNamespace
 
+import pytest
 from mcp.server.mcpserver import MCPServer
 
 from norman_mcp.apps.inbox import INBOX_URI, PREVIOUS_INBOX_URI, load_inbox, register_inbox
@@ -9,6 +10,7 @@ from norman_mcp.apps.inbox import INBOX_URI, PREVIOUS_INBOX_URI, load_inbox, reg
 COMPANY = "11111111-1111-4111-8111-111111111111"
 EXECUTION = "22222222-2222-4222-8222-222222222222"
 TRANSACTION = "33333333-3333-4333-8333-333333333333"
+REPORT = "77777777-7777-4777-8777-777777777777"
 
 
 class Api:
@@ -17,6 +19,18 @@ class Api:
         self.failed = False
         self._company = COMPANY
         self.company_threads = []
+        self.company_details = {
+            "publicId": COMPANY,
+            "isSme": True,
+            "chartOfAccounts": {"code": "skr04"},
+            "taxNumber": "private",
+            "iban": "private",
+            "members": ["private"],
+        }
+        self.tax_runs = [
+            {"publicId": "ustva-09", "status": "ready_for_approval", "periodStart": "2026-09-01", "periodEnd": "2026-09-30", "report": REPORT},
+            {"publicId": "ustva-08", "status": "submitted"},
+        ]
 
     @property
     def company_id(self):
@@ -29,6 +43,10 @@ class Api:
 
     async def arequest(self, method, url, **kwargs):
         self.calls.append((method, url, kwargs))
+        if url.endswith(f"companies/{COMPANY}/"):
+            if isinstance(self.company_details, Exception):
+                raise self.company_details
+            return self.company_details
         if url.endswith("workflow-runs/"):
             return {
                 "runs": [
@@ -38,10 +56,7 @@ class Api:
                 ]
             }
         if url.endswith(f"companies/{COMPANY}/autofiling/runs/"):
-            return [
-                {"publicId": "ustva-09", "status": "ready_for_approval", "periodStart": "2026-09-01", "periodEnd": "2026-09-30"},
-                {"publicId": "ustva-08", "status": "submitted"},
-            ]
+            return self.tax_runs
         if url.endswith("rule-executions/"):
             if self.failed:
                 return {"error": "forbidden"}
@@ -75,7 +90,7 @@ def test_inbox_counts_all_approvals_and_only_actual_blocked_workflows():
     assert data["summary"] == {"questions": 1, "approvals": 51, "taxReviewsShown": 1}
     assert [r["publicId"] for r in data["questions"]] == ["question"]
     assert data["pagination"] == {"page": 2, "hasNext": True}
-    assert len(api.calls) == 9
+    assert len(api.calls) == 10
     assert all(call[0] == "GET" for call in api.calls)
     assert data["overview"]["actions"] == {
         "overdueInvoices": 83,
@@ -84,6 +99,8 @@ def test_inbox_counts_all_approvals_and_only_actual_blocked_workflows():
     }
     assert all(data["sourceAvailability"].values())
     assert "private" not in str(data)
+    assert data["capabilities"] == {"ledger": True, "taxPreview": True}
+    assert "taxNumber" not in str(data) and "chartOfAccounts" not in str(data)
     assert api.calls[1][2]["params"]["page"] == 2
 
 
@@ -94,6 +111,72 @@ def test_failed_section_is_not_an_empty_success():
     assert data["summary"]["approvals"] is None
     assert data["unavailable"] == ["approvals"]
     assert data["summary"]["questions"] == 1
+
+
+@pytest.mark.parametrize(
+    ("company_details", "ledger"),
+    [
+        ({"isSme": True, "chartOfAccounts": {"code": "skr03"}}, True),
+        ({"isSme": True, "chartOfAccounts": {"code": "skr04"}}, True),
+        ({"isSme": False, "chartOfAccounts": {"code": "skr04"}}, False),
+        ({"isSme": "true", "chartOfAccounts": {"code": "skr04"}}, False),
+        ({"isSme": True, "chartOfAccounts": {"code": "unknown"}}, False),
+        ({"isSme": True, "chartOfAccounts": "skr04"}, False),
+        ({"isSme": True, "chartOfAccounts": None}, False),
+        ({}, False),
+        (None, False),
+        ([], False),
+        ({"error": "private upstream response", "status_code": 403}, False),
+        (RuntimeError("private upstream response"), False),
+    ],
+)
+def test_discovery_ledger_requires_supported_company_metadata(company_details, ledger):
+    api = Api()
+    api.company_details = company_details
+    data = asyncio.run(load_inbox(api))
+    assert data["capabilities"] == {"ledger": ledger, "taxPreview": True}
+    assert data["summary"]["approvals"] == 51
+    assert data["overview"]["actions"]["unreviewedTransactions"] == 4
+    assert data["unavailable"] == []
+    assert "private" not in str(data)
+    assert len([call for call in api.calls if call[1].endswith(f"companies/{COMPANY}/")]) == 1
+    assert all(call[0] == "GET" for call in api.calls)
+
+
+@pytest.mark.parametrize(
+    ("tax_runs", "tax_preview"),
+    [
+        ([{"status": "ready_for_approval", "report": REPORT}], True),
+        ([{"status": "needs_input", "report": REPORT}], False),
+        ([{"status": "submitted", "report": REPORT}], False),
+        ([{"status": "ready_for_approval"}], False),
+        ([{"status": "ready_for_approval", "report": "not-a-report-id"}], False),
+        ([{"status": "ready_for_approval", "report": {"publicId": REPORT}}], False),
+        ([None, {}, {"status": "ready_for_approval", "report": REPORT}], True),
+        ([], False),
+        ({"error": "private upstream response", "status_code": 500}, False),
+    ],
+)
+def test_discovery_tax_preview_requires_an_actual_prepared_report(tax_runs, tax_preview):
+    api = Api()
+    api.tax_runs = tax_runs
+    data = asyncio.run(load_inbox(api))
+    assert data["capabilities"] == {"ledger": True, "taxPreview": tax_preview}
+    assert data["overview"]["actions"]["unreviewedTransactions"] == 4
+    assert "private" not in str(data)
+    assert not [call for call in api.calls if "/taxes/reports/" in call[1]]
+
+
+def test_discovery_company_metadata_auth_failure_requires_reconnect():
+    api = Api()
+    api.company_details = {
+        "error": "Your Norman session expired. Please reconnect.",
+        "status_code": 401,
+    }
+    assert asyncio.run(load_inbox(api)) == {
+        "error": "Your Norman session expired. Please reconnect.",
+        "reconnect": True,
+    }
 
 
 def test_no_company_does_not_read_another_company():
@@ -133,12 +216,15 @@ def test_previously_opened_inbox_resource_uri_still_resolves():
     async def read_templates():
         current = list(await mcp.read_resource(INBOX_URI))[0].content
         previous = list(await mcp.read_resource(PREVIOUS_INBOX_URI))[0].content
+        v4 = list(await mcp.read_resource("ui://norman/inbox-v4.html"))[0].content
         v3 = list(await mcp.read_resource("ui://norman/inbox-v3.html"))[0].content
         v2 = list(await mcp.read_resource("ui://norman/inbox-v2.html"))[0].content
-        return current, previous, v3, v2
+        return current, previous, v4, v3, v2
 
-    current, previous, v3, v2 = asyncio.run(read_templates())
-    assert current == previous == v3 == v2
+    current, previous, v4, v3, v2 = asyncio.run(read_templates())
+    assert INBOX_URI == "ui://norman/inbox-v6.html"
+    assert PREVIOUS_INBOX_URI == "ui://norman/inbox-v5.html"
+    assert current == previous == v4 == v3 == v2
     assert "financialStatus" in previous
 
 

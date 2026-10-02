@@ -17,8 +17,8 @@ from norman_mcp.apps.inbox_overview import load_overview
 from norman_mcp.context import Context, set_api_company_id
 
 # Bump when the HTML changes: hosts cache widget templates by URI.
-INBOX_URI = "ui://norman/inbox-v5.html"
-PREVIOUS_INBOX_URI = "ui://norman/inbox-v4.html"
+INBOX_URI = "ui://norman/inbox-v6.html"
+PREVIOUS_INBOX_URI = "ui://norman/inbox-v5.html"
 READ = ToolAnnotations(
     read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False
 )
@@ -107,6 +107,36 @@ def tax_review(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def discovery_capabilities(company: dict[str, Any], tax_runs: Any) -> dict[str, bool]:
+    """Conservative discovery hints from current company-scoped API evidence.
+
+    These hints neither grant permission nor guarantee a particular tool is
+    available in the host. A prepared Autopilot report is enough to suggest a
+    preview; absence does not assert that the company has no tax reports.
+    """
+    chart = company.get("chartOfAccounts")
+    ledger = (
+        not company.get("error")
+        and company.get("isSme") is True
+        and isinstance(chart, dict)
+        and chart.get("code") in ("skr03", "skr04")
+    )
+    tax_preview = False
+    for run in tax_runs if isinstance(tax_runs, list) else []:
+        if not isinstance(run, dict) or run.get("status") != "ready_for_approval":
+            continue
+        report = run.get("report")
+        if not isinstance(report, str):
+            continue
+        try:
+            UUID(report)
+        except ValueError:
+            continue
+        tax_preview = True
+        break
+    return {"ledger": ledger, "taxPreview": tax_preview}
+
+
 async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
     company = await resolve_company(api)
     if not company:
@@ -119,7 +149,7 @@ async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
             params={"status": "awaiting_review", "page": number, "page_size": PAGE_SIZE},
         )
 
-    runs, executions, tax_runs, overview = await asyncio.gather(
+    runs, executions, tax_runs, overview, company_details = await asyncio.gather(
         read(api, "assistant/workflow-runs/"),
         executions_page(page),
         # The dedicated runs list, not the approvals aggregate: that one is
@@ -127,6 +157,9 @@ async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
         # could hide every prepared UStVA.
         read_list(api, f"companies/{company}/autofiling/runs/"),
         load_overview(api, str(company)),
+        # One bounded lookup; never return the company's tax IDs, bank details
+        # or members just to decide which discovery tasks to suggest.
+        read(api, f"companies/{company}/"),
     )
     if page > 1 and executions.get("status_code") == 404:
         # Deciding the last item on the last page empties that page and the API
@@ -135,7 +168,7 @@ async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
         last = max(1, math.ceil((first.get("count") or 0) / PAGE_SIZE)) if not first.get("error") else 1
         page = min(page - 1, last)
         executions = first if page == 1 else await executions_page(page)
-    for data in (runs, executions, tax_runs, overview):
+    for data in (runs, executions, tax_runs, overview, company_details):
         if isinstance(data, dict) and data.get("status_code") == 401:
             return {"error": data["error"], "reconnect": True}
     # Active workflows are NOT necessarily waiting on the user. The old
@@ -168,6 +201,7 @@ async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
     return {
         "view": "inbox",
         "companyId": str(company),
+        "capabilities": discovery_capabilities(company_details, tax_runs),
         "asOf": datetime.now(timezone.utc).isoformat(),
         "questions": questions,
         "runs": active,
@@ -262,7 +296,12 @@ def register_inbox(mcp: Any) -> None:
         return Path(__file__).with_name("inbox.html").read_text(encoding="utf-8")
 
     # Previously opened clients can still resolve their cached resource URI.
-    for previous in (PREVIOUS_INBOX_URI, "ui://norman/inbox-v3.html", "ui://norman/inbox-v2.html"):
+    for previous in (
+        PREVIOUS_INBOX_URI,
+        "ui://norman/inbox-v4.html",
+        "ui://norman/inbox-v3.html",
+        "ui://norman/inbox-v2.html",
+    ):
         mcp.resource(
             previous,
             name="norman-" + previous.rsplit("/", 1)[1].removesuffix(".html"),
