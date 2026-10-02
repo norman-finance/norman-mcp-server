@@ -467,6 +467,10 @@ results and genuine blockers. Financial overview is analysis-only; invoice
 follow-ups prepare drafts. External messages, payments, tax filing and automation
 approvals require a separate decision. The iframe sends a chat request rather
 than calling write tools itself; clients without messaging show a copyable request.
+Button-generated messages use readable references to the Inbox selection. Internal
+company and record IDs stay in structured app context, which is acknowledged before
+sending. When that context is unavailable, the request asks the user to confirm the
+company and relevant record; copyable requests also omit IDs.
 Below the financial overview, **You can also ask Norman** shows three contextual
 tasks with the remaining suggestions under **Explore more tasks**. Their order
 stays stable for the selected company while the panel refreshes. Spending analysis,

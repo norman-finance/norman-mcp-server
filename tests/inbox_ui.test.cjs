@@ -152,6 +152,19 @@ async function fixture(
         let result = {};
         if (m.method === "ui/initialize")
           result = { hostCapabilities: window.hostCapabilities };
+        if (m.method === "ui/update-model-context") {
+          if (window.contextError) {
+            e.source.postMessage(
+              { jsonrpc: "2.0", id: m.id, error: window.contextError },
+              "*",
+            );
+            return;
+          }
+          if (window.holdContext) {
+            window.held.push({ target: e.source, id: m.id, result });
+            return;
+          }
+        }
         if (m.method === "ui/message") {
           if (window.messageError) {
             e.source.postMessage(
@@ -1943,7 +1956,8 @@ test("every task delegates a fixed scoped request while the iframe makes no muta
     for (const message of messages) {
       const text = message.params.content[0].text;
       assert.equal(message.params.role, "user");
-      assert.match(text, /11111111-1111-4111-8111-111111111111/);
+      assert.doesNotMatch(text, /11111111-1111-4111-8111-111111111111/);
+      assert.match(text, /Use the company selected in Norman Inbox/);
       assert.match(text, /2026-09-01 through 2026-10-31/);
       assert.match(text, /verify actual results/);
       assert.match(text, /Read all available pages/);
@@ -2023,14 +2037,20 @@ test("company changes during a pending chat request never reuse its old action s
     await idle(page);
     const messages = await chatMessages(page);
     assert.equal(messages.length, 2);
-    assert.match(
-      messages[0].params.content[0].text,
-      /11111111-1111-4111-8111-111111111111/,
-    );
-    assert.match(
-      messages[1].params.content[0].text,
-      /22222222-2222-4222-8222-222222222222/,
-    );
+    for (const message of messages)
+      assert.doesNotMatch(message.params.content[0].text, /11111111|22222222/);
+    const scopedCompanies = await page.evaluate(() => {
+      let context;
+      return window.calls.flatMap((call) => {
+        if (call.method === "ui/update-model-context")
+          context = call.params.structuredContent;
+        return call.method === "ui/message" ? [context.companyId] : [];
+      });
+    });
+    assert.deepEqual(scopedCompanies, [
+      "11111111-1111-4111-8111-111111111111",
+      "22222222-2222-4222-8222-222222222222",
+    ]);
     assert.match(
       messages[1].params.content[0].text,
       /2026-08-01 through 2026-08-31/,
@@ -2395,9 +2415,10 @@ test("discovery sends scoped chat tasks without granting analytical requests boo
     const messages = (await chatMessages(page)).map((message) => message.params.content[0].text);
     assert.equal(messages.length, 6);
     for (const text of messages) {
-      assert.match(text, /11111111-1111-4111-8111-111111111111/);
+      assert.doesNotMatch(text, /11111111-1111-4111-8111-111111111111/);
+      assert.match(text, /Use the company selected in Norman Inbox/);
       assert.match(text, /2026-09-01 through 2026-10-31/);
-      assert.match(text, /If the active company differs, ask me to select this company first/);
+      assert.match(text, /If the active company differs from the Inbox selection, ask me to select that company first/);
       assert.match(text, /Obtain separate authorization before sending external messages/);
       assert.doesNotMatch(text, /Perform only the routine internal changes|Ignore restrictions/);
     }
@@ -2413,6 +2434,200 @@ test("discovery sends scoped chat tasks without granting analytical requests boo
     assert.doesNotMatch(messages[4], /read-only tool results/);
     // All actions use host messaging; the iframe itself only reads Inbox data.
     assert.deepEqual(await page.evaluate(() => [...new Set(window.calls.filter((call) => call.method === "tools/call").map((call) => call.params.name))]), ["get_norman_inbox_data"]);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+async function addTaxReviews(page) {
+  await page.evaluate(() => {
+    window.inbox.taxReviews = [
+      {
+        key: "autofiling:33333333-3333-4333-8333-333333333333",
+        kind: "autofiling", title: "Tax return ready", detail: "2026-08-01 - 2026-08-31",
+      },
+      {
+        key: "autofiling:44444444-4444-4444-8444-444444444444",
+        kind: "autofiling", title: "Tax return ready", detail: "2026-09-01 - 2026-09-30",
+      },
+    ];
+    window.pushInbox();
+  });
+  await idle(page);
+}
+
+async function chatScopes(page) {
+  return page.evaluate(() => {
+    let context;
+    return window.calls.flatMap((call) => {
+      if (call.method === "ui/update-model-context")
+        context = call.params.structuredContent;
+      return call.method === "ui/message" ? [context] : [];
+    });
+  });
+}
+
+test("all chat button paths keep company and record IDs in context instead of user messages", async () => {
+  const { page, ui, errors } = await fixture(1100, { overview: true });
+  try {
+    await ui.locator("#intent-financialStatus").click();
+    await idle(page);
+    await ui.getByRole("button", { name: "Review changes", exact: true }).click();
+    await idle(page);
+    await ui.locator("#approval-ask").click();
+    await idle(page);
+    await page.evaluate(() => {
+      window.inbox.questions[0].canChat = false;
+      window.pushInbox();
+    });
+    await idle(page);
+    await ui.getByRole("button", { name: "Review question", exact: true }).click();
+    await idle(page);
+    await ui.locator("#workflow-ask").click();
+    await idle(page);
+    await addTaxReviews(page);
+    await ui.locator("[data-tax]").nth(1).click();
+    await idle(page);
+    const messages = await chatMessages(page), scopes = await chatScopes(page);
+    assert.equal(messages.length, 4);
+    for (const message of messages) {
+      const text = message.params.content[0].text;
+      assert.doesNotMatch(text, /[0-9a-f]{8}-[0-9a-f-]{27,}|approval-1|run-1|autofiling:/i);
+      assert.match(text, /Use the company selected in Norman Inbox/);
+      assert.match(text, /If that context is unavailable, ask me to confirm/);
+    }
+    assert.ok(scopes.every((scope) => scope.companyId === "11111111-1111-4111-8111-111111111111"));
+    assert.equal(scopes[1].selected.execution.publicId, "approval-1");
+    assert.equal(scopes[2].selected.workflow.publicId, "run-1");
+    assert.equal(scopes[3].selected.kind, "tax");
+    assert.equal(scopes[3].selected.review.key, "autofiling:44444444-4444-4444-8444-444444444444");
+    assert.equal(scopes[3].selected.review.detail, "2026-09-01 - 2026-09-30");
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("chat waits for its selected context and cancels if the company changes before acknowledgment", async () => {
+  const { page, ui, errors } = await fixture(1100, { overview: true });
+  try {
+    await addTaxReviews(page);
+    await page.evaluate(() => (window.holdContext = true));
+    await ui.locator("[data-tax]").first().click();
+    await flush(page);
+    assert.equal((await chatMessages(page)).length, 0);
+    assert.equal(await page.evaluate(() => window.held.length), 1);
+    await page.evaluate(() => { window.holdContext = false; window.release(); });
+    await idle(page);
+    assert.equal((await chatMessages(page)).length, 1);
+    await page.evaluate(() => (window.holdContext = true));
+    await ui.locator("[data-tax]").nth(1).click();
+    await flush(page);
+    assert.equal((await chatMessages(page)).length, 1);
+    await page.evaluate(() => {
+      window.holdContext = false;
+      window.inbox.companyId = "22222222-2222-4222-8222-222222222222";
+      window.inbox.taxReviews = [];
+      window.pushInbox();
+    });
+    await ui.getByText(/Company changed/).waitFor();
+    await page.evaluate(() => window.release());
+    await idle(page);
+    assert.equal((await chatMessages(page)).length, 1);
+    assert.equal(await ui.locator("#chat-request").isVisible(), false);
+    assert.equal(await page.frames()[1].evaluate(() => window.__inboxTestState.chatReview), null);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("unsupported context uses the legacy state bridge and missing context keeps copy requests ID-free", async () => {
+  const { page, ui, errors } = await fixture(1100, { overview: true });
+  try {
+    await addTaxReviews(page);
+    await aliasChat(page);
+    await page.frames()[1].evaluate(() => {
+      window.savedContexts = [];
+      window.openai.setWidgetState = (data) => window.savedContexts.push(data);
+    });
+    await page.evaluate(() => (window.contextError = { code: -32601, message: "Not supported" }));
+    await ui.locator("[data-tax]").first().click();
+    await idle(page);
+    const saved = await page.frames()[1].evaluate(() => window.savedContexts);
+    assert.equal(saved.at(-1).selected.review.key, "autofiling:33333333-3333-4333-8333-333333333333");
+    assert.doesNotMatch((await chatMessages(page))[0].params.content[0].text, /autofiling:|11111111|33333333/);
+    // A different tax selection cannot inherit the earlier successful context.
+    await page.frames()[1].evaluate(() => delete window.openai);
+    await page.evaluate(() => {
+      window.contextError = { code: -32000, message: "Context denied" };
+      window.messageError = { code: -32000, message: "Message denied" };
+    });
+    await ui.locator("[data-tax]").nth(1).click();
+    await idle(page);
+    const copied = await ui.locator("#chat-request-text").inputValue();
+    assert.doesNotMatch(copied, /autofiling:|11111111|44444444/);
+    assert.match(copied, /The Inbox context could not be attached/);
+    assert.match(copied, /Ask me to confirm the company and the relevant record before proceeding/);
+    assert.equal(await ui.locator("#chat-request").isVisible(), true);
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("tax chat replaces an older approval selection and keeps its scope across polling", async () => {
+  const { page, ui, errors } = await fixture(1100, { overview: true, clock: true });
+  try {
+    await ui.getByRole("button", { name: "Review changes", exact: true }).click();
+    await idle(page);
+    await ui.locator("#confirm").check();
+    await addTaxReviews(page);
+    await ui.locator("[data-tax]").first().click();
+    await idle(page);
+    assert.equal(await ui.locator("aside").count(), 0);
+    assert.equal(await page.frames()[1].evaluate(() => window.__inboxTestState.consent), "");
+    await page.evaluate(() => (window.inbox.summary.approvals = 52));
+    await page.clock.runFor(30_001);
+    await idle(page);
+    const context = await page.evaluate(() => window.calls
+      .filter((call) => call.method === "ui/update-model-context")
+      .at(-1).params.structuredContent);
+    assert.equal(context.summary.approvals, 52);
+    assert.equal(context.selected.kind, "tax");
+    assert.equal(context.selected.review.key, "autofiling:33333333-3333-4333-8333-333333333333");
+    assert.equal((await chatMessages(page)).length, 1);
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("reselecting acknowledged context replaces a different pending update before sending chat", async () => {
+  const { page, ui, errors } = await fixture(1100, { overview: true });
+  try {
+    await ui.getByRole("button", { name: "Review changes", exact: true }).click();
+    await idle(page);
+    await page.evaluate(() => (window.holdContext = true));
+    await ui.getByRole("button", { name: "Review question", exact: true }).click();
+    await until(page, () => !window.__inboxTestState.busy);
+    await page.evaluate(() => (window.holdContext = false));
+    await ui.getByRole("button", { name: "Review changes", exact: true }).click();
+    await until(page, () => !window.__inboxTestState.busy);
+    await ui.locator("#approval-ask").click();
+    await flush(page);
+    assert.equal((await chatMessages(page)).length, 0);
+    await page.evaluate(() => window.release());
+    await idle(page);
+    assert.equal((await chatMessages(page)).length, 1);
+    assert.equal((await chatScopes(page))[0].selected.kind, "approval");
+    assert.equal((await chatScopes(page))[0].selected.execution.publicId, "approval-1");
+    assert.equal(await page.frames()[1].evaluate(() =>
+      JSON.parse(window.__inboxTestState.context).selected.kind), "approval");
     assert.deepEqual(errors, []);
   } finally {
     await page.close();

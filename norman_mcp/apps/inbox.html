@@ -508,6 +508,7 @@
         const state = {
           data: null,
           detail: null,
+          chatReview: null,
           busy: false,
           ready: false,
           hostCapabilities: {},
@@ -524,6 +525,7 @@
           reviewStale: false,
           renderedSelection: "",
           context: "",
+          contextPending: null,
           initialized: false,
           disposed: false,
           intersecting: true,
@@ -672,6 +674,7 @@
           }, delay);
         }
         function setDetail(next) {
+          state.chatReview = null;
           const previousKey = selectionKey(state.detail),
             nextKey = selectionKey(next),
             changedReview =
@@ -837,42 +840,75 @@
             view: "inbox",
             summary: d.summary,
             ...(d.overview ? { overview: d.overview } : {}),
-            selected: !s
-              ? null
-              : s.kind === "workflow"
-                ? { kind: "workflow", workflow: s.run }
-                : {
-                    kind: "approval",
-                    execution: s.execution,
-                    before: s.before,
-                    currentUnavailable: s.currentUnavailable,
-                    canApprove: s.canApprove,
-                  },
+            selected: state.chatReview
+              ? { kind: "tax", review: state.chatReview }
+              : !s
+                ? null
+                : s.kind === "workflow"
+                  ? { kind: "workflow", workflow: s.run }
+                  : {
+                      kind: "approval",
+                      execution: s.execution,
+                      before: s.before,
+                      currentUnavailable: s.currentUnavailable,
+                      canApprove: s.canApprove,
+                    },
           };
         }
         // Each ui/update-model-context replaces the previous one, so every
         // update carries the summary and the current selection together.
         async function syncContext() {
-          if (!state.initialized || state.disposed || !state.data) return;
-          if (!state.ready && !window.openai?.setWidgetState) return;
+          if (!state.initialized || state.disposed || !state.data) return false;
+          if (!state.ready && !window.openai?.setWidgetState) return false;
           const data = modelContext(),
             fingerprint = stable(data);
-          if (state.context === fingerprint) return;
-          state.context = fingerprint;
-          try {
-            if (state.ready)
-              await rpc("ui/update-model-context", { structuredContent: data });
-            else window.openai.setWidgetState(data);
-          } catch {
-            if (state.context === fingerprint) state.context = "";
+          if (state.contextPending?.fingerprint === fingerprint)
+            return state.contextPending.promise;
+          if (state.contextPending) {
+            // A previous selection must finish publishing before its replacement.
+            await state.contextPending.promise;
+            return syncContext();
           }
+          if (state.context === fingerprint) return true;
+          const pending = { fingerprint, promise: null };
+          state.contextPending = pending;
+          pending.promise = (async () => {
+            try {
+              let result;
+              if (state.ready) {
+                try {
+                  result = await rpc("ui/update-model-context", {
+                    structuredContent: data,
+                  });
+                } catch (error) {
+                  if (error.code !== -32601 || !window.openai?.setWidgetState)
+                    throw error;
+                  result = await window.openai.setWidgetState(data);
+                }
+              } else result = await window.openai.setWidgetState(data);
+              if (result?.isError) return false;
+              if (state.contextPending === pending) state.context = fingerprint;
+              return true;
+            } catch {
+              return false;
+            } finally {
+              if (state.contextPending === pending) state.contextPending = null;
+            }
+          })();
+          return pending.promise;
         }
         function showChatRequest(text) {
           document.getElementById("chat-request").hidden = !text;
           document.getElementById("chat-request-text").value = text;
         }
-        async function ask(text) {
-          const company = state.data?.companyId;
+        async function ask(text, review = null) {
+          const company = state.data?.companyId,
+            revision = state.revision;
+          // Selecting a tax review replaces an older workflow/approval, so
+          // its background refresh cannot overwrite the tax chat's context.
+          if (review) setDetail(null);
+          state.chatReview = review;
+          if (review) render();
           showChatRequest("");
           const accepted = (result) => {
             if (result?.isError)
@@ -882,6 +918,11 @@
             return result;
           };
           try {
+            // Keep record IDs in app context, not in the visible chat request.
+            const scoped = await syncContext();
+            guard(revision);
+            if (company !== state.data?.companyId) throw stale();
+            text = `Use the company selected in Norman Inbox. ${text} ${scoped ? "Use the Inbox context to identify the selected company and record. If that context is unavailable, ask me to confirm the company and the relevant record before proceeding." : "The Inbox context could not be attached. Ask me to confirm the company and the relevant record before proceeding."} If the active company differs from the Inbox selection, ask me to select that company first.`;
             if (state.ready && state.hostCapabilities.message?.text) {
               try {
                 return accepted(
@@ -909,7 +950,8 @@
               "Conversation messaging is unavailable in this host. Copy the request into chat.",
             );
           } catch (error) {
-            if (company !== state.data?.companyId) throw stale();
+            if (error.name === "StaleResponse" || company !== state.data?.companyId)
+              throw stale();
             showChatRequest(text);
             throw error;
           }
@@ -1357,7 +1399,7 @@
             throw Error(
               "Company or period is unavailable. Refresh before using this action.",
             );
-          return `Use Norman company ${company}. Overview period: ${period.from} through ${period.to}. ${INTENTS[key].request} ${INTENT_MODES[INTENTS[key].mode]} Complete this task and report verified results; ask only for genuine missing facts or ambiguity. Read all available pages needed for the requested scope, verify actual results and report completed totals, source coverage and unresolved cases. Never invent missing records, waive missing required documents or treat a displayed batch as the complete dataset. Use the narrowest tools needed for this task. Do not approve pending automation executions or start workflows with side effects as part of this task. Obtain separate authorization before sending external messages or invoice reminders, making payments or submitting tax filings. If the active company differs, ask me to select this company first.`;
+          return `Overview period: ${period.from} through ${period.to}. ${INTENTS[key].request} ${INTENT_MODES[INTENTS[key].mode]} Complete this task and report verified results; ask only for genuine missing facts or ambiguity. Read all available pages needed for the requested scope, verify actual results and report completed totals, source coverage and unresolved cases. Never invent missing records, waive missing required documents or treat a displayed batch as the complete dataset. Use the narrowest tools needed for this task. Do not approve pending automation executions or start workflows with side effects as part of this task. Obtain separate authorization before sending external messages or invoice reminders, making payments or submitting tax filings.`;
         }
         const count = (value) =>
           Number.isInteger(value) && value >= 0 ? String(value) : "Unavailable";
@@ -1591,8 +1633,21 @@
               (b.onclick = () =>
                 action(
                   async () => {
+                    const review = state.data.taxReviews.find(
+                      (item) => item.key === b.dataset.tax,
+                    );
+                    if (!review)
+                      throw Error(
+                        "This tax review is unavailable. Refresh to retry.",
+                      );
                     await ask(
-                      `Review my prepared tax return in Norman. Selected review: ${b.dataset.tax}. Show the preview and what needs my attention.`,
+                      "Review the tax return selected in Norman Inbox. Read its current status, show the available preview and explain what needs my attention. Do not submit a filing or approve any actions.",
+                      {
+                        key: review.key,
+                        kind: review.kind,
+                        title: review.title,
+                        detail: review.detail,
+                      },
                     );
                     return "Task sent to chat.";
                   },
@@ -1679,7 +1734,7 @@
               action(
                 async () => {
                   await ask(
-                    `Explain every planned action for Norman execution ${state.detail.execution.publicId}. Use the current values and flag external effects before I decide.`,
+                    "Explain every planned action for the approval selected in Norman Inbox. Read its current values and flag external effects before I decide. Do not approve or change any records.",
                   );
                   return "Task sent to chat.";
                 },
@@ -1691,7 +1746,7 @@
               action(
                 async () => {
                   await ask(
-                    `Help me resolve Norman workflow ${state.detail.run.publicId}. Read its current blocked state first.`,
+                    "Help me resolve the workflow selected in Norman Inbox. Read its current blocked state first. Explain what is needed without approving or starting actions with external effects.",
                   );
                   return "Task sent to chat.";
                 },
