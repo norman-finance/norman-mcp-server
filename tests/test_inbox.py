@@ -133,11 +133,12 @@ def test_previously_opened_inbox_resource_uri_still_resolves():
     async def read_templates():
         current = list(await mcp.read_resource(INBOX_URI))[0].content
         previous = list(await mcp.read_resource(PREVIOUS_INBOX_URI))[0].content
-        return current, previous
+        v2 = list(await mcp.read_resource("ui://norman/inbox-v2.html"))[0].content
+        return current, previous, v2
 
-    current, previous = asyncio.run(read_templates())
-    assert current == previous
-    assert "Show my financial status" in previous
+    current, previous, v2 = asyncio.run(read_templates())
+    assert current == previous == v2
+    assert "financialStatus" in previous
 
 
 # --- Regression tests for the review of #148 ---------------------------------

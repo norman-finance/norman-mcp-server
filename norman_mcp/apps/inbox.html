@@ -174,28 +174,23 @@
         border-color: var(--n-accent-hover);
       }
       .metrics {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 24px;
-        padding: 16px 0;
-        margin: 24px 0 32px;
-        border-top: 1px solid var(--n-border-default);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 20px;
+        padding: 12px 0;
+        margin: 24px 0;
         border-bottom: 1px solid var(--n-border-default);
       }
       .metric {
         min-width: 0;
-        padding: 0 24px 0 0;
-        border-right: 1px solid var(--n-border-default);
-      }
-      .metric:last-child {
-        padding-right: 0;
-        border-right: 0;
+        display: inline-flex;
+        gap: 4px;
+        align-items: baseline;
       }
       .metric strong {
-        display: block;
-        font-size: 32px;
+        font-size: 12px;
         font-weight: 600;
-        line-height: 40px;
+        line-height: 20px;
         font-variant-numeric: tabular-nums;
       }
       .metric span {
@@ -206,6 +201,9 @@
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(280px, 0.85fr);
         gap: 32px;
+      }
+      .layout.no-selection {
+        grid-template-columns: 1fr;
       }
       .card {
         border: 0;
@@ -321,8 +319,7 @@
         font-size: 12px;
         margin: 16px 0;
       }
-      .overview-stats,
-      .suggestions {
+      .overview-stats {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 0 24px;
@@ -345,23 +342,35 @@
       .overview-stat .notice {
         margin: 4px 0 0;
       }
-      .overview .quick-actions {
-        margin-bottom: 24px;
-      }
       .suggestions {
-        margin-bottom: 24px;
+        margin-bottom: 32px;
       }
       .suggestion {
         display: flex;
         gap: 16px;
         align-items: center;
         justify-content: space-between;
+        padding: 20px 0;
       }
       .suggestion p {
         margin-bottom: 0;
       }
       .suggestion button {
         flex-shrink: 0;
+      }
+      .suggestion .scope {
+        font-size: 11px;
+      }
+      #bookkeeping-help {
+        margin: 24px 0 32px;
+      }
+      #bookkeeping-help summary {
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      #bookkeeping-help article {
+        padding: 16px 0;
       }
       #dismiss,
       #undo {
@@ -400,22 +409,17 @@
           gap: 24px;
         }
         .metrics {
-          gap: 12px;
-        }
-        .metric {
-          padding-right: 12px;
-        }
-        .metric strong {
-          font-size: 24px;
-          line-height: 36px;
+          gap: 8px 16px;
         }
         .detail {
           border-left: 0;
           border-top: 1px solid var(--n-border-default);
           padding: 20px 0 0;
         }
-        .suggestions {
-          grid-template-columns: 1fr;
+        .suggestion {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 12px;
         }
         .overview-value {
           font-size: 20px;
@@ -431,8 +435,8 @@
       <header>
         <div>
           <div class="eyebrow">Norman Finance</div>
-          <h1>Your Inbox</h1>
-          <div class="muted">Decisions that move your books forward.</div>
+          <h1>Let AI handle your bookkeeping</h1>
+          <div class="muted">Choose a task. AI takes it from here in chat.</div>
         </div>
         <button id="refresh">Refresh</button>
       </header>
@@ -454,6 +458,7 @@
           busy: false,
           ready: false,
           hostCapabilities: {},
+          helpOpen: false,
           pending: new Map(),
           id: 1,
           initId: null,
@@ -663,6 +668,7 @@
             state.answer = "";
             state.answerFor = "";
             state.context = "";
+            state.helpOpen = false;
             showChatRequest("");
             warn("Company changed. Select a decision to review.");
           }
@@ -1076,7 +1082,8 @@
             else say(`Could not refresh: ${error.message}`, true);
           } finally {
             // Back off while nothing on screen changes.
-            if (checked) state.quiet = state.markup === shown ? state.quiet + 1 : 0;
+            if (checked)
+              state.quiet = state.markup === shown ? state.quiet + 1 : 0;
             schedulePolling(state.refreshWanted ? 0 : interval());
           }
         }
@@ -1147,34 +1154,34 @@
         // supplies a prompt or a tool name to execute.
         const INTENTS = Object.freeze({
           financialStatus: {
-            label: "Show my financial status",
+            label: "Explain my finances",
             request:
-              "Show my financial status for the overview period. Keep bank balances by currency separate from period income, costs and profit, and identify unavailable data.",
+              "Analyze and explain my financial status for the overview period. Keep bank balances by currency separate from period income, costs and profit, identify unavailable data and explain what needs attention. This is a read-only explanation; do not change records.",
           },
           findReceipts: {
-            label: "Find receipts",
+            label: "Find missing receipts",
             request:
-              "Find missing receipts for transactions in the overview period. Inspect Norman and available connected sources, and show candidate matches and a proposed attachment plan.",
+              "Find missing receipts for transactions in the overview period using Norman documents and available connected sources. Upload and link reliable matches when supported and permitted, then verify the links. Ask only about ambiguous matches or unavailable sources.",
           },
           monthlyReconciliation: {
-            label: "Monthly reconciliation",
+            label: "Do my monthly bookkeeping",
             request:
-              "Review monthly reconciliation within the overview period, month by month. Show missing documents, categories and verification blockers, then preview proposed fixes. Do not claim the period is reconciled from a limited batch.",
+              "Complete monthly bookkeeping within the overview period, month by month: match documents, assign supported categories and finalize well-documented clear cases. Leave entries blocked by missing facts or ambiguous evidence unresolved. Do not claim the period is reconciled from a limited batch.",
           },
           overdueInvoices: {
             label: "Overdue invoices",
             request:
-              "Review all currently outstanding overdue invoices across all dates. Show the invoice, payment and existing reminder status, then preview any proposed reminders.",
+              "Prepare complete invoice follow-up drafts for all currently outstanding overdue unpaid invoices across all dates. Check invoice, incoming payment and existing reminder status so the drafts are accurate and do not duplicate existing reminders. Leave all drafts unsent and do not change invoice or payment records.",
           },
           unmatchedDocuments: {
             label: "Unmatched documents",
             request:
-              "Review all currently unattached invoices and receipts across all dates. Show proposed transaction matches first.",
+              "Match all currently unattached invoices and receipts across all dates to actual transactions. Use vendor, amount, currency, date and invoice identifiers as evidence. Link clear matches where supported and permitted; ask only about ambiguities or missing facts.",
           },
           unreviewedTransactions: {
             label: "Unfinalized transactions",
             request:
-              "Review transactions with status UNVERIFIED across all history, independently of the overview period. Show what needs a document, category or other information, then preview proposed finalization changes.",
+              "Finalize transactions with status UNVERIFIED across all history, independently of the overview period. Check documents, categories and payment information; assign supported categories and finalize clear cases where permitted. Leave transactions with missing required evidence or uncertain treatment unresolved.",
           },
         });
         function intentPrompt(key) {
@@ -1193,7 +1200,7 @@
             throw Error(
               "Company or period is unavailable. Refresh before using this action.",
             );
-          return `Use Norman company ${company}. Overview period: ${period.from} through ${period.to}. ${INTENTS[key].request} Start with read-only inspection and previews. Ask me to approve concrete changes before uploading, linking, categorizing or verifying records, sending messages, starting workflows, paying or filing. If the active company differs, ask me to select this company first.`;
+          return `Use Norman company ${company}. Overview period: ${period.from} through ${period.to}. ${INTENTS[key].request} ${["financialStatus", "overdueInvoices"].includes(key) ? "Use actual read-only tool results for this task; do not change records." : "I am delegating this task to you. Perform only the routine internal changes necessary for this specific task where the evidence is clear and the tools and permissions support them."} Complete this task and report verified results; ask only for genuine missing facts or ambiguity. Read all available pages needed for the requested scope, verify actual results and report completed totals, source coverage and unresolved cases. Never invent missing records, waive missing required documents or treat a displayed batch as the complete dataset. Use the narrowest tools needed for this task. Do not approve pending automation executions or start workflows with side effects as part of this task. Obtain separate authorization before sending external messages or invoice reminders, making payments or submitting tax filings. If the active company differs, ask me to select this company first.`;
         }
         const count = (value) =>
           Number.isInteger(value) && value >= 0 ? String(value) : "Unavailable";
@@ -1227,20 +1234,60 @@
                       .join("<br>")
                   : "Unavailable",
             suggestions = [
-              ["overdueInvoices", "Overdue unpaid invoices · all dates"],
-              ["unmatchedDocuments", "All unattached invoices and receipts"],
-              ["unreviewedTransactions", "All history · UNVERIFIED"],
+              {
+                key: "overdueInvoices",
+                noun: "overdue invoices",
+                title: "Overdue invoices",
+                zero: "No overdue invoices",
+                outcome:
+                  "AI checks payments and prepares complete reminder drafts",
+                scope: "Overdue unpaid invoices · all dates",
+                button: "Prepare follow-ups",
+              },
+              {
+                key: "unmatchedDocuments",
+                noun: "documents to match",
+                title: "Documents to match",
+                zero: "No documents to match",
+                outcome:
+                  "AI links clear document matches and flags ambiguities",
+                scope: "All unattached invoices and receipts",
+                button: "Match my documents",
+              },
+              {
+                key: "unreviewedTransactions",
+                noun: "transactions to finalize",
+                title: "Transactions to finalize",
+                zero: "No unfinalized transactions",
+                outcome:
+                  "AI checks documents and categories, then finalizes clear cases",
+                scope: "All unfinalized transactions · all dates",
+                button: "Finalize my transactions",
+              },
             ];
-          return `<section class="overview" aria-label="Financial status and suggested actions"><h2>Current status</h2><div class="overview-stats"><div class="overview-stat"><div class="overview-value" data-balance>${balanceText}</div><p class="notice">Bank balances · latest synced by currency${bank?.partial ? "<br>Some bank snapshots are missing" : ""}</p></div><div class="overview-stat"><div class="overview-value" data-transaction-count>${count(o.transactionsCount)}</div><p class="notice">Transactions<br>${period}</p></div></div><div class="row quick-actions" aria-label="Quick actions">${["financialStatus", "findReceipts", "monthlyReconciliation"].map((key) => `<button data-intent="${key}">${INTENTS[key].label}</button>`).join("")}</div><h2>Suggested actions</h2><div class="suggestions">${suggestions.map(([key, scope]) => `<article class="card suggestion" data-suggestion="${key}"><div><strong>${count(o.actions?.[key])} · ${INTENTS[key].label}</strong><p class="muted">${scope}</p></div><button data-intent="${key}" aria-label="Review ${INTENTS[key].label.toLowerCase()} in chat">Review in chat</button></article>`).join("")}</div></section>`;
+          return `<section class="overview" aria-label="Bookkeeping next steps"><p class="notice">Sends the task to this chat. AI handles clear cases and asks when facts are missing.</p><div class="suggestions">${suggestions
+            .map((task) => {
+              const n = o.actions?.[task.key],
+                known = Number.isInteger(n) && n >= 0,
+                title =
+                  known && n === 0
+                    ? task.zero
+                    : known
+                      ? `${n} ${task.noun}`
+                      : task.title;
+              return `<article class="card suggestion" data-suggestion="${task.key}"><div><strong>${title}</strong>${!known ? '<p class="muted">Count unavailable</p>' : ""}${known && n === 0 ? "" : `<p class="muted">${task.outcome}</p>`}<p class="muted scope">${task.scope}</p></div>${known && n === 0 ? "" : `<button id="intent-${task.key}" data-intent="${task.key}">${task.button}</button>`}</article>`;
+            })
+            .join(
+              "",
+            )}</div><section aria-label="Financial overview"><h2>Financial overview</h2><div class="overview-stats"><div class="overview-stat"><div class="overview-value" data-balance>${balanceText}</div><p class="notice">Bank balances · latest synced by currency${bank?.partial ? "<br>Some bank snapshots are missing" : ""}</p></div><div class="overview-stat"><div class="overview-value" data-transaction-count>${count(o.transactionsCount)}</div><p class="notice">Transactions<br>${period}</p></div></div><button id="intent-financialStatus" data-intent="financialStatus">${INTENTS.financialStatus.label}</button><p class="notice">AI explains your balances, income, expenses and what needs attention.</p></section><details id="bookkeeping-help"${state.helpOpen ? " open" : ""}><summary id="bookkeeping-help-toggle">More bookkeeping help</summary><article class="card"><strong>Find receipts you are missing</strong><p class="muted">AI searches connected sources and attaches clear matches.</p><button id="intent-findReceipts" data-intent="findReceipts">${INTENTS.findReceipts.label}</button></article><article class="card"><strong>Complete a month's bookkeeping</strong><p class="muted">AI matches documents, categorizes and finalizes clear cases.</p><button id="intent-monthlyReconciliation" data-intent="monthlyReconciliation">${INTENTS.monthlyReconciliation.label}</button></article></details></section>`;
         }
         function review() {
           const d = state.detail;
-          if (!d)
-            return '<h2>Review a decision</h2><p class="muted">Select an approval to see the current values and every planned action.</p>';
+          if (!d) return "";
           if (d.kind === "workflow") {
             const r = d.run,
               asking = r.state === "active" && r.blockedReason === "user_input";
-            return `<h2>${esc(r.title)}</h2><div class="tag">${esc(human(r.blockedReason || r.state))}</div><p>${esc(r.blockedDetail)}</p>${asking && r.canChat === true ? `${draftChanged() ? `<p class="error">The question changed after you started your answer. You wrote it for: “${esc(state.answerQuestion)}”</p><div class="row"><button id="answer-keep">Use my answer for this question</button></div>` : ""}<label for="answer">Your answer</label><textarea id="answer" placeholder="Provide the missing information">${esc(state.answer)}</textarea><button class="primary" id="answer-send">Send answer to Norman</button>` : `${asking ? `<p class="notice">${STARTER_ONLY}</p>` : ""}<button id="workflow-ask">Discuss in chat</button>`}`;
+            return `<h2 id="review-heading" tabindex="-1">${esc(r.title)}</h2><div class="tag">${esc(human(r.blockedReason || r.state))}</div><p>${esc(r.blockedDetail)}</p>${asking && r.canChat === true ? `${draftChanged() ? `<p class="error">The question changed after you started your answer. You wrote it for: “${esc(state.answerQuestion)}”</p><div class="row"><button id="answer-keep">Use my answer for this question</button></div>` : ""}<label for="answer">Your answer</label><textarea id="answer" placeholder="Provide the missing information">${esc(state.answer)}</textarea><button class="primary" id="answer-send">Send answer to Norman</button>` : `${asking ? `<p class="notice">${STARTER_ONLY}</p>` : ""}<button id="workflow-ask">Discuss in chat</button>`}`;
           }
           const e = d.execution,
             actions = e.actionsPlanned || [],
@@ -1298,7 +1345,7 @@
             set_payment_type: ["paymentType"],
             mark_verified: ["userStatus"],
           };
-          return `<h2>${esc(e.ruleName || e.rule?.name || "Automation approval")}</h2><p>${described(e.transaction?.description || "", facts(e.transaction, true))}</p><div class="tag">${esc(human(e.status))}</div>${d.currentUnavailable ? '<p class="error">Current transaction values are unavailable. Discuss this in chat before deciding.</p>' : ""}${state.reviewStale ? '<p class="error">Latest review unavailable. Refresh before confirming.</p>' : ""}<table><thead><tr><th>Action</th><th>Current</th><th>Proposed</th></tr></thead><tbody>${actions.map((a) => `<tr><td>${esc(labels[a.type] || a.type.replaceAll("_", " "))}</td><td>${keys[a.type] && before ? keys[a.type].map((k) => label(before[`${k}Label`]) ?? value(before[k])).join("<br>") : "—"}</td><td>${proposed(a)}</td></tr>`).join("")}</tbody></table>${!actions.length ? '<p class="muted">No planned actions returned.</p>' : ""}<p class="notice">Approval executes the full action list. Actions may send messages or affect payments when listed above.</p><div class="row"><button id="approval-ask">Explain in chat</button></div>${d.canApprove && actions.length && !d.currentUnavailable ? '<label class="confirm"><input type="checkbox" id="confirm"> <span>I reviewed every listed action and approve this execution.</span></label><div class="row"><button class="primary" id="approve" disabled>Approve execution</button></div>' : ""}${d.canApprove ? '<button id="dismiss">Dismiss</button>' : ""}${["success", "partial"].includes(e.status) && !e.revertedAt ? '<button id="undo">Undo execution</button>' : ""}${e.error ? `<p class="error">${esc(stripUrls(e.error))}</p>` : ""}${e.actionsResult?.length ? `<h3>Actual result</h3><table><tbody>${e.actionsResult.map((a) => `<tr><td>${esc(labels[a.type] || a.type || "Action")}</td><td>${esc(human(a.status) || "Result returned")}${a.detail ? `<br>${esc(stripUrls(a.detail))}` : ""}</td></tr>`).join("")}</tbody></table>` : ""}`;
+          return `<h2 id="review-heading" tabindex="-1">${esc(e.ruleName || e.rule?.name || "Automation approval")}</h2><p>${described(e.transaction?.description || "", facts(e.transaction, true))}</p><div class="tag">${esc(human(e.status))}</div>${d.currentUnavailable ? '<p class="error">Current transaction values are unavailable. Discuss this in chat before deciding.</p>' : ""}${state.reviewStale ? '<p class="error">Latest review unavailable. Refresh before confirming.</p>' : ""}<table><thead><tr><th>Action</th><th>Current</th><th>Proposed</th></tr></thead><tbody>${actions.map((a) => `<tr><td>${esc(labels[a.type] || a.type.replaceAll("_", " "))}</td><td>${keys[a.type] && before ? keys[a.type].map((k) => label(before[`${k}Label`]) ?? value(before[k])).join("<br>") : "—"}</td><td>${proposed(a)}</td></tr>`).join("")}</tbody></table>${!actions.length ? '<p class="muted">No planned actions returned.</p>' : ""}<p class="notice">Approval executes the full action list. Actions may send messages or affect payments when listed above.</p><div class="row"><button id="approval-ask">Explain in chat</button></div>${d.canApprove && actions.length && !d.currentUnavailable ? '<label class="confirm"><input type="checkbox" id="confirm"> <span>I reviewed every listed action and approve this execution.</span></label><div class="row"><button class="primary" id="approve" disabled>Approve execution</button></div>' : ""}${d.canApprove ? '<button id="dismiss">Dismiss</button>' : ""}${["success", "partial"].includes(e.status) && !e.revertedAt ? '<button id="undo">Undo execution</button>' : ""}${e.error ? `<p class="error">${esc(stripUrls(e.error))}</p>` : ""}${e.actionsResult?.length ? `<h3>Actual result</h3><table><tbody>${e.actionsResult.map((a) => `<tr><td>${esc(labels[a.type] || a.type || "Action")}</td><td>${esc(human(a.status) || "Result returned")}${a.detail ? `<br>${esc(stripUrls(a.detail))}` : ""}</td></tr>`).join("")}</tbody></table>` : ""}`;
         }
         function render() {
           const d = state.data;
@@ -1313,7 +1360,7 @@
                 ? [focused.selectionStart, focused.selectionEnd]
                 : null;
           // What is on screen; polls back off while it stays the same.
-          state.markup = `${overview(d)}<div class="metrics"><div class="metric"><strong>${display(d.summary.questions)}</strong><span>Workflows need you</span></div><div class="metric"><strong>${display(d.summary.approvals)}</strong><span>Pending approvals</span></div><div class="metric"><strong>${display(d.summary.taxReviewsShown)}</strong><span>Tax reviews shown</span></div></div>${d.unavailable.length ? `<p class="error">Unavailable: ${esc(d.unavailable.join(", "))}. Refresh to retry.</p>` : ""}<div class="layout"><div><h2>Needs your attention</h2>${d.questions.map((r) => `<article class="card"><div class="tag">Workflow · ${esc(human(r.blockedReason))}</div><strong>${esc(r.title)}</strong><p>${esc(r.blockedDetail || r.steps?.find((s) => s.active)?.title || "Review the current step.")}</p><button data-run="${esc(r.publicId)}">Review question</button></article>`).join("")}${d.approvals.map((e) => `<article class="card"><div class="tag">Automation approval</div><strong>${esc(e.ruleName || e.rule?.name || "Automation")}</strong><p>${described(e.transaction?.description || "Review planned actions", facts(e.transaction))}</p><button data-execution="${esc(e.publicId)}">Review changes</button></article>`).join("")}${d.taxReviews.map((t) => `<article class="card"><div class="tag">Tax review</div><strong>${esc(t.title)}</strong><p>${esc(t.detail)}</p><button data-tax="${esc(t.key)}">Discuss in chat</button></article>`).join("")}${!d.questions.length && !d.approvals.length && !d.taxReviews.length ? '<div class="empty">No items returned by the available sources.</div>' : ""}<div class="row">${d.pagination.page > 1 ? '<button id="previous">Previous approvals</button>' : ""}${d.pagination.hasNext ? '<button id="next">More approvals</button>' : ""}</div><p class="muted notice">Tax reviews are a bounded list. Approval totals include all pages.</p><h2>In progress</h2>${
+          state.markup = `${overview(d)}<div class="metrics" aria-label="Decision summary"><div class="metric"><strong>${display(d.summary.questions)}</strong><span>Workflows need you</span></div><div class="metric"><strong>${display(d.summary.approvals)}</strong><span>Pending approvals</span></div><div class="metric"><strong>${display(d.summary.taxReviewsShown)}</strong><span>Tax reviews shown</span></div></div>${d.unavailable.length ? `<p class="error">Unavailable: ${esc(d.unavailable.join(", "))}. Refresh to retry.</p>` : ""}<div class="layout${state.detail ? "" : " no-selection"}"><div>${d.questions.length || d.approvals.length || d.taxReviews.length ? "<h2>Decisions to review</h2>" : ""}${d.questions.map((r) => `<article class="card"><div class="tag">Workflow · ${esc(human(r.blockedReason))}</div><strong>${esc(r.title)}</strong><p>${esc(r.blockedDetail || r.steps?.find((s) => s.active)?.title || "Review the current step.")}</p><button data-run="${esc(r.publicId)}">Review question</button></article>`).join("")}${d.approvals.map((e) => `<article class="card"><div class="tag">Automation approval</div><strong>${esc(e.ruleName || e.rule?.name || "Automation")}</strong><p>${described(e.transaction?.description || "Review planned actions", facts(e.transaction))}</p><button data-execution="${esc(e.publicId)}">Review changes</button></article>`).join("")}${d.taxReviews.map((t) => `<article class="card"><div class="tag">Tax review</div><strong>${esc(t.title)}</strong><p>${esc(t.detail)}</p><button data-tax="${esc(t.key)}">Discuss in chat</button></article>`).join("")}${!d.questions.length && !d.approvals.length && !d.taxReviews.length ? '<div class="empty">No workflow questions, approvals or tax reviews returned.</div>' : ""}<div class="row">${d.pagination.page > 1 ? '<button id="previous">Previous approvals</button>' : ""}${d.pagination.hasNext ? '<button id="next">More approvals</button>' : ""}</div><p class="muted notice">Tax reviews are a bounded list. Approval totals include all pages.</p><h2>In progress</h2>${
             d.runs
               .filter((r) => !r.blockedReason)
               .map(
@@ -1321,8 +1368,13 @@
                   `<article class="card"><strong>${esc(r.title)}</strong><p class="muted">${esc(r.steps?.find((s) => s.active)?.title || r.state)}</p></article>`,
               )
               .join("") || '<div class="empty">No other active workflows.</div>'
-          }</div><aside class="detail">${review()}</aside></div>`;
+          }</div>${state.detail ? `<aside class="detail" aria-labelledby="review-heading">${review()}</aside>` : ""}</div>`;
           content.innerHTML = state.markup;
+          const help = document.getElementById("bookkeeping-help");
+          if (help)
+            help.ontoggle = () => {
+              if (help.isConnected) state.helpOpen = help.open;
+            };
           content.querySelectorAll("[data-intent]").forEach((button) => {
             button.onclick = () =>
               action(
@@ -1330,14 +1382,14 @@
                   const prompt = intentPrompt(button.dataset.intent);
                   guard(revision);
                   await ask(prompt);
-                  return "Sent to chat.";
+                  return "Task sent to chat.";
                 },
                 { kind: "ask" },
               );
           });
           content.querySelectorAll("[data-execution]").forEach(
             (b) =>
-              (b.onclick = () =>
+              (b.onclick = (event) =>
                 action(
                   async (revision) => {
                     const companyId = state.data.companyId,
@@ -1353,13 +1405,15 @@
                     }
                     setDetail(detail);
                     render();
+                    if (event.detail === 0)
+                      document.getElementById("review-heading")?.focus();
                   },
                   { kind: "open" },
                 )),
           );
           content.querySelectorAll("[data-run]").forEach(
             (b) =>
-              (b.onclick = () =>
+              (b.onclick = (event) =>
                 action(
                   async (revision) => {
                     const companyId = state.data.companyId;
@@ -1369,25 +1423,25 @@
                     guard(revision);
                     setDetail({ kind: "workflow", companyId, run: r });
                     render();
+                    if (event.detail === 0)
+                      document.getElementById("review-heading")?.focus();
                   },
                   { kind: "open" },
                 )),
           );
-          content
-            .querySelectorAll("[data-tax]")
-            .forEach(
-              (b) =>
-                (b.onclick = () =>
-                  action(
-                    async () => {
-                      await ask(
-                        `Review my prepared tax return in Norman. Selected review: ${b.dataset.tax}. Show the preview and what needs my attention.`,
-                      );
-                      return "Sent to chat.";
-                    },
-                    { kind: "ask" },
-                  )),
-            );
+          content.querySelectorAll("[data-tax]").forEach(
+            (b) =>
+              (b.onclick = () =>
+                action(
+                  async () => {
+                    await ask(
+                      `Review my prepared tax return in Norman. Selected review: ${b.dataset.tax}. Show the preview and what needs my attention.`,
+                    );
+                    return "Task sent to chat.";
+                  },
+                  { kind: "ask" },
+                )),
+          );
           for (const [id, page] of [
             ["previous", d.pagination.page - 1],
             ["next", d.pagination.page + 1],
@@ -1470,7 +1524,7 @@
                   await ask(
                     `Explain every planned action for Norman execution ${state.detail.execution.publicId}. Use the current values and flag external effects before I decide.`,
                   );
-                  return "Sent to chat.";
+                  return "Task sent to chat.";
                 },
                 { kind: "ask" },
               );
@@ -1482,7 +1536,7 @@
                   await ask(
                     `Help me resolve Norman workflow ${state.detail.run.publicId}. Read its current blocked state first.`,
                   );
-                  return "Sent to chat.";
+                  return "Task sent to chat.";
                 },
                 { kind: "ask" },
               );
@@ -1643,7 +1697,9 @@
           if (state.busy || state.refreshPromise) return;
           // Focus and visibility re-read only data older than half the interval.
           const age =
-              state.lastCheck === null ? Infinity : Date.now() - state.lastCheck,
+              state.lastCheck === null
+                ? Infinity
+                : Date.now() - state.lastCheck,
             wait =
               state.refreshWanted || age >= interval() / 2
                 ? 0

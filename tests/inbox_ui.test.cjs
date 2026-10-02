@@ -478,7 +478,7 @@ test("mobile Inbox paginates, escapes source content and submits a workflow answ
     await ui.getByRole("button", { name: "Review question" }).click();
     await ui.locator("#answer").fill("Annual software license");
     await ui.getByRole("button", { name: "Send answer to Norman" }).click();
-    await ui.getByText("Review a decision", { exact: true }).waitFor();
+    await ui.locator("aside").waitFor({ state: "detached" });
     assert.equal(
       (await mutations(page))[0].params.arguments.answer,
       "Annual software license",
@@ -792,7 +792,7 @@ test("company notification rejects older pending reads and clears the previous r
       window.inbox.summary.questions = 0;
       window.pushInbox();
     });
-    await ui.getByText("Review a decision", { exact: true }).waitFor();
+    await ui.locator("aside").waitFor({ state: "detached" });
     assert.equal(await ui.locator("#confirm").count(), 0);
     await page.evaluate(() => {
       window.holdNames = [];
@@ -833,7 +833,7 @@ test("company change during approval preflight prevents the mutation and late de
       window.inbox.questions = [];
       window.pushInbox();
     });
-    await ui.getByText("Review a decision", { exact: true }).waitFor();
+    await ui.locator("aside").waitFor({ state: "detached" });
     await page.evaluate(() => {
       window.holdNames = [];
       window.release();
@@ -1376,7 +1376,8 @@ test("sending re-reads the question and blocks a draft written for another one",
 test("only the person who started a workflow gets an answer box", async () => {
   const { page, ui, errors } = await fixture();
   try {
-    const note = "Only the person who started this workflow can answer it here.";
+    const note =
+      "Only the person who started this workflow can answer it here.";
     const aside = ui.locator("aside");
     for (const canChat of ["false", "missing"]) {
       await page.evaluate((canChat) => {
@@ -1822,11 +1823,11 @@ test("overview shows balances separately by currency and honest action scopes", 
     for (const [key, count, scope] of [
       ["overdueInvoices", 3, "Overdue unpaid invoices · all dates"],
       ["unmatchedDocuments", 5, "All unattached invoices and receipts"],
-      ["unreviewedTransactions", 9, "All history · UNVERIFIED"],
+      ["unreviewedTransactions", 9, "All unfinalized transactions · all dates"],
     ]) {
       const row = ui.locator(`[data-suggestion="${key}"]`);
-      assert.match(await row.innerText(), new RegExp(`^${count} ·`));
-      assert.equal(await row.locator("p").innerText(), scope);
+      assert.match(await row.innerText(), new RegExp(`^${count} `));
+      assert.equal(await row.locator(".scope").innerText(), scope);
     }
     assert.equal(
       await page
@@ -1881,13 +1882,13 @@ test("overview distinguishes unavailable, no bank data, partial snapshots and ge
     );
     assert.match(
       await ui.locator('[data-suggestion="overdueInvoices"]').innerText(),
-      /^Unavailable ·/,
+      /Count unavailable/,
     );
     assert.match(
       await ui
         .locator('[data-suggestion="unreviewedTransactions"]')
         .innerText(),
-      /^0 ·/,
+      /^No unfinalized transactions/,
     );
     await page.evaluate(() => {
       window.inbox.overview.bankBalances = { status: "no_data", values: [] };
@@ -1913,7 +1914,7 @@ test("overview distinguishes unavailable, no bank data, partial snapshots and ge
   }
 });
 
-test("every quick action sends a fixed company/period-scoped preview intent without mutations", async () => {
+test("every task delegates a fixed scoped request while the iframe makes no mutations", async () => {
   const { page, ui, errors } = await fixture(1100, { overview: true });
   try {
     await page.evaluate(() => {
@@ -1930,6 +1931,10 @@ test("every quick action sends a fixed company/period-scoped preview intent with
       "unmatchedDocuments",
       "unreviewedTransactions",
     ]) {
+      if (["findReceipts", "monthlyReconciliation"].includes(key))
+        await ui
+          .locator("#bookkeeping-help")
+          .evaluate((details) => (details.open = true));
       await ui.locator(`[data-intent="${key}"]`).click();
       await idle(page);
     }
@@ -1940,15 +1945,46 @@ test("every quick action sends a fixed company/period-scoped preview intent with
       assert.equal(message.params.role, "user");
       assert.match(text, /11111111-1111-4111-8111-111111111111/);
       assert.match(text, /2026-09-01 through 2026-10-31/);
-      assert.match(text, /Start with read-only inspection and previews/);
-      assert.match(text, /Ask me to approve concrete changes/);
+      assert.match(text, /verify actual results/);
+      assert.match(text, /Read all available pages/);
+      assert.match(text, /ask only for genuine missing facts or ambiguity/);
+      assert.match(text, /Do not approve pending automation executions/);
+      assert.match(text, /or start workflows with side effects/);
+      assert.match(
+        text,
+        /Never invent missing records, waive missing required documents/,
+      );
+      assert.match(
+        text,
+        /Obtain separate authorization before sending external messages/,
+      );
       assert.doesNotMatch(text, /ignore consent/);
     }
+    for (const index of [0, 3]) {
+      assert.match(
+        messages[index].params.content[0].text,
+        /Use actual read-only tool results for this task; do not change records/,
+      );
+      assert.doesNotMatch(
+        messages[index].params.content[0].text,
+        /Perform only the routine internal changes/,
+      );
+    }
+    assert.match(messages[3].params.content[0].text, /Leave all drafts unsent/);
+    for (const index of [1, 2, 4, 5])
+      assert.match(
+        messages[index].params.content[0].text,
+        /Perform only the routine internal changes necessary for this specific task/,
+      );
+    assert.match(
+      messages[5].params.content[0].text,
+      /status UNVERIFIED across all history, independently of the overview period/,
+    );
     // DOM changes cannot select an arbitrary MCP tool or supplied prompt.
     await ui
       .locator('[data-intent="financialStatus"]')
       .evaluate((button) => (button.dataset.intent = "approve_rule_execution"));
-    await ui.getByRole("button", { name: "Show my financial status" }).click();
+    await ui.getByRole("button", { name: "Explain my finances" }).click();
     await idle(page);
     assert.equal((await chatMessages(page)).length, 6);
     assert.equal((await mutations(page)).length, 0);
@@ -1963,7 +1999,10 @@ test("company changes during a pending chat request never reuse its old action s
   try {
     await page.evaluate(() => (window.holdMessages = true));
     await ui
-      .getByRole("button", { name: "Find receipts", exact: true })
+      .locator("#bookkeeping-help")
+      .evaluate((details) => (details.open = true));
+    await ui
+      .getByRole("button", { name: "Find missing receipts", exact: true })
       .click();
     await flush(page);
     assert.equal(await page.evaluate(() => window.held.length), 1);
@@ -1980,7 +2019,7 @@ test("company changes during a pending chat request never reuse its old action s
     await idle(page);
     assert.match(await ui.locator("#status").innerText(), /Company changed/);
     assert.equal(await ui.locator("#chat-request").isVisible(), false);
-    await ui.getByRole("button", { name: "Show my financial status" }).click();
+    await ui.getByRole("button", { name: "Explain my finances" }).click();
     await idle(page);
     const messages = await chatMessages(page);
     assert.equal(messages.length, 2);
@@ -2014,17 +2053,20 @@ test("unadvertised messaging uses the OpenAI alias and absent messaging offers a
   });
   try {
     await aliasChat(page);
-    await ui.getByRole("button", { name: "Show my financial status" }).click();
+    await ui.getByRole("button", { name: "Explain my finances" }).click();
     await idle(page);
     assert.equal((await chatMessages(page)).length, 0);
     assert.equal(
       await page.frames()[1].evaluate(() => window.aliasCalls.length),
       1,
     );
-    assert.equal(await ui.locator("#status").innerText(), "Sent to chat.");
+    assert.equal(await ui.locator("#status").innerText(), "Task sent to chat.");
     await page.frames()[1].evaluate(() => delete window.openai);
     await ui
-      .getByRole("button", { name: "Find receipts", exact: true })
+      .locator("#bookkeeping-help")
+      .evaluate((details) => (details.open = true));
+    await ui
+      .getByRole("button", { name: "Find missing receipts", exact: true })
       .click();
     await idle(page);
     assert.match(
@@ -2049,7 +2091,10 @@ test("host rejection is not reported as chat success and does not retry through 
     await aliasChat(page);
     await page.evaluate(() => (window.messageResult = { isError: true }));
     await ui
-      .getByRole("button", { name: "Find receipts", exact: true })
+      .locator("#bookkeeping-help")
+      .evaluate((details) => (details.open = true));
+    await ui
+      .getByRole("button", { name: "Find missing receipts", exact: true })
       .click();
     await idle(page);
     assert.match(await ui.locator("#status").innerText(), /did not accept/);
@@ -2075,7 +2120,10 @@ test("chat timeout never retries while explicit method-not-found can use the ali
     await aliasChat(page);
     await page.evaluate(() => (window.holdMessages = true));
     await ui
-      .getByRole("button", { name: "Find receipts", exact: true })
+      .locator("#bookkeeping-help")
+      .evaluate((details) => (details.open = true));
+    await ui
+      .getByRole("button", { name: "Find missing receipts", exact: true })
       .click();
     await flush(page);
     await page.clock.runFor(30_001);
@@ -2091,13 +2139,163 @@ test("chat timeout never retries while explicit method-not-found can use the ali
       window.messageError = { code: -32601, message: "Method not found" };
       window.release();
     });
-    await ui.getByRole("button", { name: "Show my financial status" }).click();
+    await ui.getByRole("button", { name: "Explain my finances" }).click();
     await idle(page);
     assert.equal(
       await page.frames()[1].evaluate(() => window.aliasCalls.length),
       1,
     );
-    assert.equal(await ui.locator("#status").innerText(), "Sent to chat.");
+    assert.equal(await ui.locator("#status").innerText(), "Task sent to chat.");
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("AI tasks have one clear chat action, secondary help survives refresh and review opens on selection", async () => {
+  const { page, ui, errors } = await fixture(1100, {
+    overview: true,
+    clock: true,
+  });
+  try {
+    assert.equal(
+      await ui.getByRole("heading", { level: 1 }).innerText(),
+      "Let AI handle your bookkeeping",
+    );
+    assert.equal(await ui.locator("aside").count(), 0);
+    assert.equal(
+      await ui.getByText("Review in chat", { exact: true }).count(),
+      0,
+    );
+    const boxes = await ui.locator(".suggestion").evaluateAll((rows) =>
+      rows.map((row) => {
+        const rect = row.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, bottom: rect.bottom };
+      }),
+    );
+    assert.equal(boxes.length, 3);
+    for (const box of boxes) {
+      assert.equal(box.x, boxes[0].x);
+      assert.equal(box.width, boxes[0].width);
+    }
+    assert.ok(boxes[1].y >= boxes[0].bottom && boxes[2].y >= boxes[1].bottom);
+    for (const label of [
+      "Prepare follow-ups",
+      "Match my documents",
+      "Finalize my transactions",
+      "Explain my finances",
+    ])
+      assert.equal(
+        await ui.getByRole("button", { name: label, exact: true }).count(),
+        1,
+      );
+    assert.ok(
+      (
+        await ui
+          .getByRole("heading", { name: "Financial overview", exact: true })
+          .boundingBox()
+      ).y >= boxes[2].bottom,
+    );
+    assert.equal(
+      await ui
+        .getByRole("button", { name: "Find missing receipts", exact: true })
+        .isVisible(),
+      false,
+    );
+    assert.equal(
+      await ui
+        .locator(".metric strong")
+        .first()
+        .evaluate(
+          (element) =>
+            Number.parseFloat(getComputedStyle(element).fontSize) <= 14,
+        ),
+      true,
+    );
+    await ui.locator("#bookkeeping-help-toggle").focus();
+    await ui.locator("#bookkeeping-help-toggle").press("Enter");
+    await until(
+      page,
+      () => window.__inboxTestState.helpOpen,
+      null,
+      "expanded bookkeeping help",
+    );
+    await ui.locator("#intent-findReceipts").focus();
+    await page.evaluate(() => (window.inbox.overview.transactionsCount = 85));
+    await page.clock.runFor(30_001);
+    await idle(page);
+    assert.equal(
+      await ui.locator("[data-transaction-count]").innerText(),
+      "85",
+    );
+    assert.equal(
+      await ui.locator("#bookkeeping-help").evaluate((details) => details.open),
+      true,
+    );
+    assert.equal(
+      await page.frames()[1].evaluate(() => document.activeElement.id),
+      "intent-findReceipts",
+    );
+    await ui
+      .getByRole("button", { name: "Review changes", exact: true })
+      .focus();
+    await ui
+      .getByRole("button", { name: "Review changes", exact: true })
+      .press("Enter");
+    await idle(page);
+    assert.equal(await ui.locator("aside").count(), 1);
+    assert.equal(
+      await page.frames()[1].evaluate(() => document.activeElement.id),
+      "review-heading",
+    );
+    assert.equal(await ui.locator("#confirm").isChecked(), false);
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("zero bookkeeping counts show neutral outcomes and unavailable counts never claim all clear", async () => {
+  const { page, ui, errors } = await fixture(1100, { overview: true });
+  try {
+    await page.evaluate(() => {
+      window.inbox.overview.actions = {
+        overdueInvoices: 0,
+        unmatchedDocuments: 0,
+        unreviewedTransactions: 0,
+      };
+      window.pushInbox();
+    });
+    for (const label of [
+      "No overdue invoices",
+      "No documents to match",
+      "No unfinalized transactions",
+    ])
+      await ui.getByText(label, { exact: true }).waitFor();
+    assert.equal(await ui.locator(".suggestions button").count(), 0);
+    await page.evaluate(() => {
+      window.inbox.overview.actions.overdueInvoices = null;
+      window.pushInbox();
+    });
+    await ui
+      .locator('[data-suggestion="overdueInvoices"]')
+      .getByText("Count unavailable", { exact: true })
+      .waitFor();
+    assert.equal(
+      await ui.getByText("No overdue invoices", { exact: true }).count(),
+      0,
+    );
+    assert.equal(
+      await ui
+        .getByRole("button", {
+          name: "Prepare follow-ups",
+          exact: true,
+        })
+        .count(),
+      1,
+    );
     assert.equal((await mutations(page)).length, 0);
     assert.deepEqual(errors, []);
   } finally {

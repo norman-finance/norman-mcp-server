@@ -460,9 +460,13 @@ history. Transaction totals cover the previous and current calendar months, with
 the date range displayed. Counts come from pagination totals, not
 the single record requested with each counter. Overdue invoices use Norman's
 stored overdue status; bank snapshots may lag the bank and are not profit.
-Financial status, receipt search and reconciliation buttons send a scoped request
-to the conversation. They do not execute a skill directly or change the books;
-clients without chat messaging show a prompt the user can copy.
+Task buttons delegate work to the conversation with the selected company and
+scope. The assistant can complete supported, evidence-backed document matching,
+categorization and finalization through existing tools, then report verified
+results and genuine blockers. Financial overview is analysis-only; invoice
+follow-ups prepare drafts. External messages, payments, tax filing and automation
+approvals require a separate decision. The iframe sends a chat request rather
+than calling write tools itself; clients without messaging show a copyable request.
 The review card uses existing approve/dismiss/undo tools and refreshes actual
 results. Approval requires a checkbox and re-reads current values and planned
 actions immediately before executing. A changed review requires confirmation
