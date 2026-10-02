@@ -20,6 +20,8 @@ async function fixture(
     settle = true,
     overview = false,
     hostCapabilities = { message: { text: {} } },
+    hostContext = {},
+    legacyGlobals = null,
   } = {},
 ) {
   const page = await browser.newPage({ viewport: { width, height: 1000 } });
@@ -33,13 +35,14 @@ async function fixture(
     '<iframe title="Norman Inbox" style="border:0;width:100%;height:960px"></iframe>',
   );
   await page.evaluate(
-    ({ pushOnInit, hold, overview, hostCapabilities }) => {
+    ({ pushOnInit, hold, overview, hostCapabilities, hostContext }) => {
       window.calls = [];
       window.mode = "";
       window.hooks = {};
       window.holdNames = hold;
       window.held = [];
       window.hostCapabilities = hostCapabilities;
+      window.hostContext = hostContext;
       window.release = () => {
         for (const held of window.held.splice(0))
           held.target.postMessage(
@@ -56,7 +59,20 @@ async function fixture(
           },
           "*",
         );
+      window.pushHostContext = (context) => {
+        window.hostContext = { ...window.hostContext, ...context };
+        document.querySelector("iframe").contentWindow.postMessage(
+          { jsonrpc: "2.0", method: "ui/notifications/host-context-changed", params: context },
+          "*",
+        );
+      };
       const companyId = "11111111-1111-4111-8111-111111111111";
+      window.companies = [
+        { id: companyId, name: "Example Studio", legalForm: "GMBH", country: "DE", isSme: true, isArchived: false },
+        { id: "22222222-2222-4222-8222-222222222222", name: "Second Studio", legalForm: "SOLE_PROPRIETOR", country: "DE", isSme: false, isArchived: false },
+        { id: "33333333-3333-4333-8333-333333333333", name: "Archived Studio", legalForm: "GMBH", country: "DE", isSme: true, isArchived: true },
+      ];
+      window.inboxes = {};
       window.detail = {
         companyId,
         view: "approval",
@@ -76,6 +92,7 @@ async function fixture(
       };
       window.inbox = {
         companyId,
+        company: structuredClone(window.companies[0]),
         view: "inbox",
         summary: { questions: 1, approvals: 51, taxReviewsShown: 0 },
         questions: [
@@ -151,7 +168,7 @@ async function fixture(
         if (!m.id || !m.method) return;
         let result = {};
         if (m.method === "ui/initialize")
-          result = { hostCapabilities: window.hostCapabilities };
+          result = { hostCapabilities: window.hostCapabilities, hostContext: window.hostContext };
         if (m.method === "ui/update-model-context") {
           if (window.contextError) {
             e.source.postMessage(
@@ -184,6 +201,32 @@ async function fixture(
           if (name === "get_norman_inbox_data") {
             window.inbox.pagination.page = args.page;
             result = window.inbox;
+          }
+          if (name === "list_companies")
+            result = { count: window.companies.length, activeCompanyId: window.inbox.companyId,
+              companies: window.companies.map((company) => ({ ...company, active: company.id === window.inbox.companyId })) };
+          if (name === "switch_company") {
+            const performSwitch = () => {
+              const company = window.companies.find((item) => item.id === args.company_id);
+              if (window.switchFailure) return { error: "Could not switch company." };
+              if (!company || company.isArchived) return { error: "Company is unavailable." };
+              const previousCompanyId = window.inbox.companyId;
+              window.inbox = window.inboxes[company.id] || {
+                ...structuredClone(window.inbox), companyId: company.id, company: structuredClone(company),
+                questions: [], runs: [], approvals: [], taxReviews: [],
+                summary: { questions: 0, approvals: 0, taxReviewsShown: 0 },
+                pagination: { page: 1, hasNext: false },
+              };
+              return { activeCompanyId: company.id, previousCompanyId, company: structuredClone(company) };
+            };
+            if (window.delaySwitchExecution) {
+              window.completeSwitch = () => e.source.postMessage({
+                jsonrpc: "2.0", id: m.id,
+                result: { structuredContent: structuredClone(performSwitch()), content: [] },
+              }, "*");
+              return;
+            }
+            result = performSwitch();
           }
           if (name === "get_norman_approval_data")
             result = window.detailFailure
@@ -221,12 +264,13 @@ async function fixture(
         e.source.postMessage({ jsonrpc: "2.0", id: m.id, result }, "*");
       });
     },
-    { pushOnInit, hold, overview, hostCapabilities },
+    { pushOnInit, hold, overview, hostCapabilities, hostContext },
   );
   const html = readFileSync(
     join(__dirname, "../norman_mcp/apps/inbox.html"),
     "utf8",
-  ).replace("const state = {", "const state = window.__inboxTestState = {");
+  ).replace("const state = {", "const state = window.__inboxTestState = {")
+    .replace("<head>", legacyGlobals ? `<head><script>window.openai = ${JSON.stringify(legacyGlobals)};</script>` : "<head>");
   await page
     .locator("iframe")
     .evaluate((frame, html) => (frame.srcdoc = html), html);
@@ -360,7 +404,7 @@ async function mutations(page) {
 }
 // A host with only the window.openai bridge: it never answers postMessage
 // JSON-RPC, so ui/initialize stays unanswered.
-async function bridgeless(width = 1100) {
+async function bridgeless(width = 1100, globals = {}) {
   const page = await browser.newPage({ viewport: { width, height: 1000 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -384,7 +428,7 @@ async function bridgeless(width = 1100) {
     unavailable: [],
     pagination: { page: 1, hasNext: false },
   };
-  const shim = `<script>window.openaiCalls = []; window.openai = { toolOutput: ${JSON.stringify(
+  const shim = `<script>window.openaiCalls = []; window.openai = { ...${JSON.stringify(globals)}, toolOutput: ${JSON.stringify(
     inbox,
   )}, callTool: async (name, args) => { window.openaiCalls.push({ name, args }); return { structuredContent: ${JSON.stringify(
     inbox,
@@ -2628,6 +2672,436 @@ test("reselecting acknowledged context replaces a different pending update befor
     assert.equal((await chatScopes(page))[0].selected.execution.publicId, "approval-1");
     assert.equal(await page.frames()[1].evaluate(() =>
       JSON.parse(window.__inboxTestState.context).selected.kind), "approval");
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("mobile Inbox owns a bounded scroll region and keeps content outside host overlays", async () => {
+  const { page, ui, errors } = await fixture(390, {
+    overview: true,
+    hostContext: {
+      safeAreaInsets: { top: 96, right: 0, bottom: 80, left: 0 },
+      containerDimensions: { height: 640, width: 374 },
+    },
+  });
+  try {
+    const scroll = ui.locator("#inbox-scroll");
+    const bounds = await scroll.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { height: element.clientHeight, extent: element.scrollHeight,
+        overflow: style.overflowY, top: parseFloat(style.paddingTop), bottom: parseFloat(style.paddingBottom),
+        outerHeight: document.documentElement.scrollHeight, viewportHeight: innerHeight,
+        horizontalOverflow: document.documentElement.scrollWidth > innerWidth };
+    });
+    assert.ok(bounds.height <= 640 && bounds.height > 200, JSON.stringify(bounds));
+    assert.ok(bounds.extent > bounds.height, JSON.stringify(bounds));
+    assert.match(bounds.overflow, /auto|scroll/);
+    assert.ok(bounds.top >= 96 && bounds.bottom >= 80, JSON.stringify(bounds));
+    assert.ok(bounds.outerHeight <= bounds.viewportHeight, JSON.stringify(bounds));
+    assert.equal(bounds.horizontalOverflow, false);
+    const box = await scroll.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 700);
+    await until(page, () => document.querySelector("#inbox-scroll").scrollTop > 0, null, "inner scroll movement");
+    await scroll.evaluate((element) => (element.scrollTop = element.scrollHeight));
+    const end = await scroll.evaluate((element) => ({ position: element.scrollTop + element.clientHeight, extent: element.scrollHeight }));
+    assert.ok(Math.abs(end.extent - end.position) <= 2);
+    await page.evaluate(() => window.pushHostContext({
+      safeAreaInsets: { top: 52, right: 0, bottom: 44, left: 0 },
+      containerDimensions: { height: 520, width: 374 },
+    }));
+    await until(page, () => document.querySelector("#inbox-scroll").clientHeight <= 520);
+    assert.ok(await scroll.evaluate((element) => parseFloat(getComputedStyle(element).paddingTop) >= 52));
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("host theme overrides the OS theme and updates the Norman wordmark live", async () => {
+  const { page, ui, errors } = await fixture(390, { hostContext: { theme: "dark" } });
+  try {
+    await page.emulateMedia({ colorScheme: "light" });
+    const fill = () => ui.locator("svg.brand path").evaluate((path) => getComputedStyle(path).fill);
+    assert.equal(await fill(), "rgb(255, 255, 255)");
+    await page.evaluate(() => window.pushHostContext({ theme: "light" }));
+    await until(page, () => getComputedStyle(document.querySelector("svg.brand path")).fill !== "rgb(255, 255, 255)");
+    await page.emulateMedia({ colorScheme: "dark" });
+    assert.notEqual(await fill(), "rgb(255, 255, 255)");
+    await page.evaluate(() => window.pushHostContext({ theme: "dark" }));
+    await until(page, () => getComputedStyle(document.querySelector("svg.brand path")).fill === "rgb(255, 255, 255)");
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("mobile zero-task rows are compact while outstanding work remains actionable", async () => {
+  const { page, ui, errors } = await fixture(390, { overview: true });
+  try {
+    await page.evaluate(() => {
+      window.inbox.overview.actions.overdueInvoices = 0;
+      window.inbox.overview.actions.unmatchedDocuments = 0;
+      window.inbox.overview.actions.unreviewedTransactions = 1;
+      window.pushInbox();
+    });
+    await idle(page);
+    const doneHeights = await ui.locator('[data-suggestion="overdueInvoices"],[data-suggestion="unmatchedDocuments"]')
+      .evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().height));
+    assert.equal(doneHeights.length, 2);
+    assert.ok(doneHeights.every((height) => height <= 64), JSON.stringify(doneHeights));
+    assert.equal(await ui.getByRole("button", { name: "Finalize my transactions", exact: true }).isVisible(), true);
+    assert.match(await ui.locator('[data-suggestion="unreviewedTransactions"]').innerText(), /1 transaction to finalize/);
+    assert.equal(await page.frames()[1].evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("company picker loads only on demand, hides archived companies and never displays IDs", async () => {
+  const { page, ui, errors } = await fixture(390, { overview: true, clock: true });
+  try {
+    assert.equal(await ui.locator("#company-name").innerText(), "Example Studio");
+    assert.match(await ui.locator("#company-meta").innerText(), /GmbH|GMBH/);
+    assert.match(await ui.locator("#company-meta").innerText(), /Germany|DE/);
+    assert.equal((await toolCalls(page, "list_companies")).length, 0);
+    await page.clock.runFor(30_001);
+    await idle(page);
+    assert.equal((await toolCalls(page, "list_companies")).length, 0);
+    await ui.locator("#company-toggle").click();
+    await idle(page);
+    assert.equal((await toolCalls(page, "list_companies")).length, 1);
+    assert.equal(await ui.locator("#company-options").isVisible(), true);
+    assert.equal(await ui.locator('[data-company-id="22222222-2222-4222-8222-222222222222"]').count(), 1);
+    assert.equal(await ui.locator('[data-company-id="33333333-3333-4333-8333-333333333333"]').count(), 0);
+    assert.doesNotMatch(await ui.locator("body").innerText(), /[0-9a-f]{8}-[0-9a-f-]{27,}/i);
+    assert.equal((await toolCalls(page, "switch_company")).length, 0);
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("switching company clears reviewed state before loading and scopes subsequent chat to the new company", async () => {
+  const { page, ui, errors } = await fixture(1100, { overview: true });
+  try {
+    await ui.getByRole("button", { name: "Review changes", exact: true }).click();
+    await idle(page);
+    await ui.locator("#confirm").check();
+    await ui.locator("#company-toggle").click();
+    await idle(page);
+    await page.evaluate(() => (window.holdNames = ["switch_company"]));
+    await ui.locator('[data-company-id="22222222-2222-4222-8222-222222222222"]').click();
+    await until(page, () => window.__inboxTestState.busy);
+    assert.equal((await toolCalls(page, "switch_company")).length, 1);
+    assert.equal(await ui.locator("#confirm").count(), 0);
+    assert.equal(await ui.locator("aside").count(), 0);
+    assert.deepEqual(await page.frames()[1].evaluate(() => {
+      const state = window.__inboxTestState;
+      return { detail: state.detail, consent: state.consent, chatReview: state.chatReview, data: state.data };
+    }), { detail: null, consent: "", chatReview: null, data: null });
+    assert.equal(await ui.locator("button:enabled").count(), 0);
+    await page.evaluate(() => { window.holdNames = []; window.release(); });
+    await idle(page);
+    assert.equal(await ui.locator("#company-name").innerText(), "Second Studio");
+    assert.equal(await ui.getByText("Software VAT review", { exact: true }).count(), 0);
+    assert.equal(await ui.locator("#company-options").isVisible(), false);
+    await ui.locator("#intent-financialStatus").click();
+    await idle(page);
+    const message = (await chatMessages(page)).at(-1).params.content[0].text;
+    assert.doesNotMatch(message, /11111111|22222222/);
+    assert.equal((await chatScopes(page)).at(-1).companyId, "22222222-2222-4222-8222-222222222222");
+    assert.equal((await mutations(page)).length, 0);
+    assert.equal((await toolCalls(page, "switch_company")).length, 1);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("failed company switching reloads actual selection and does not restore approval consent", async () => {
+  const { page, ui, errors } = await fixture(1100, { overview: true });
+  try {
+    await ui.getByRole("button", { name: "Review changes", exact: true }).click();
+    await idle(page);
+    await ui.locator("#confirm").check();
+    await ui.locator("#company-toggle").click();
+    await idle(page);
+    const readsBefore = (await toolCalls(page, "get_norman_inbox_data")).length;
+    await page.evaluate(() => { window.switchFailure = true; window.holdNames = ["get_norman_inbox_data"]; });
+    await ui.locator('[data-company-id="22222222-2222-4222-8222-222222222222"]').click();
+    await until(page, () => window.__inboxTestState.busy);
+    await flush(page);
+    assert.equal((await toolCalls(page, "switch_company")).length, 1);
+    await page.waitForFunction((count) => window.calls.filter((call) => call.params?.name === "get_norman_inbox_data").length > count, readsBefore);
+    assert.equal(await ui.locator("button:enabled").count(), 0);
+    await page.evaluate(() => { window.holdNames = []; window.release(); });
+    await idle(page);
+    assert.equal(await ui.locator("#company-name").innerText(), "Example Studio");
+    assert.equal(await ui.locator("#confirm").count(), 0);
+    assert.equal(await page.frames()[1].evaluate(() => window.__inboxTestState.consent), "");
+    assert.match(await ui.locator("#status").innerText(), /Could not switch|not switch|failed/i);
+    assert.equal((await toolCalls(page, "switch_company")).length, 1);
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("missing or mismatched company profile never presents another company's identity", async () => {
+  const { page, ui, errors } = await fixture(1100, { overview: true });
+  try {
+    await page.evaluate(() => {
+      window.inbox.companyId = "22222222-2222-4222-8222-222222222222";
+      window.pushInbox();
+    });
+    await idle(page);
+    assert.doesNotMatch(await ui.locator("#company-name").innerText(), /Example Studio|11111111|22222222/);
+    await page.evaluate(() => { delete window.inbox.company; window.pushInbox(); });
+    await idle(page);
+    assert.doesNotMatch(await ui.locator("#company-name").innerText(), /Example Studio|11111111|22222222/);
+    assert.equal(await ui.locator("#company-toggle").isEnabled(), true);
+    assert.equal((await toolCalls(page, "switch_company")).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("timed-out company switching reconciles the actual company without replaying the mutation", async () => {
+  const { page, ui, errors } = await fixture(1100, { overview: true, clock: true });
+  try {
+    await ui.locator("#company-toggle").click();
+    await idle(page);
+    await page.evaluate(() => (window.holdNames = ["switch_company"]));
+    await ui.locator('[data-company-id="22222222-2222-4222-8222-222222222222"]').click();
+    await until(page, () => window.__inboxTestState.busy);
+    await page.clock.runFor(30_001);
+    await idle(page);
+    assert.equal(await ui.locator("#company-name").innerText(), "Second Studio");
+    assert.equal((await toolCalls(page, "switch_company")).length, 1);
+    assert.equal(await ui.locator("#confirm").count(), 0);
+    assert.equal((await mutations(page)).length, 0);
+    // The late success response cannot perform a second switch or change scope.
+    await page.evaluate(() => { window.holdNames = []; window.release(); });
+    await idle(page);
+    assert.equal((await toolCalls(page, "switch_company")).length, 1);
+    assert.equal(await ui.locator("#company-name").innerText(), "Second Studio");
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("a switch with unavailable replacement Inbox never revives decisions from the old company", async () => {
+  const { page, ui, errors } = await fixture(1100, { overview: true });
+  try {
+    await ui.getByRole("button", { name: "Review changes", exact: true }).click();
+    await idle(page);
+    await ui.locator("#confirm").check();
+    await ui.locator("#company-toggle").click();
+    await idle(page);
+    await page.evaluate(() => {
+      window.hooks.get_norman_inbox_data = () => ({ error: "Inbox temporarily unavailable." });
+    });
+    await ui.locator('[data-company-id="22222222-2222-4222-8222-222222222222"]').click();
+    await until(page, () => !window.__inboxTestState.busy && window.__inboxTestState.pending.size === 0);
+    assert.equal(await ui.getByText("Software VAT review", { exact: true }).count(), 0);
+    assert.equal(await ui.locator("#confirm,#approve,[data-intent]").count(), 0);
+    assert.equal(await page.frames()[1].evaluate(() => window.__inboxTestState.consent), "");
+    assert.equal((await toolCalls(page, "switch_company")).length, 1);
+    assert.equal((await mutations(page)).length, 0);
+    await page.evaluate(() => delete window.hooks.get_norman_inbox_data);
+    await ui.locator("#refresh").click();
+    await idle(page);
+    assert.equal(await ui.locator("#company-name").innerText(), "Second Studio");
+    assert.equal((await toolCalls(page, "switch_company")).length, 1);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("legacy OpenAI globals initialize theme and insets and update them without the MCP UI bridge", async () => {
+  const { page, ui, errors } = await bridgeless(390, {
+    theme: "dark", displayMode: "fullscreen", maxHeight: 600,
+    safeArea: { insets: { top: 88, right: 4, bottom: 72, left: 4 } },
+  });
+  try {
+    await page.emulateMedia({ colorScheme: "light" });
+    assert.equal(await ui.locator("svg.brand path").evaluate((path) => getComputedStyle(path).fill), "rgb(255, 255, 255)");
+    assert.equal(await ui.locator("#inbox-scroll").evaluate((element) => element.clientHeight), 600);
+    assert.ok(await ui.locator("#inbox-scroll").evaluate((element) => parseFloat(getComputedStyle(element).paddingTop) >= 88));
+    assert.ok(await ui.locator("#inbox-scroll").evaluate((element) => parseFloat(getComputedStyle(element).paddingBottom) >= 72));
+    await page.frames()[1].evaluate(() => window.dispatchEvent(new CustomEvent("openai:set_globals", {
+      detail: { globals: { theme: "light", maxHeight: 460,
+        safeArea: { insets: { top: 24, right: 0, bottom: 36, left: 0 } } } },
+    })));
+    await until(page, () => document.querySelector("#inbox-scroll").clientHeight === 460);
+    assert.notEqual(await ui.locator("svg.brand path").evaluate((path) => getComputedStyle(path).fill), "rgb(255, 255, 255)");
+    const insets = await ui.locator("#inbox-scroll").evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { top: parseFloat(style.paddingTop), bottom: parseFloat(style.paddingBottom) };
+    });
+    assert.ok(insets.top >= 24 && insets.top < 88, JSON.stringify(insets));
+    assert.ok(insets.bottom >= 36 && insets.bottom < 72, JSON.stringify(insets));
+    assert.equal(await page.frames()[1].evaluate(() => window.__inboxTestState.ready), false);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("modern host context takes priority over initial and updated legacy presentation globals", async () => {
+  const { page, ui, errors } = await fixture(390, {
+    hostContext: { theme: "light", displayMode: "fullscreen", containerDimensions: { height: 500 },
+      safeAreaInsets: { top: 12, right: 0, bottom: 16, left: 0 } },
+    legacyGlobals: { theme: "dark", maxHeight: 700,
+      safeArea: { insets: { top: 90, right: 0, bottom: 80, left: 0 } } },
+  });
+  try {
+    await page.emulateMedia({ colorScheme: "dark" });
+    const presentation = () => ui.locator("#inbox-scroll").evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { height: element.clientHeight, top: parseFloat(style.paddingTop), bottom: parseFloat(style.paddingBottom),
+        logo: getComputedStyle(document.querySelector("svg.brand path")).fill };
+    });
+    const initial = await presentation();
+    assert.equal(initial.height, 500);
+    assert.ok(initial.top >= 12 && initial.top < 90);
+    assert.ok(initial.bottom >= 16 && initial.bottom < 80);
+    assert.notEqual(initial.logo, "rgb(255, 255, 255)");
+    await page.frames()[1].evaluate(() => window.dispatchEvent(new CustomEvent("openai:set_globals", {
+      detail: { globals: { theme: "dark", maxHeight: 750,
+        safeArea: { insets: { top: 150, right: 0, bottom: 130, left: 0 } } } },
+    })));
+    await flush(page);
+    assert.deepEqual(await presentation(), initial);
+    await page.evaluate(() => window.pushHostContext({ theme: "dark", containerDimensions: { height: 560 } }));
+    await until(page, () => document.querySelector("#inbox-scroll").clientHeight === 560);
+    const updated = await presentation();
+    assert.equal(updated.logo, "rgb(255, 255, 255)");
+    assert.equal(updated.top, initial.top);
+    assert.equal(updated.bottom, initial.bottom);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("inline hosts keep natural content height until maxHeight bounds the scroll region", async () => {
+  const { page, ui, errors } = await fixture(390, { overview: true, hostContext: { displayMode: "inline" } });
+  try {
+    const initial = await ui.locator("#inbox-scroll").evaluate((element) => ({
+      height: element.clientHeight, extent: element.scrollHeight, viewport: innerHeight,
+      documentHeight: document.documentElement.scrollHeight,
+    }));
+    assert.ok(initial.height > initial.viewport, JSON.stringify(initial));
+    assert.ok(Math.abs(initial.height - initial.extent) <= 2, JSON.stringify(initial));
+    assert.ok(initial.documentHeight >= initial.height);
+    await page.evaluate(() => window.pushHostContext({ containerDimensions: { maxHeight: 550 } }));
+    await until(page, () => document.querySelector("#inbox-scroll").clientHeight === 550);
+    const bounded = await ui.locator("#inbox-scroll").evaluate((element) => ({
+      height: element.clientHeight, extent: element.scrollHeight, viewport: innerHeight,
+      documentHeight: document.documentElement.scrollHeight,
+    }));
+    assert.ok(bounded.extent > bounded.height);
+    assert.ok(bounded.documentHeight <= bounded.viewport);
+    await page.evaluate(() => window.pushHostContext({ containerDimensions: {} }));
+    await until(page, () => document.querySelector("#inbox-scroll").clientHeight > innerHeight);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("bounded hosts do not receive size notifications when content or available height changes", async () => {
+  const { page, ui, errors } = await fixture(390, {
+    overview: true, hostContext: { displayMode: "fullscreen", containerDimensions: { height: 640 } },
+  });
+  try {
+    await ui.locator("#bookkeeping-help-toggle").click();
+    await page.evaluate(() => {
+      window.inbox.summary.approvals = 999;
+      window.pushInbox();
+      window.pushHostContext({ containerDimensions: { height: 480 } });
+    });
+    await idle(page);
+    await page.frames()[1].evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const calls = await page.evaluate(() => window.calls.filter((call) => call.method === "ui/notifications/size-changed"));
+    assert.deepEqual(calls, []);
+    assert.equal(await ui.locator("#inbox-scroll").evaluate((element) => element.clientHeight), 480);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("switch timeout keeps actions unavailable while the delayed mutation can still change the company", async () => {
+  const { page, ui, errors } = await fixture(1100, { overview: true, clock: true });
+  try {
+    await ui.getByRole("button", { name: "Review changes", exact: true }).click();
+    await idle(page);
+    await ui.locator("#confirm").check();
+    await ui.locator("#company-toggle").click();
+    await idle(page);
+    await page.evaluate(() => (window.delaySwitchExecution = true));
+    await ui.locator('[data-company-id="22222222-2222-4222-8222-222222222222"]').click();
+    await until(page, () => window.__inboxTestState.busy);
+    await page.clock.runFor(30_001);
+    await until(page, () => !window.__inboxTestState.busy && window.__inboxTestState.pending.size === 0);
+    // A read of the previous company is not evidence that the timed-out switch failed.
+    assert.equal(await page.evaluate(() => window.inbox.companyId), "11111111-1111-4111-8111-111111111111");
+    assert.equal(await ui.getByText("Software VAT review", { exact: true }).count(), 0);
+    assert.equal(await ui.locator("#confirm,#approve,[data-intent]").count(), 0);
+    assert.equal(await page.frames()[1].evaluate(() => window.__inboxTestState.consent), "");
+    assert.equal((await toolCalls(page, "switch_company")).length, 1);
+    await page.evaluate(() => window.completeSwitch());
+    await ui.locator("#refresh").click();
+    await idle(page);
+    assert.equal(await ui.locator("#company-name").innerText(), "Second Studio");
+    assert.equal(await ui.locator("#intent-financialStatus").isEnabled(), true);
+    assert.equal((await toolCalls(page, "switch_company")).length, 1);
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test("late previous-company host snapshots cannot undo a completed local company switch", async () => {
+  const { page, ui, errors } = await fixture(1100, { overview: true });
+  try {
+    await page.evaluate(() => (window.previousInbox = structuredClone(window.inbox)));
+    await ui.locator("#company-toggle").click();
+    await idle(page);
+    await ui.locator('[data-company-id="22222222-2222-4222-8222-222222222222"]').click();
+    await idle(page);
+    const readsBefore = (await toolCalls(page, "get_norman_inbox_data")).length;
+    await page.evaluate(() => {
+      window.holdNames = ["get_norman_inbox_data"];
+      document.querySelector("iframe").contentWindow.postMessage({
+        jsonrpc: "2.0", method: "ui/notifications/tool-result",
+        params: { structuredContent: { ...window.previousInbox, asOf: "2099-01-01T00:00:00Z" } },
+      }, "*");
+    });
+    await page.waitForFunction((count) => window.calls.filter((call) => call.params?.name === "get_norman_inbox_data").length > count, readsBefore);
+    assert.equal(await ui.getByText("Software VAT review", { exact: true }).count(), 0);
+    assert.notEqual(await ui.locator("#company-name").innerText(), "Example Studio");
+    assert.equal(await ui.locator("#confirm").count(), 0);
+    await page.evaluate(() => { window.holdNames = []; window.release(); });
+    await idle(page);
+    assert.equal(await ui.locator("#company-name").innerText(), "Second Studio");
+    await ui.locator("#intent-financialStatus").click();
+    await idle(page);
+    assert.equal((await chatScopes(page)).at(-1).companyId, "22222222-2222-4222-8222-222222222222");
+    assert.equal((await toolCalls(page, "switch_company")).length, 1);
+    assert.equal((await mutations(page)).length, 0);
     assert.deepEqual(errors, []);
   } finally {
     await page.close();

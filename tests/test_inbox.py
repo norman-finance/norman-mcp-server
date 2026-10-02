@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import threading
 from types import SimpleNamespace
 
@@ -21,14 +22,24 @@ class Api:
         self.company_threads = []
         self.company_details = {
             "publicId": COMPANY,
+            "name": "Musterfirma GmbH",
+            "accountType": "GmbH",
+            "country": "DE",
             "isSme": True,
+            "isArchived": False,
             "chartOfAccounts": {"code": "skr04"},
             "taxNumber": "private",
             "iban": "private",
             "members": ["private"],
         }
         self.tax_runs = [
-            {"publicId": "ustva-09", "status": "ready_for_approval", "periodStart": "2026-09-01", "periodEnd": "2026-09-30", "report": REPORT},
+            {
+                "publicId": "ustva-09",
+                "status": "ready_for_approval",
+                "periodStart": "2026-09-01",
+                "periodEnd": "2026-09-30",
+                "report": REPORT,
+            },
             {"publicId": "ustva-08", "status": "submitted"},
         ]
 
@@ -100,6 +111,14 @@ def test_inbox_counts_all_approvals_and_only_actual_blocked_workflows():
     assert all(data["sourceAvailability"].values())
     assert "private" not in str(data)
     assert data["capabilities"] == {"ledger": True, "taxPreview": True}
+    assert data["company"] == {
+        "id": COMPANY,
+        "name": "Musterfirma GmbH",
+        "legalForm": "GmbH",
+        "country": "DE",
+        "isSme": True,
+        "isArchived": False,
+    }
     assert "taxNumber" not in str(data) and "chartOfAccounts" not in str(data)
     assert api.calls[1][2]["params"]["page"] == 2
 
@@ -111,6 +130,58 @@ def test_failed_section_is_not_an_empty_success():
     assert data["summary"]["approvals"] is None
     assert data["unavailable"] == ["approvals"]
     assert data["summary"]["questions"] == 1
+
+
+@pytest.mark.parametrize(
+    "details",
+    [
+        None,
+        [],
+        {},
+        {"error": "private upstream response", "name": "Wrong company", "status_code": 403},
+        RuntimeError("private upstream response"),
+        {"publicId": "another-company", "name": "Wrong company", "isSme": True},
+    ],
+)
+def test_unavailable_company_profile_does_not_invent_identity(details):
+    api = Api()
+    api.company_details = details
+    data = asyncio.run(load_inbox(api))
+    assert data["company"] == {
+        "id": COMPANY,
+        "name": None,
+        "legalForm": None,
+        "country": None,
+        "isSme": None,
+        "isArchived": None,
+    }
+    assert "Wrong company" not in str(data)
+    assert "private" not in str(data)
+    assert data["summary"]["approvals"] == 51
+    assert len(api.calls) == 10
+
+
+def test_company_profile_accepts_only_display_field_types():
+    api = Api()
+    api.company_details = {
+        "publicId": COMPANY,
+        "name": {"taxNumber": "private"},
+        "accountType": ["private"],
+        "country": 49,
+        "isSme": "true",
+        "isArchived": 0,
+        "members": ["private"],
+    }
+    data = asyncio.run(load_inbox(api))
+    assert data["company"] == {
+        "id": COMPANY,
+        "name": None,
+        "legalForm": None,
+        "country": None,
+        "isSme": None,
+        "isArchived": None,
+    }
+    assert "private" not in str(data)
 
 
 @pytest.mark.parametrize(
@@ -195,6 +266,13 @@ def test_entrypoints_and_approval_review_are_read_only():
         {"type": "thread"},
     ]
     assert tools["open_norman_inbox"].meta["ui"]["resourceUri"] == INBOX_URI
+    icons = tools["open_norman_inbox"].icons
+    assert [icon.theme for icon in icons] == ["light", "dark"]
+    for icon, fill in zip(icons, ('fill="#080809"', 'fill="#ffffff"')):
+        assert icon.mime_type == "image/svg+xml"
+        svg = base64.b64decode(icon.src.split(",", 1)[1]).decode("utf-8")
+        assert fill in svg
+        assert "currentColor" not in svg
     assert all(t.annotations.read_only_hint for t in tools.values())
     api = Api()
     ctx = SimpleNamespace(request_context=SimpleNamespace(lifespan_context={"api": api}))
@@ -216,15 +294,16 @@ def test_previously_opened_inbox_resource_uri_still_resolves():
     async def read_templates():
         current = list(await mcp.read_resource(INBOX_URI))[0].content
         previous = list(await mcp.read_resource(PREVIOUS_INBOX_URI))[0].content
+        v5 = list(await mcp.read_resource("ui://norman/inbox-v5.html"))[0].content
         v4 = list(await mcp.read_resource("ui://norman/inbox-v4.html"))[0].content
         v3 = list(await mcp.read_resource("ui://norman/inbox-v3.html"))[0].content
         v2 = list(await mcp.read_resource("ui://norman/inbox-v2.html"))[0].content
-        return current, previous, v4, v3, v2
+        return current, previous, v5, v4, v3, v2
 
-    current, previous, v4, v3, v2 = asyncio.run(read_templates())
-    assert INBOX_URI == "ui://norman/inbox-v6.html"
-    assert PREVIOUS_INBOX_URI == "ui://norman/inbox-v5.html"
-    assert current == previous == v4 == v3 == v2
+    current, previous, v5, v4, v3, v2 = asyncio.run(read_templates())
+    assert INBOX_URI == "ui://norman/inbox-v7.html"
+    assert PREVIOUS_INBOX_URI == "ui://norman/inbox-v6.html"
+    assert current == previous == v5 == v4 == v3 == v2
     assert "financialStatus" in previous
 
 
@@ -269,7 +348,10 @@ def test_upstream_error_text_stays_out_of_the_inbox():
     class Broken(Api):
         async def arequest(self, method, url, **kwargs):
             if url.endswith("workflow-runs/"):
-                return {"error": "Request failed: 500 for url: https://api.example/secret", "status_code": 500}
+                return {
+                    "error": "Request failed: 500 for url: https://api.example/secret",
+                    "status_code": 500,
+                }
             return await super().arequest(method, url, **kwargs)
 
     data = asyncio.run(load_inbox(Broken()))
@@ -326,7 +408,11 @@ def test_approval_review_shows_names_not_ids():
                 return {
                     "publicId": EXECUTION,
                     "status": "awaiting_review",
-                    "transaction": {"publicId": TRANSACTION, "amount": "-59.49", "valueDate": "2026-09-12"},
+                    "transaction": {
+                        "publicId": TRANSACTION,
+                        "amount": "-59.49",
+                        "valueDate": "2026-09-12",
+                    },
                     "actionsPlanned": [
                         {"type": "set_category", "params": {"company_category": CATEGORY}},
                         {"type": "assign_vendor", "params": {"vendor": VENDOR}},
@@ -334,7 +420,11 @@ def test_approval_review_shows_names_not_ids():
                     ],
                 }
             if url.endswith(f"transactions/{TRANSACTION}/"):
-                return {"vendor": CURRENT_VENDOR, "vendorDetails": {"name": "Old Vendor GmbH"}, "vatRate": "7"}
+                return {
+                    "vendor": CURRENT_VENDOR,
+                    "vendorDetails": {"name": "Old Vendor GmbH"},
+                    "vatRate": "7",
+                }
             if url.endswith(f"accounting/company-categories/{CATEGORY}/"):
                 return {"code": "4964", "name": "Software subscriptions"}
             if url.endswith(f"accounting/vendors/{VENDOR}/"):

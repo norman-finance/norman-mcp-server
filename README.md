@@ -483,6 +483,18 @@ run with a report ID; a missing suggestion does not mean no tax reports exist.
 Unknown eligibility hides specialized suggestions while general tasks remain
 usable. Raw company details are omitted, and the host and API still enforce
 tool availability and permissions.
+The header shows the selected company's name, legal form and country. Its picker
+loads non-archived companies on demand through `list_companies`, then switches
+with `switch_company` and re-reads the Inbox. Switching clears old decisions,
+confirmation and chat context before loading the replacement. An ambiguous timeout
+keeps actions unavailable until the requested company is verified; the switch is
+never automatically retried. The additive `company` profile reuses the existing
+company lookup and excludes tax IDs, bank details and members.
+On mobile, the Inbox has a bounded inner scroll area, uses host safe-area insets,
+and condenses empty states and explanatory text. Standard host context controls
+theme and dimensions, with legacy OpenAI globals and OS theme fallbacks. Sidebar
+icons include explicit light and dark variants. Unbounded inline hosts retain
+natural height; previously cached Inbox resource URIs remain available.
 The review card uses existing approve/dismiss/undo tools and refreshes actual
 results. Approval requires a checkbox and re-reads current values and planned
 actions immediately before executing. A changed review requires confirmation
