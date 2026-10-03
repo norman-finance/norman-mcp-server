@@ -69,7 +69,9 @@ specific issue; it does not settle how the reviewer classified Norman's wider
 invoice/payment capabilities.
 
 The public MCP still supports invoice creation/sending, payment links and
-finAPI payment initiation. These features have not been removed or hidden from
+finAPI payment initiation. The guidelines also prohibit execution of money
+transfers. External bank authorization does not by itself establish that the
+plugin's payment-initiation flow is acceptable. These features have not been removed or hidden from
 reviewers. Before resubmission, describe their real behavior in the commerce
 declaration and obtain clarification about the rejected workflow. Do not state
 that Norman has no commerce merely because it does not sell Norman plans in
