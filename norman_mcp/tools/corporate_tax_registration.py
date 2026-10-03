@@ -55,7 +55,7 @@ def _clean(payload: dict[str, Any]) -> dict[str, Any]:
 # Personal government identifiers belong in Norman's authenticated form, not chat.
 _PERSONAL_IDENTIFIER_KEYS = frozenset({
     "taxid", "taxidentificationnumber", "steuerid", "steueridentifikationsnummer",
-    "ssn", "socialsecuritynumber", "passportnumber", "passport",
+    "ssn", "socialsecuritynumber", "passportnumber", "passport", "pesel",
     "nationalid", "nationalidentificationnumber", "identitynumber",
     "driverslicensenumber", "driverlicensenumber",
 })

@@ -257,8 +257,8 @@ def register_rule_tools(mcp):
         title="Apply Rule To Existing Transactions",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
-            idempotentHint=True,
+            destructiveHint=True,
+            idempotentHint=False,
             openWorldHint=False,
         ),
     )
@@ -267,12 +267,17 @@ def register_rule_tools(mcp):
         rule_id: str = Field(description="Rule publicId from list_rules or a create_rule response"),
     ) -> Dict[str, Any]:
         """
-        Run an existing rule over the company's uncategorized transactions and
-        categorize every match now. Use after create_rule when the user also
-        wants the backlog cleaned up.
+        Run an existing rule's supported transaction actions on up to 500 matching
+        uncategorized transactions from the last 90 days. Actions can overwrite
+        categories, VAT, vendor/client, payment type or verification, or create
+        private in-app notifications. Use only after the user requests the run.
+
+        Each call creates a new execution; repeated calls are not deduplicated.
+        Check list_rule_executions before retrying an uncertain result.
 
         Returns:
-            The number of transactions updated.
+            With the agents runtime enabled, queued=true and executionId for a
+            background run. Otherwise the sweep runs inline and returns applied_count.
         """
         api = ctx.request_context.lifespan_context["api"]
         if not api.company_id:

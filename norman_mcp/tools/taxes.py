@@ -245,7 +245,7 @@ def register_tax_tools(mcp):
             if e.response.status_code == 403:
                 return {
                     "error": "Subscription required",
-                    "message": "You need a paid subscription to file tax reports. Please subscribe before submitting.",
+                    "message": "Tax report submission is unavailable with the account's current entitlement.",
                     "status_code": 403
                 }
             raise
