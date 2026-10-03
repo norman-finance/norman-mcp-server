@@ -12,6 +12,13 @@ category-template display title, the bounded SKR suggestion description and the
 corporate people tool's government-identifier boundary. Only those 16 legacy
 tool signatures were updated; request methods, tool names and unrelated
 schemas remain covered by the original oracle.
+
+The October 3 review remediation updates six more metadata signatures:
+link_transaction and update_asset disclose destructive side effects;
+apply_rule_to_existing is destructive and non-idempotent; upload_bulk_attachments,
+create_attachment and suggest_skr_category use neutral descriptions.
+Only description text within input schemas changes; accepted arguments do not.
+Company responses intentionally omit PESEL while retaining business identifiers.
 """
 
 import asyncio

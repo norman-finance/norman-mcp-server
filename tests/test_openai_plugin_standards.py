@@ -52,7 +52,7 @@ def _corporate_tools(api):
     return server._tool_manager._tools, ctx
 
 
-@pytest.mark.parametrize("key", ["taxId", "tax_id", "SSN", "passportNumber", "nationalId"])
+@pytest.mark.parametrize("key", ["taxId", "tax_id", "SSN", "passportNumber", "nationalId", "PESEL"])
 def test_personal_identifiers_never_reach_the_api(key):
     api = SimpleNamespace(_make_request=Mock())
     tools, ctx = _corporate_tools(api)
@@ -77,6 +77,7 @@ def test_stored_identifiers_are_withheld_without_mutating_the_api_record():
                 "firstName": "Sample",
                 "taxId": "synthetic-id",
                 "passport_number": "synthetic-passport",
+                "pesel": "synthetic-personal-id",
             },
         ],
     }
@@ -86,6 +87,7 @@ def test_stored_identifiers_are_withheld_without_mutating_the_api_record():
     assert result["representatives"] == [{"firstName": "Sample"}]
     assert stored["representatives"][0]["taxId"] == "synthetic-id"
     assert stored["representatives"][0]["passport_number"] == "synthetic-passport"
+    assert stored["representatives"][0]["pesel"] == "synthetic-personal-id"
 
 
 def test_non_identifier_people_updates_keep_the_existing_request_contract():
@@ -113,8 +115,9 @@ def test_non_identifier_people_updates_keep_the_existing_request_contract():
         ("shareholder_entries", "shareholder_entries"),
     ],
 )
-def test_replacing_people_cannot_discard_hidden_identifiers(group, argument):
-    stored = {group: [{"firstName": "Sample", "taxId": "synthetic-id"}]}
+@pytest.mark.parametrize("identifier", ["taxId", "pesel"])
+def test_replacing_people_cannot_discard_hidden_identifiers(group, argument, identifier):
+    stored = {group: [{"firstName": "Sample", identifier: "synthetic-id"}]}
     api = SimpleNamespace(_make_request=Mock(return_value=stored))
     tools, ctx = _corporate_tools(api)
     params = {"representatives": None, "shareholder_entries": None, argument: []}

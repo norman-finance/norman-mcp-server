@@ -43,6 +43,11 @@ field minimization, not a general sensitive-data classifier.
 
 ## Portal state and remaining verification
 
+For the 3 October 2.0.1 rejection, current portal observations, confirmed source
+fixes and unresolved commerce/data-review questions, see
+[the remediation record](review-notes-2026-10-03.md). The package remains a
+prepared 2.1.0 upload, not an approved release.
+
 On 2026-10-01, release 1.0.0 was published and release 2.0.1 was already in
 review. Uploading a replacement was disabled until that review ends or is
 cancelled. Obtain explicit authorization before cancelling review. Local source

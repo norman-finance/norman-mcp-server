@@ -763,7 +763,7 @@ def register_invoice_tools(mcp):
         title="Link Transaction to Invoice",
         annotations=ToolAnnotations(
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=True,
             openWorldHint=False,
         ),
@@ -775,7 +775,12 @@ def register_invoice_tools(mcp):
         items: list[TransactionInvoiceItem] | None = None,
     ) -> Dict[str, Any]:
         """
-        Link a transaction to an invoice.
+        Link a transaction to an invoice, finalize it and mark the invoice paid.
+
+        This replaces any previous attachment link and updates transaction
+        classification from the invoice. By default, invoice lines replace the
+        transaction's existing items; nonempty items replace them with the
+        supplied lines instead. An empty items list skips only item replacement.
         
         Args:
             invoice_id: ID of the invoice

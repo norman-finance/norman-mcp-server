@@ -3,6 +3,7 @@ from typing import Dict, Any, List
 from urllib.parse import urljoin
 from norman_mcp import config
 from norman_mcp.tools.taxes import reports_url
+from norman_mcp.company_profile import without_company_personal_identifiers
 
 def register_resources(mcp):
     """Register all resource endpoints with the MCP server."""
@@ -18,7 +19,7 @@ def register_resources(mcp):
         try:
             # The API client resolves the caller's token per request; the
             # static token is empty in hosted OAuth mode ("Bearer None", 401).
-            company_data = api._make_request("GET", company_url)
+            company_data = without_company_personal_identifiers(api._make_request("GET", company_url))
             if not isinstance(company_data, dict) or company_data.get("error"):
                 return f"Error getting company details: {company_data}"
 

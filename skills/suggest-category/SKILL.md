@@ -56,6 +56,6 @@ Call `get_company_details` and check the `isSme` field:
 ## Tips
 
 - The full SKR catalog has ~1000+ entries — the tools handle search/filtering, don't try to list everything.
-- Prefer `search_skr_by_code` over `suggest_skr_category` when possible (faster, no OpenAI cost).
+- `search_skr_by_code` searches by account number or prefix; `suggest_skr_category` matches a free-text name or description.
 - `categorize_transaction` is a *different* tool — it classifies a specific transaction. The SKR tools here help find/create account codes for the company's category setup.
 - Common SKR04 ranges: 0xxx = assets, 1xxx = financial accounts, 2xxx = liabilities, 3xxx = income, 4xxx = material costs, 5xxx = depreciation, 6xxx = other expenses, 7xxx = extraordinary items.

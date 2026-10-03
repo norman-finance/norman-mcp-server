@@ -106,7 +106,7 @@ def register_category_tools(mcp):
         Results are limited to Norman's fixed SKR03/SKR04 catalog; this does not
         search the web, contact arbitrary destinations or modify your books.
 
-        NOTE: This calls OpenAI — prefer search_skr_by_code when you have a code.
+        search_skr_by_code accepts a known account number or prefix.
         """
         api = ctx.request_context.lifespan_context["api"]
         if not api.company_id:

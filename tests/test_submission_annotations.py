@@ -146,6 +146,47 @@ def test_account_deactivation_mode_is_marked_destructive() -> None:
     assert "active" in tool.parameters["properties"]
 
 
+def test_asset_update_discloses_depreciation_posting_replacement() -> None:
+    server = MCPServer()
+    register_accounting_tools(server)
+    tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
+    tool = tools["update_asset"]
+
+    assert _annotation_tuple(tool) == DESTRUCTIVE_WRITE
+    assert "delete existing unlocked depreciation" in tool.description
+    assert "status" in tool.input_schema["properties"]
+    assert _annotation_tuple(tools["get_asset"]) == READ_ONLY
+
+
+def test_invoice_link_discloses_default_transaction_item_replacement() -> None:
+    server = MCPServer()
+    register_invoice_tools(server)
+    tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
+    tool = tools["link_transaction"]
+
+    assert _annotation_tuple(tool) == DESTRUCTIVE_WRITE
+    assert "finalize it and mark the invoice paid" in tool.description
+    assert "invoice lines replace" in tool.description
+    assert "empty items list skips only item replacement" in tool.description
+    assert "items" not in tool.input_schema.get("required", [])
+    assert _annotation_tuple(tools["get_invoice"]) == READ_ONLY
+
+
+def test_rule_backlog_run_discloses_non_idempotent_bounded_background_execution() -> None:
+    server = MCPServer()
+    register_rule_tools(server)
+    tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
+    tool = tools["apply_rule_to_existing"]
+
+    assert tool.annotations.idempotent_hint is False
+    assert _annotation_tuple(tool) == DESTRUCTIVE_WRITE
+    assert "500" in tool.description and "90 days" in tool.description
+    assert "Each call creates a new execution" in tool.description
+    assert "queued=true and executionId" in tool.description
+    assert "applied_count" in tool.description
+    assert _annotation_tuple(tools["preview_rule"]) == READ_ONLY
+
+
 class _DatevApi:
     async def arequest(self, method, url, params=None, json_data=None):
         return self._make_request(method, url, params=params, json_data=json_data)
