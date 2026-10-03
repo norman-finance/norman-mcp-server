@@ -1,6 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="#080809">
-  <!-- Norman favicon mark from assets/logo.svg, fitted to navigation without its background or shadow. -->
-  <svg x="2" y="2" width="16" height="16" viewBox="12 10 31 36">
-    <path d="M43 46H42.8521L15.3021 19.4219L16.682 19.75L16.7806 44.9219H12V10H12.2464L25.8736 23.336L39.5008 36.6719L38.3672 36.4375L38.2687 11.0313H43V46Z"/>
-  </svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 64 64" fill="#080809">
+  <!-- Norman favicon mark, centered with transparent padding for larger mobile menu slots. -->
+  <path d="M47.5 50H47.3521L19.8021 23.4219L21.182 23.75L21.2806 48.9219H16.5V14H16.7464L30.3736 27.336L44.0008 40.6719L42.8672 40.4375L42.7687 15.0313H47.5V50Z"/>
 </svg>
