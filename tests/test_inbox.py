@@ -294,18 +294,19 @@ def test_previously_opened_inbox_resource_uri_still_resolves():
     async def read_templates():
         current = list(await mcp.read_resource(INBOX_URI))[0].content
         previous = list(await mcp.read_resource(PREVIOUS_INBOX_URI))[0].content
+        v8 = list(await mcp.read_resource("ui://norman/inbox-v8.html"))[0].content
         v7 = list(await mcp.read_resource("ui://norman/inbox-v7.html"))[0].content
         v6 = list(await mcp.read_resource("ui://norman/inbox-v6.html"))[0].content
         v5 = list(await mcp.read_resource("ui://norman/inbox-v5.html"))[0].content
         v4 = list(await mcp.read_resource("ui://norman/inbox-v4.html"))[0].content
         v3 = list(await mcp.read_resource("ui://norman/inbox-v3.html"))[0].content
         v2 = list(await mcp.read_resource("ui://norman/inbox-v2.html"))[0].content
-        return current, previous, v7, v6, v5, v4, v3, v2
+        return current, previous, v8, v7, v6, v5, v4, v3, v2
 
-    current, previous, v7, v6, v5, v4, v3, v2 = asyncio.run(read_templates())
-    assert INBOX_URI == "ui://norman/inbox-v9.html"
-    assert PREVIOUS_INBOX_URI == "ui://norman/inbox-v8.html"
-    assert current == previous == v7 == v6 == v5 == v4 == v3 == v2
+    current, previous, v8, v7, v6, v5, v4, v3, v2 = asyncio.run(read_templates())
+    assert INBOX_URI == "ui://norman/inbox-v10.html"
+    assert PREVIOUS_INBOX_URI == "ui://norman/inbox-v9.html"
+    assert current == previous == v8 == v7 == v6 == v5 == v4 == v3 == v2
     assert "financialStatus" in previous
 
 
