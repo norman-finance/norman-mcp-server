@@ -39,8 +39,7 @@ def _explained(result: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "error": (
                 "This month's AI messages are used up, so Norman cannot continue the "
-                "workflow now. The user can upgrade their Norman plan, or answer when the "
-                "messages renew next month."
+                "workflow now. It can continue when the messages renew next month."
             ),
             "code": "chat_limit_reached",
         }

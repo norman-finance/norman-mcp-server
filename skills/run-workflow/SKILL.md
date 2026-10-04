@@ -33,7 +33,7 @@ Norman runs its workflows on its own servers. You start one, relay the user's an
   - `manual_step`: explain the step's instruction. Once the user did it, or wants to skip it, call `complete_workflow_step`.
   - `source_required`: ask them to connect the bank or source in Norman, then `continue_workflow`.
   - `step_failed`: say what stopped it (from `blockedDetail`). Offer `continue_workflow` to try again.
-  - `ai_limit` or `chat_limit_reached`: this month's AI messages are used up. The user can upgrade, or continue next month.
+  - `ai_limit` or `chat_limit_reached`: this month's AI messages are used up. The workflow can continue when the messages renew next month.
 
 ## Step 4: Report and offer the schedule
 - When `state` is `done` or `done_with_warnings`, summarize each step's `summary` in plain words.
