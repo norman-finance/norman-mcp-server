@@ -270,17 +270,18 @@ def register_document_tools(mcp):
     )
     async def upload_bulk_attachments(
         ctx: Context,
-        file_urls: Optional[List[str]] = Field(default=None, description="BEST OPTION: List of HTTP(S) URLs. The server downloads each file directly — nothing goes through the LLM context."),
+        file_urls: Optional[List[str]] = Field(default=None, description="HTTP(S) download URLs. The server downloads each file directly without additional request headers."),
         file_refs: Optional[List[str]] = Field(default=None, description="List of file_ref tokens from prior POST /files/upload calls."),
-        files_base64: Optional[List[Dict[str, str]]] = Field(default=None, description="LAST RESORT — only for tiny files (<50 KB each). Each item: {\"file_name\": \"receipt.pdf\", \"content\": \"<base64>\"}. Do NOT use for images or PDFs."),
+        files_base64: Optional[List[Dict[str, str]]] = Field(default=None, description="Base64 content for small files under 50 KB each. Each item: {\"file_name\": \"note.txt\", \"content\": \"<base64>\"}. For images and PDFs, supply file_urls or file_refs to keep file bytes out of the model context."),
         file_paths: Optional[List[str]] = Field(default=None, description="Deprecated alias for file_urls."),
         cashflow_type: Optional[str] = Field(default=None, description="Optional cashflow type for the transactions (INCOME or EXPENSE). If not provided, then try to detect it from the file")
     ) -> Dict[str, Any]:
         """
         Upload multiple file attachments in bulk.
 
-        Priority: file_urls > file_refs > files_base64.
-        Do NOT base64-encode images or PDFs — it will exceed the context window.
+        Accepts download URLs, upload references, and base64 content for small files.
+        For images and PDFs, supply file_urls or file_refs; embedding file bytes
+        as base64 can exceed model context limits.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -289,7 +290,7 @@ def register_document_tools(mcp):
             return {"error": "No company available. Please authenticate first."}
         
         if not file_urls and not file_refs and not files_base64 and not file_paths:
-            return {"error": "Provide file_urls (preferred), file_refs, or files_base64."}
+            return {"error": "Provide file_urls, file_refs, or files_base64."}
 
         if cashflow_type and cashflow_type not in ["INCOME", "EXPENSE"]:
             return {"error": "cashflow_type must be either 'INCOME' or 'EXPENSE'"}
@@ -565,9 +566,9 @@ def register_document_tools(mcp):
     )
     async def create_attachment(
         ctx: Context,
-        file_url: Optional[str] = Field(default=None, description="BEST OPTION: HTTP(S) download URL, including a valid presigned URL with query parameters. Must be accessible without additional headers. The server downloads it directly; the file does not go through the LLM context."),
+        file_url: Optional[str] = Field(default=None, description="HTTP(S) download URL, including a valid presigned URL with query parameters. Must be accessible without additional headers. The server downloads the file directly."),
         file_ref: Optional[str] = Field(default=None, description="Reference token from a prior POST /files/upload call. Use when the client uploaded the file directly to the MCP server."),
-        file_content_base64: Optional[str] = Field(default=None, description="LAST RESORT — only for tiny files (<50 KB). Do NOT use for images, PDFs, or scanned documents — the base64 string will exceed the context window. Prefer file_url or file_ref."),
+        file_content_base64: Optional[str] = Field(default=None, description="Base64 content for a small file under 50 KB. For images, PDFs, and scanned documents, supply file_url or file_ref to keep file bytes out of the model context."),
         file_name: Optional[str] = Field(default=None, description="Original filename with extension (e.g. 'invoice.pdf'). Required when using file_content_base64."),
         transactions: Optional[List[str]] = Field(default=None, description="List of transaction IDs to link"),
         attachment_type: Optional[str] = Field(default=None, description="Type of attachment (invoice, receipt)"),
@@ -608,14 +609,14 @@ def register_document_tools(mcp):
             additional_metadata: Additional metadata for attachment
 
         How to provide the file (pick one):
-        1. file_url  — best if the file has a public HTTP(S) URL
+        1. file_url  — an HTTP(S) download URL accessible without extra headers
         2. file_ref  — call request_file_upload first to get an upload link,
            ask the user to open it in their browser and drop the file,
            then pass the file_ref here
-        3. file_content_base64 — ONLY for tiny files under 50 KB
+        3. file_content_base64 — content of a small file under 50 KB
 
-        NEVER base64-encode images, PDFs, or scans — they will blow up the
-        context window. Use file_url or request_file_upload instead.
+        For images, PDFs, and scans, supply file_url or file_ref; embedding file
+        bytes as base64 can exceed model context limits.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -625,7 +626,7 @@ def register_document_tools(mcp):
 
         if not file_url and not file_ref and not file_content_base64:
             return {
-                "error": "Provide one of: file_url (preferred), file_ref, "
+                "error": "Provide one of: file_url, file_ref, "
                 "or file_content_base64 (small files only)."
             }
 

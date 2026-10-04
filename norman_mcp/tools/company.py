@@ -8,6 +8,7 @@ from mcp.types import ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
 from norman_mcp.tools.results import as_object
+from norman_mcp.company_profile import without_company_personal_identifiers
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ def register_company_tools(mcp):
             return {"error": "No company available. Please authenticate first."}
         
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
-        return await api.arequest("GET", company_url)
+        return without_company_personal_identifiers(await api.arequest("GET", company_url))
 
     @mcp.tool(
         title="List My Companies",
@@ -214,10 +215,12 @@ def register_company_tools(mcp):
             update_data["datevClientNumber"] = datev_client_number
 
         if not update_data:
-            current_data = await api.arequest("GET", company_url)
+            current_data = without_company_personal_identifiers(await api.arequest("GET", company_url))
             return {"message": "No fields provided for update.", "company": current_data}
         
-        updated_company = api._make_request("PATCH", company_url, json_data=update_data)
+        updated_company = without_company_personal_identifiers(
+            api._make_request("PATCH", company_url, json_data=update_data)
+        )
         if isinstance(updated_company, dict) and updated_company.get("error"):
             return updated_company
         return {"message": "Company updated successfully", "company": updated_company}

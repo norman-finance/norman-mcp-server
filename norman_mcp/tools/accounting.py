@@ -880,7 +880,7 @@ def register_accounting_tools(mcp: Any) -> None:
             json_data=payload,
         )
 
-    @mcp.tool(title="Update Asset", annotations=WRITE)
+    @mcp.tool(title="Update Asset", annotations=DESTRUCTIVE)
     async def update_asset(
         ctx: Context,
         asset_id: str,
@@ -915,6 +915,9 @@ def register_accounting_tools(mcp: Any) -> None:
         without disposal_date clears a stored disposal date, which also repairs
         an active asset that the API rejects with "Active assets cannot have a
         disposal date" (older clients stored the acquisition date there).
+        Changes to depreciation or status delete existing unlocked depreciation
+        postings; the next annual-close preview regenerates them. Locked
+        postings remain protected by the API.
         """
         api, company_id, error = _api_and_company(ctx)
         if error:
