@@ -151,6 +151,8 @@ def register_invoice_tools(mcp):
             company_data: Sender details for this document.
             online_payment_enabled: Enable Stripe/PayPal payment links; omit to inherit, false to disable.
             document_type: Document type: invoice, quote, delivery_note, cancel or credit_note. Use invoice unless another type is requested. To cancel or credit an EXISTING invoice, or to make a delivery note from one, use cancel_invoice, create_credit_note or create_delivery_note instead.
+                A cancel or credit_note takes positive amounts, like the invoice it corrects,
+                and prints them with a minus.
             status: "draft" keeps an editable draft that is never emailed, marked paid or
                 matched to payments. Omit or use "saved" to issue it.
             payment_status: Payment status: unpaid or paid.
