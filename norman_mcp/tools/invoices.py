@@ -108,6 +108,8 @@ def register_invoice_tools(mcp):
         currency_exchanged: str | None = None,
         full_cost_origin_exchanged: float | None = None,
         tax_exempt_reason: str | None = None,
+        preceding_invoice_number: str | None = None,
+        preceding_invoice_date: str | None = None,
         instructions: str | None = None,
         message: str | None = None,
         company_email: str | None = None,
@@ -142,6 +144,9 @@ def register_invoice_tools(mcp):
             currency_exchanged: Reporting currency code.
             full_cost_origin_exchanged: Total in reporting currency in major units; omit for automatic conversion.
             tax_exempt_reason: VAT note; omit for automatic text, or use an empty string to print no note.
+            preceding_invoice_number: For a cancel or credit_note made from scratch, the number of
+                the invoice it refers to when that invoice was issued outside Norman.
+            preceding_invoice_date: That invoice's date (YYYY-MM-DD).
             instructions: Invoice instructions.
             message: Invoice message.
             company_email: Sender email; omit to use the company email.
@@ -268,6 +273,8 @@ def register_invoice_tools(mcp):
             currency_exchanged=currency_exchanged,
             full_cost_origin_exchanged=full_cost_origin_exchanged,
             tax_exempt_reason=tax_exempt_reason,
+            preceding_invoice_number=preceding_invoice_number,
+            preceding_invoice_date=preceding_invoice_date,
             instructions=instructions,
             message=message,
             company_email=company_email,
