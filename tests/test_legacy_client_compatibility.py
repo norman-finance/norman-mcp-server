@@ -19,6 +19,12 @@ apply_rule_to_existing is destructive and non-idempotent; upload_bulk_attachment
 create_attachment and suggest_skr_category use neutral descriptions.
 Only description text within input schemas changes; accepted arguments do not.
 Company responses intentionally omit PESEL while retaining business identifiers.
+
+The October 5 correction-sign change updates three descriptions: cancel_invoice,
+create_credit_note and create_invoice say that a correction's amounts stay
+positive and print with a minus. create_invoice and update_invoice also gain the
+optional preceding_invoice_number and preceding_invoice_date of a correction
+made from scratch; no existing argument changes.
 """
 
 import asyncio

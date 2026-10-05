@@ -275,7 +275,8 @@ def register_invoice_management_tools(mcp, enrich=None):
         no longer edited, reminded about or matched to payments. Only an issued
         invoice (saved, sent, overdue, paid or uncollectible) can be cancelled, and only once.
         To correct part of an invoice use create_credit_note instead. Edit a
-        draft directly. issued (YYYY-MM-DD) defaults to today.
+        draft directly. issued (YYYY-MM-DD) defaults to today. The amounts stay
+        positive, like the invoice's; the PDF prints every amount with a minus.
         """
         return await _derive(ctx, invoice_id, "cancel", _derivation_payload(issued=issued, message=message))
 
@@ -291,10 +292,11 @@ def register_invoice_management_tools(mcp, enrich=None):
         """Credit part or all of an issued invoice with a credit note (Rechnungskorrektur).
 
         Without items every line of the invoice is credited. Pass items (with the
-        quantities and rates to credit, in minor currency units) to correct part
-        of it. The invoice itself stays in force. The credit note refers to the
-        invoice on the PDF and in the e-invoice XML. status "draft" leaves it
-        editable; "saved" issues it at once. issued (YYYY-MM-DD) defaults to today.
+        quantities and rates to credit, positive and in minor currency units) to
+        correct part of it; the PDF prints every amount with a minus. The invoice
+        itself stays in force. The credit note refers to the invoice on the PDF
+        and in the e-invoice XML. status "draft" leaves it editable; "saved"
+        issues it at once. issued (YYYY-MM-DD) defaults to today.
         """
         return await _derive(
             ctx,
