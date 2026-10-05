@@ -153,6 +153,7 @@ Found a German **GmbH or UG (haftungsbeschränkt)** end-to-end — Norman collec
 - *"Reword my business purpose so it's ready for the register."*
 - *"Generate the Musterprotokoll and find me a notary who does online notarization."*
 - *"What's left before my company is officially registered?"*
+- *"Which Finanzamt is responsible for my company's address?"*
 
 > Choosing GmbH/UG also sets your Norman account to the corporate **SKR04** chart of accounts, so bookkeeping and taxes are ready from day one. The documents are drafts to prepare the notary appointment — not legal advice.
 

@@ -1,7 +1,7 @@
 ---
 name: corporate-tax-registration
 description: Prepare the corporate tax registration (Fragebogen zur steuerlichen Erfassung for a GmbH/UG) through a guided chat. Use when a newly founded GmbH/UG needs its Steuernummer, the user asks what to do after the notary appointment, or wants to register the company with the Finanzamt. Final submission happens in the Norman app, not in chat.
-version: 1.0.0
+version: 1.0.1
 disable-model-invocation: true
 metadata:
   openclaw:
@@ -52,6 +52,9 @@ Firma exactly as notarized, legal form, Sitz, Geschäftsanschrift (+ separate ma
 address when `managementAddressSame` is false), contact data, Gegenstand des Unternehmens and
 the responsible Finanzamt (4-digit BuFa number).
 
+Find the Finanzamt with `suggest_tax_office` from the management address. If it returns
+several `candidates`, let the user choose; `get_tax_offices` searches by name, town or postcode.
+
 ## Section 2 — Registration (`update_corporate_registration_details`)
 
 Notarization date and the Handelsregister state: application filed / registered with dates,
@@ -80,6 +83,9 @@ expected profits for the founding and following year.
 Revenue forecast, the § 19 UStG Kleinunternehmer decision (waiving it binds for 5 years —
 make sure the user understands before setting it), Soll-/Istversteuerung, whether to request
 a USt-IdNr, and the refund bank account.
+
+The company is eligible when its founding-year revenue is at most 25.000 €. Since 2025 the
+founding-year revenue counts as it is; do not extrapolate it to twelve months.
 
 ## Finish (`get_corporate_submission_link`)
 
