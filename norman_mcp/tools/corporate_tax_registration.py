@@ -182,7 +182,10 @@ def register_corporate_tax_registration_tools(mcp):
         email: str | None = Field(default=None, description="Delivery email for the confirmation PDF (not e-filed)"),
         website: str | None = Field(default=None),
         activity_description: str | None = Field(default=None, description="Gegenstand des Unternehmens"),
-        tax_office: str | None = Field(default=None, description="Responsible Finanzamt as 4-digit BuFa number"),
+        tax_office: str | None = Field(
+            default=None,
+            description="Responsible Finanzamt as 4-digit BuFa number; find it with suggest_tax_office",
+        ),
     ) -> dict[str, Any]:
         """Section 1 (company): name, seat, addresses, contact, activity and tax office."""
         api = ctx.request_context.lifespan_context.get("api")
@@ -336,7 +339,11 @@ def register_corporate_tax_registration_tools(mcp):
         ),
         is_kleinunternehmer: bool | None = Field(
             default=None,
-            description="Apply the § 19 UStG Kleinunternehmer rule (no VAT charged)?",
+            description=(
+                "Apply the § 19 UStG Kleinunternehmer rule (no VAT charged)? Eligible when the "
+                "founding-year revenue is at most €25,000; from 2025 it counts as it is, "
+                "not extrapolated to twelve months"
+            ),
         ),
         kleinunternehmer_charge_vat: bool | None = Field(
             default=None,
