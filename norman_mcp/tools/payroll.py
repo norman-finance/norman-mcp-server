@@ -137,6 +137,13 @@ def _month(review: Any) -> dict[str, Any]:
     return cleaned
 
 
+def _link(result: Any) -> dict[str, Any] | None:
+    """The one-hour download link of an API document answer, if it carries one."""
+    if isinstance(result, dict) and result.get("downloadUrl"):
+        return {key: result.get(key) for key in ("downloadUrl", "fileName", "expiresInSeconds")}
+    return None
+
+
 def _run(run: Any) -> Any:
     if not isinstance(run, dict):
         return run
@@ -933,13 +940,16 @@ def register_payroll_tools(mcp):
     ) -> dict[str, Any]:
         """Send the Lohnsteuer-Anmeldung to ELSTER as a test transmission; nothing is filed.
 
-        ELSTER validates it like a real filing and answers with its protocol. Show the user
-        the result before submit_wage_tax_return.
+        ELSTER validates it like a real filing; a rejection comes back as an error with
+        ELSTER's reason. On success `protocol` is a one-hour link to ELSTER's protocol PDF.
+        Show the user the result before submit_wage_tax_return.
         """
         if not _api(ctx).company_id:
             return NO_COMPANY_ERROR
-        result = await _post(ctx, f"payroll-runs/{run_id}/preview/", {})
-        return _failed(result) or as_object(result)
+        result = await _post(ctx, f"payroll-runs/{run_id}/preview/", {}, params={"response_format": "download_url"})
+        if _failed(result):
+            return _failed(result)
+        return {"accepted": True, "filed": False, "protocol": _link(result)}
 
     @mcp.tool(title="Submit Wage Tax Return", annotations=EXTERNAL_IRREVERSIBLE_WRITE)
     async def submit_wage_tax_return(
@@ -955,11 +965,16 @@ def register_payroll_tools(mcp):
         """
         if not _api(ctx).company_id:
             return NO_COMPANY_ERROR
-        result = await _post(ctx, f"payroll-runs/{run_id}/submit/", {})
+        result = await _post(ctx, f"payroll-runs/{run_id}/submit/", {}, params={"response_format": "download_url"})
         if isinstance(result, dict) and result.get("status_code") == 403:
             return {"error": "Filing is not available for this account right now; file it in the Norman app.",
                     "status_code": 403, "url": _app_url("payroll?view=reports")}
-        return _failed(result) or as_object(result)
+        if _failed(result):
+            return _failed(result)
+        # The status says what happened: FILED, or SUBMITTING while ELSTER has not confirmed yet.
+        run = await _get(ctx, f"payroll-runs/{run_id}/")
+        return {"protocol": _link(result), "status": run.get("status") if isinstance(run, dict) else None,
+                "submittedAt": run.get("submittedAt") if isinstance(run, dict) else None}
 
     @mcp.tool(title="Mark Wage Tax Return Filed Elsewhere", annotations=DESTRUCTIVE_WRITE)
     async def mark_wage_tax_return_filed(

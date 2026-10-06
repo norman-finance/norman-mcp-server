@@ -285,3 +285,20 @@ def test_the_employment_end_is_read_back_after_the_patch():
     assert (result["directorName"], result["employmentEnd"]) == ("Sara Mini", "2027-06-30")
     assert api.requests[0][2]["json_data"] == {"employment_end": "2027-06-30"} and "taxIdNr" not in result
 
+
+def test_filing_returns_the_protocol_link_and_the_resulting_status():
+    link = {"downloadUrl": "https://api.example/api/v1/dl/t/", "fileName": "lsta-protokoll-2026-12.pdf",
+            "mimeType": "application/pdf", "expiresInSeconds": 3600}
+    api = FakeApi(respond({
+        ("POST", BASE + "payroll-runs/run-1/preview/"): link,
+        ("POST", BASE + "payroll-runs/run-1/submit/"): link,
+        ("GET", BASE + "payroll-runs/run-1/"): {"status": "FILED", "submittedAt": "2027-01-08T10:00:00", "lines": []},
+    }))
+    test = structured(call_tool("preview_wage_tax_return", {"run_id": "run-1"}, api))
+    assert test == {"accepted": True, "filed": False, "protocol": {
+        "downloadUrl": link["downloadUrl"], "fileName": link["fileName"], "expiresInSeconds": 3600}}
+    assert api.requests[0][2]["params"] == {"response_format": "download_url"}
+    filed = structured(call_tool("submit_wage_tax_return", {"run_id": "run-1"}, api))
+    assert (filed["status"], filed["submittedAt"], filed["protocol"]["fileName"]) == (
+        "FILED", "2027-01-08T10:00:00", "lsta-protokoll-2026-12.pdf")
+
