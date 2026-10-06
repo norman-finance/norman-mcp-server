@@ -183,6 +183,11 @@ class InvoiceChanges(DocumentFields):
     payment_date: str | None = None
     bank_account_pk: str | None = None
     type: Literal["invoice", "quote", "delivery_note", "cancel", "credit_note"] | None = None
+    preceding_invoice_number: str | None = Field(
+        default=None, max_length=100,
+        description="A cancel or credit_note made from scratch: the invoice it refers to, issued outside Norman.",
+    )
+    preceding_invoice_date: str | None = Field(default=None, description="That invoice's date, YYYY-MM-DD.")
     reminders_paused: bool | None = Field(
         default=None, description="Pause the automatic payment reminders of this invoice; false resumes them.",
     )

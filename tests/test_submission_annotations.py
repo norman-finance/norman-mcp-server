@@ -14,6 +14,7 @@ from norman_mcp.tools.offers import register_offer_tools
 from norman_mcp.tools.products import register_product_tools
 from norman_mcp.tools.rules import register_rule_tools
 from norman_mcp.tools.tax_advisor import register_tax_advisor_tools
+from norman_mcp.tools.tax_offices import register_tax_office_tools
 from norman_mcp.tools.taxes import register_tax_tools
 from norman_mcp.tools.transactions import register_transaction_tools
 
@@ -39,6 +40,7 @@ def test_registration_tools_advertise_truthful_submission_annotations() -> None:
     register_incorporation_tools(server)
     register_gewerbe_registration_tools(server)
     register_corporate_tax_registration_tools(server)
+    register_tax_office_tools(server)
     tools = server._tool_manager._tools  # noqa: SLF001
 
     expected = {
@@ -79,6 +81,8 @@ def test_registration_tools_advertise_truthful_submission_annotations() -> None:
         "update_corporate_financials": WRITE,
         "update_corporate_vat_and_bank": WRITE,
         "get_corporate_submission_link": READ_ONLY,
+        "get_tax_offices": READ_ONLY,
+        "suggest_tax_office": READ_ONLY,
     }
 
     assert set(tools) == set(expected)

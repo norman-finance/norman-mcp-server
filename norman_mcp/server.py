@@ -44,6 +44,8 @@ from norman_mcp.tools.tax_advisor import register_tax_advisor_tools
 from norman_mcp.tools.incorporation import register_incorporation_tools
 from norman_mcp.tools.gewerbe_registration import register_gewerbe_registration_tools
 from norman_mcp.tools.corporate_tax_registration import register_corporate_tax_registration_tools
+from norman_mcp.tools.tax_offices import register_tax_office_tools
+from norman_mcp.tools.payroll import register_payroll_tools
 from norman_mcp.prompts.templates import register_prompts
 from norman_mcp.resources.endpoints import register_resources
 from norman_mcp.apps import register_public_apps
@@ -427,6 +429,8 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
     register_incorporation_tools(server)
     register_gewerbe_registration_tools(server)
     register_corporate_tax_registration_tools(server)
+    register_tax_office_tools(server)
+    register_payroll_tools(server)
     register_prompts(server)
     register_resources(server)
     register_public_apps(server)
