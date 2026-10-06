@@ -45,6 +45,8 @@
 
 **Tax Filing** — Generate Finanzamt previews, file VAT returns, and track deadlines
 
+**Payroll** — Run the monthly Lohnabrechnung of a GmbH/UG (Max plan): calculate and approve the month, see social insurance per Krankenkasse and the Minijob-Zentrale, save the Beitragsnachweis estimate, file the Lohnsteuer-Anmeldung, correct an approved month, and get payslips and the Lohnkonto as download links. Steuer-IDs, insurance numbers and bank details stay in the Norman app
+
 **Company Overview** — Check your balance, revenue, and financial health at a glance
 
 **Company Formation** — Found a German **GmbH or UG**: collect the founders' data, check the name against the Handelsregister, generate the founding documents (Musterprotokoll, Gesellschafterliste), match with a notary, and track every step through to registration
@@ -396,6 +398,7 @@ Ready-to-use skills compatible with **Claude Code**, **OpenClaw**, and the [Agen
 | `manage-clients` | List, create, and update client records |
 | `manage-products` | List, create, update, and archive catalog products; fill invoice lines from them |
 | `tax-report` | Review, preview, and file tax reports with the Finanzamt |
+| `run-payroll-month` | Monthly payroll — changes, calculation, approval, social insurance, payment, and Lohnsteuer-Anmeldung |
 | `categorize-transactions` | Categorize and verify bank transactions |
 | `find-receipts` | Find missing receipts from Gmail or email and attach them |
 | `overdue-reminders` | Identify overdue invoices and send payment reminders |
