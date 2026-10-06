@@ -147,12 +147,141 @@ def test_no_company_means_no_request():
     assert api.requests == []
 
 
+WRITES = {
+    "calculate_payroll_month", "record_salary_change", "record_tax_profile_change", "set_employment_end",
+    "record_statutory_insurance", "record_minijob_details", "record_work_schedule", "record_absence",
+    "update_employer_payroll_setup", "save_contribution_plan", "prepare_wage_tax_return",
+    "prepare_payroll_correction", "preview_wage_tax_return",
+}
+BINDING = {"approve_payroll_month", "approve_payroll_correction", "cancel_payroll_correction",
+           "mark_wage_tax_return_filed"}
+
+
 def test_annotations_are_truthful():
     server = MCPServer()
     register_payroll_tools(server)
     tools = server._tool_manager._tools  # noqa: SLF001
-    writes = {"calculate_payroll_month"}
     for name, tool in tools.items():
         hints = (tool.annotations.read_only_hint, tool.annotations.open_world_hint, tool.annotations.destructive_hint)
-        assert hints == ((False, False, False) if name in writes else (True, False, False)), name
+        if name == "submit_wage_tax_return":
+            expected = (False, True, True)
+        elif name in BINDING:
+            expected = (False, False, True)
+        elif name in WRITES:
+            expected = (False, False, False)
+        else:
+            expected = (True, False, False)
+        assert hints == expected, name
         assert tool.title, name
+    assert len(tools) == 31
+
+
+def test_sickness_needs_every_confirmation_before_anything_is_sent():
+    api = FakeApi(respond({}))
+    result = structured(call_tool("record_absence", {
+        "person_id": "person-1", "kind": "SICKNESS", "start_date": "2026-12-15", "end_date": "2026-12-19",
+        "source_reference": "AU certificate of 15.12.", "prior_illnesses_reviewed": True,
+    }, api))
+    assert "confirm each sickness statement" in result["error"]
+    assert api.requests == []
+
+
+def test_a_confirmed_sickness_is_sent_against_the_reviewed_versions():
+    review = {"latestRevision": 4, "employmentFingerprint": "e" * 64, "workScheduleRevision": 2}
+    api = FakeApi(respond({
+        ("GET", BASE + "gf-salaries/person-1/absences/"): review,
+        ("POST", BASE + "gf-salaries/person-1/absences/"): review,
+    }))
+    result = structured(call_tool("record_absence", {
+        "person_id": "person-1", "kind": "SICKNESS", "start_date": "2026-12-15", "end_date": "2026-12-19",
+        "source_reference": "AU certificate of 15.12.", "prior_illnesses_reviewed": True,
+        "sick_note_reviewed": True, "fixed_salary_covers_sick_pay": True, "no_work_on_first_day": True,
+    }, api))
+    assert result == {"recorded": True, "kind": "SICKNESS", "startDate": "2026-12-15", "endDate": "2026-12-19"}
+    method, _, kwargs = api.requests[1]
+    body = kwargs["json_data"]
+    assert method == "POST" and kwargs["params"] == {"year": 2026, "month": 12}
+    assert (body["expected_revision"], body["reviewed_employment"], body["reviewed_work_schedule_revision"]) == (
+        4, "e" * 64, 2)
+    assert body["sickness"] == {"incapacity_start": "2026-12-15", "prior_used_days": 0, "history_reviewed": True,
+                                "entitlement_confirmed": True, "fixed_salary_confirmed": True,
+                                "first_day_full_absence_confirmed": True}
+    assert body["fixed_salary_confirmed"] is False and len(body["absence_id"]) == 36
+
+
+def test_vacation_needs_the_pay_confirmation():
+    api = FakeApi(respond({}))
+    result = structured(call_tool("record_absence", {
+        "person_id": "person-1", "kind": "PAID_VACATION", "start_date": "2026-12-21", "end_date": "2026-12-23",
+        "source_reference": "Vacation request",
+    }, api))
+    assert "vacation pay" in result["error"] and api.requests == []
+
+
+def test_the_first_contribution_plan_needs_an_explicit_confirmation():
+    preview = {"status": "PREVIEW", "fingerprint": "f" * 64, "snapshot": {"plans": [], "funds": []}}
+    saved = {"status": "SAVED", "id": "plan-1", "snapshot": {"plans": [], "funds": [{"fundNumber": "98000006"}]}}
+    api = FakeApi(respond({
+        ("GET", BASE + "payroll-months/contribution-plan/"): preview,
+        ("POST", BASE + "payroll-months/contribution-plan/"): saved,
+    }))
+    refused = structured(call_tool("save_contribution_plan", {"year": 2026, "month": 12}, api))
+    assert "first plan in Norman" in refused["error"] and len(api.requests) == 1
+    result = structured(call_tool("save_contribution_plan", {"year": 2026, "month": 12,
+                                                              "first_month_confirmed": True}, api))
+    assert result == {"status": "SAVED", "id": "plan-1", "funds": [{"fundNumber": "98000006"}]}
+    body = api.requests[-1][2]["json_data"]
+    assert (body["reviewed_fingerprint"], body["starts_series"]) == ("f" * 64, True)
+
+
+def test_employer_setup_keeps_omitted_fields_and_sends_the_reviewed_identity():
+    review = {"current": {"revision": 2, "data": {"employerNumber": "12345671", "u1ReimbursementRate": "70.00",
+                                                  "contactEmail": "a@b.de"}},
+              "identityFingerprint": "i" * 64}
+    api = FakeApi(respond({
+        ("GET", BASE + "employer-setup/"): review,
+        ("POST", BASE + "employer-setup/"): {"current": {"revision": 3}, "dataComplete": True, "issues": []},
+    }))
+    result = structured(call_tool("update_employer_payroll_setup", {"u1_reimbursement_rate": 80}, api))
+    assert result == {"revision": 3, "dataComplete": True, "issues": []}
+    body = api.requests[-1][2]["json_data"]
+    assert (body["expected_revision"], body["reviewed_identity"]) == (2, "i" * 64)
+    assert body["data"] == {"employer_number": "12345671", "u1_reimbursement_rate": "80.00", "contact_email": "a@b.de"}
+
+
+def test_approval_and_corrections_carry_the_reviewed_version():
+    approved = {"status": "APPROVED", "lines": [LINE],
+                "pendingCorrection": {"id": "c-1", "fingerprint": "c" * 64, "lines": [LINE]}}
+    api = FakeApi(respond({
+        ("POST", BASE + "payroll-months/approve/"): approved,
+        ("POST", BASE + "payroll-months/prepare-correction/"): {"id": "c-1", "lines": [LINE], "changes": []},
+    }))
+    result = structured(call_tool("approve_payroll_month", {"year": 2026, "month": 12, "revision": 1,
+                                                             "fingerprint": "a" * 64}, api))
+    assert "snapshot" not in result["lines"][0] and "snapshot" not in result["pendingCorrection"]["lines"][0]
+    assert api.requests[0][2]["json_data"] == {"year": 2026, "month": 12, "revision": 1,
+                                               "reviewed_fingerprint": "a" * 64}
+    structured(call_tool("prepare_payroll_correction", {
+        "year": 2026, "month": 12, "revision": 1, "fingerprint": "a" * 64, "reason": "Raise was late",
+        "changes": [{"person_id": "person-1", "monthly_gross": 560}],
+    }, api))
+    body = api.requests[1][2]["json_data"]
+    assert body["changes"] == [{"salary": "person-1", "monthly_gross": "560.00"}] and body["reason"] == "Raise was late"
+
+
+def test_a_refused_filing_points_to_the_app():
+    api = FakeApi({"error": "Access forbidden. Check your account permissions.", "status_code": 403})
+    result = structured(call_tool("submit_wage_tax_return", {"run_id": "run-1"}, api))
+    assert result["error"].startswith("Filing is not available") and result["status_code"] == 403
+
+
+def test_the_employment_end_is_read_back_after_the_patch():
+    stored = {**PERSON, "employmentEnd": "2027-06-30"}
+    api = FakeApi(respond({
+        ("PATCH", BASE + "gf-salaries/person-1/"): {"directorName": "", "employmentEnd": None},
+        ("GET", BASE + "gf-salaries/person-1/"): stored,
+    }))
+    result = structured(call_tool("set_employment_end", {"person_id": "person-1", "employment_end": "2027-06-30"}, api))
+    assert (result["directorName"], result["employmentEnd"]) == ("Sara Mini", "2027-06-30")
+    assert api.requests[0][2]["json_data"] == {"employment_end": "2027-06-30"} and "taxIdNr" not in result
+
