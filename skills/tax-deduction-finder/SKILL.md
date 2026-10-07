@@ -28,7 +28,7 @@ Review each transaction and flag potential deductions that may be miscategorized
 
 **Technology & software:**
 - SaaS subscriptions (Adobe, Google Workspace, Slack, hosting)
-- Computer hardware (fully deductible if under 1000 EUR net, otherwise depreciated)
+- Computer hardware (fully deductible up to 800 EUR net, otherwise depreciated)
 - Phone and mobile plans (business portion)
 
 **Travel & transportation (Reisekosten):**
@@ -70,7 +70,7 @@ Present a summary:
 - Approximate tax savings (rough estimate using ~30-42% marginal rate for Einkommensteuer + Soli)
 
 Tips:
-- Items under 1000 EUR net (GWG - Geringwertige Wirtschaftsgüter) can be fully deducted in the purchase year
-- Items over 1000 EUR must be depreciated over their useful life (AfA)
+- Items up to 800 EUR net (GWG - Geringwertige Wirtschaftsgüter) can be fully deducted in the purchase year
+- Items over 800 EUR must be depreciated over their useful life (AfA)
 - Mixed-use items (e.g., phone) should only claim the business portion
 - Keep receipts for all deductions - suggest attaching any missing ones
