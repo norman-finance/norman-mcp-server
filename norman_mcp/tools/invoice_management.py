@@ -254,10 +254,11 @@ def register_invoice_management_tools(mcp, enrich=None):
     async def duplicate_invoice(ctx: Context, document_id: str) -> dict:
         """Copy an invoice or a quote into a new draft of the same kind.
 
-        The copy keeps client, lines, terms and appearance, is dated today with
-        the payment term carried over, takes the next number of its sequence and
-        does not refer to the original. Finish it with update_invoice: adjust the
-        service or delivery dates and set status "saved" to issue it.
+        The copy keeps client, lines, terms, appearance and bank details, is
+        dated today with the payment term carried over, takes the next number of
+        its sequence and does not refer to the original. Finish it with
+        update_invoice: adjust the service or delivery dates and set status
+        "saved" to issue it.
         """
         return await _derive(ctx, document_id, "duplicate", {})
 
