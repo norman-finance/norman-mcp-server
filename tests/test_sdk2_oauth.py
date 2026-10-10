@@ -176,6 +176,7 @@ def basic(registration, secret=None):
         ("http://127.0.0.1:49152/callback", False),
         ("https://claude.ai/oauth/callback", False),
         ("https://chatgpt.com/cb", True),
+        ("https://www.cursor.com/agents/mcp/oauth/callback", False),
     ],
 )
 def test_public_pkce_metadata_code_exchange_and_refresh(oauth_server, redirect, omit_client_id):

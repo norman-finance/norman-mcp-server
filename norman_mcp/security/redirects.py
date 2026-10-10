@@ -42,10 +42,12 @@ _DEFAULT_ALLOWED_HTTPS_HOSTS = {
     "connect.smithery.ai",
 }
 
-# Grok's callback observed in its custom-connector OAuth flow. Match the entire
-# URI so this exception does not trust other paths or subdomains of grok.com.
+# Fixed connector callbacks. Match the entire URI so these exceptions do not
+# trust other paths or subdomains of the connector's domain.
 _EXACT_ALLOWED_HTTPS_REDIRECT_URIS = {
     "https://grok.com/connectors-oauth-exchange-code/",
+    # Cursor web / Cloud Agents: https://cursor.com/docs/mcp#static-redirect-url
+    "https://www.cursor.com/agents/mcp/oauth/callback",
 }
 
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
