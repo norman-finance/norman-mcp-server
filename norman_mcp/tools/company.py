@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Literal, Optional
 from urllib.parse import urljoin
 from datetime import date
 from pydantic import Field
@@ -324,12 +324,15 @@ def register_company_tools(mcp):
             default=None,
             description="SKR03 or SKR04; uses the company's chart of accounts when omitted",
         ),
+        source: Literal["auto", "ledger", "transactions"] = "auto",
     ) -> Dict[str, Any]:
         """
-        Generate a DATEV export of finalized transactions and return a downloadUrl valid for one hour.
-        With include_documents=true, the ZIP includes the DATEV EXTF CSV, a human-readable
-        statement CSV and all attached documents; otherwise the download is the DATEV CSV.
-        Present the returned downloadUrl to the user.
+        Export DATEV and return a downloadUrl valid for one hour. By default GmbH/UG
+        use the complete Ledger, including opening, manual, payroll, depreciation and
+        closing entries; other companies use finalized transactions. Ledger exports
+        are structurally checked before download; show validation findings to the user.
+        include_documents adds a ZIP with receipts. Nothing is sent to DATEV or an advisor.
+        Use source=transactions only when the user explicitly wants that narrower export.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -362,6 +365,23 @@ def register_company_tools(mcp):
         if resolved_skr_variant not in {"SKR03", "SKR04"}:
             return {"error": "skr_variant must be SKR03 or SKR04."}
 
+        use_ledger = source == "ledger" or (source == "auto" and company.get("isSme"))
+        if use_ledger:
+            if skr_variant and resolved_skr_variant != str(chart_code or "").upper():
+                return {"error": "Ledger export uses the company's chart; a different skr_variant cannot be applied."}
+            export_url = urljoin(
+                config.api_base_url,
+                f"api/v1/companies/{company_id}/accounting/ledger/datev-export/",
+            )
+            # Do not fall back to a transactions-only export if the API is old or
+            # preflight fails: that would silently omit Ledger-only sources.
+            return await api.arequest("POST", export_url, json_data={
+                "dateFrom": date_from, "dateTo": date_to,
+                "advisorNumber": resolved_advisor_number, "clientNumber": resolved_client_number,
+                "kind": "journal", "includeDocuments": include_documents,
+                "responseFormat": "download_url",
+            })
+
         export_url = urljoin(config.api_base_url, "api/v1/accounting/datev-export/")
         
         export_data = {
@@ -377,4 +397,4 @@ def register_company_tools(mcp):
             "responseFormat": "download_url",
         }
         
-        return api._make_request("POST", export_url, json_data=export_data)
+        return await api.arequest("POST", export_url, json_data=export_data)

@@ -593,3 +593,32 @@ endpoints; redirects are not followed. Each callback, verification included, has
 Host support, plugin submission and production activation need separate
 verification. Local protocol and browser fixtures do not establish ChatGPT
 catalog availability or a successful production OAuth/webhook connection.
+
+### DATEV files and complete Ledger exports
+
+`trigger_datev_export` defaults to the complete Ledger for GmbH/UG (`isSme`),
+including opening, manual, payroll, depreciation and closing entries. Other
+companies retain the finalized-transactions export. Use `source="transactions"`
+only for an explicitly requested transactions-only export. A Ledger failure never
+falls back to that narrower export. The API checks the journal before returning
+an expiring download link and includes its validation findings in the response.
+With `include_documents=true`, the ZIP contains the journal, account reports and
+available linked documents; unreadable attached documents block the package.
+
+- `validate_ledger_datev_export`: preview structure, source coverage and documents
+  for a period without saving company settings, creating a download or sending it.
+- `read_datev_file`: inspect an uploaded EXTF/DTVF **Buchungsstapel** without
+  importing it. Obtain a `file_ref` through `request_file_upload` or `POST /files/upload`, then
+  filter by account, document date, text or minimum amount. Reuse that reference
+  for subsequent pages (up to 100 rows/page) until its normal upload expiry.
+  No DATEV connection or chart setup is needed; an authenticated Norman company
+  is required. CSV/TXT/EXTF uploads are limited to 20 MB / 100,000 rows; extract
+  the booking CSV from a ZIP before uploading.
+
+The reader preserves tax keys and Generalumkehr markers. Its totals are source-row
+amounts grouped by currency, **not** tax-expanded account balances or open items.
+Structural checks do not certify tax correctness or acceptance by DATEV. Nothing
+in these tools emails an accountant or pushes an export to DATEV.
+
+The API release providing Ledger `responseFormat`/`validateOnly` and
+`/companies/{id}/accounting/datev/read/` must be deployed before this MCP release.

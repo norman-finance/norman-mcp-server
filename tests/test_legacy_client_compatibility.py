@@ -30,6 +30,9 @@ The October 5 Finanzamt finder updates two descriptions: update_corporate_compan
 points to suggest_tax_office for the tax office, and update_corporate_vat_and_bank
 states the founding-year Kleinunternehmer limit. No argument changes.
 
+The October 11 DATEV change adds optional source selection and describes the complete
+Ledger default for SMEs. Only trigger_datev_export metadata is updated.
+
 The October 6 duplicate change updates one description: duplicate_invoice says
 the copy keeps the bank details of the original; no argument changes.
 """
