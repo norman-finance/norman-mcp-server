@@ -176,8 +176,11 @@ def register_company_tools(mcp):
             description="Email reminders a week before and on the due date of each UStVA and ZM. False turns them off.",
         ),
     ) -> Dict[str, Any]:
-        """Update company information. For SME companies you can also set chart_of_accounts, DATEV advisor/client numbers.
-        notify_tax_deadlines switches the UStVA and ZM deadline reminder emails on or off."""
+        """Update company information.
+
+        For SME companies you can also set chart_of_accounts, DATEV advisor/client numbers.
+        notify_tax_deadlines switches the UStVA and ZM deadline reminder emails on or off.
+        """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
