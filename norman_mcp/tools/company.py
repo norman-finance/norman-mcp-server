@@ -171,8 +171,13 @@ def register_company_tools(mcp):
         chart_of_accounts: Optional[str] = Field(default=None, description="Chart of accounts template code: 'skr03' or 'skr04'. Only for SME companies."),
         datev_advisor_number: Optional[str] = Field(default=None, description="DATEV tax advisor number"),
         datev_client_number: Optional[str] = Field(default=None, description="DATEV client/Mandant number"),
+        notify_tax_deadlines: Optional[bool] = Field(
+            default=None,
+            description="Email reminders a week before and on the due date of each UStVA and ZM. False turns them off.",
+        ),
     ) -> Dict[str, Any]:
-        """Update company information. For SME companies you can also set chart_of_accounts, DATEV advisor/client numbers."""
+        """Update company information. For SME companies you can also set chart_of_accounts, DATEV advisor/client numbers.
+        notify_tax_deadlines switches the UStVA and ZM deadline reminder emails on or off."""
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
         
@@ -213,6 +218,8 @@ def register_company_tools(mcp):
             update_data["datevAdvisorNumber"] = datev_advisor_number
         if datev_client_number is not None:
             update_data["datevClientNumber"] = datev_client_number
+        if notify_tax_deadlines is not None:
+            update_data["isToNotifyTaxDeadlines"] = notify_tax_deadlines
 
         if not update_data:
             current_data = without_company_personal_identifiers(await api.arequest("GET", company_url))

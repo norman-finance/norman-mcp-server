@@ -35,4 +35,5 @@ Important warnings:
 - ALWAYS show a preview before submitting to the Finanzamt
 - Tax submissions are IRREVERSIBLE - make sure the user explicitly confirms
 - Remind the user of filing deadlines (monthly: 10th of following month, quarterly: 10th of following quarter month)
+- Norman emails a reminder a week before and on the morning of each UStVA and ZM due date. To turn the reminders off or on again, set `notify_tax_deadlines` with `update_company_details`.
 - If tax numbers need validation, use `validate_tax_number`
