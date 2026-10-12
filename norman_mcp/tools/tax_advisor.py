@@ -8,12 +8,15 @@ from norman_mcp.context import Context
 from norman_mcp import config
 from norman_mcp.tools.taxes import reports_url as company_reports_url
 from norman_mcp.tools.missing_documents import category_name, missing_document_transactions, needs_document
+from norman_mcp.tools.advisor_signatures import register_advisor_signature_tools
 
 logger = logging.getLogger(__name__)
 
 
 def register_tax_advisor_tools(mcp):
     """Register tax-advisor-specific tools with the MCP server."""
+
+    register_advisor_signature_tools(mcp)
 
     @mcp.tool(
         title="Get Client Overview",

@@ -542,10 +542,23 @@ class NormanAPI:
                 }
             elif e.response.status_code == 403:
                 logger.error("Access forbidden. Check your account permissions.")
-                return {
+                result = {
                     "error": "Access forbidden. Check your account permissions.",
                     "status_code": 403,
                 }
+                # Paywalls and plan gates answer 403 with a reason and a code
+                # ({"detail": ..., "code": "invoice_send_limit_reached"}); pass them
+                # on so the model can say what is missing instead of "permissions".
+                try:
+                    body = e.response.json()
+                except (ValueError, AttributeError):
+                    body = None
+                if isinstance(body, dict):
+                    if isinstance(body.get("detail"), str) and body["detail"]:
+                        result["error"] = body["detail"]
+                    if isinstance(body.get("code"), str) and body["code"]:
+                        result["code"] = body["code"]
+                return result
             elif e.response.status_code == 404:
                 logger.error(f"Resource not found: {url}")
                 return {"error": "Resource not found", "status_code": 404}
