@@ -16,6 +16,28 @@ logger = logging.getLogger(__name__)
 
 NO_COMPANY_ERROR = {"error": "No company available. Please authenticate first."}
 
+EMAIL_NOT_CONFIRMED_ERROR = {
+    "error": "Email not confirmed",
+    "message": (
+        "Filing needs a confirmed email address. Call resend_email_confirmation and ask the user "
+        "to open the link in that email."
+    ),
+    "status_code": 403,
+}
+
+RESEND_TOO_SOON_ERROR = {
+    "error": "Link sent a moment ago",
+    "message": "A confirmation link was sent a moment ago. Ask the user to check their inbox and spam folder.",
+    "status_code": 429,
+}
+
+
+def _error_code(response: requests.Response) -> Optional[str]:
+    try:
+        return response.json().get("code")
+    except ValueError:
+        return None
+
 
 def reports_url(company_id: str, suffix: str = "") -> str:
     """The company-scoped tax reports route.
@@ -229,7 +251,8 @@ def register_tax_tools(mcp):
             
         Returns:
             Response from the submission request and a link to the tax report from reportFile to download.
-            If response status is 403, it means a paid subscription is required to file the report.
+            A 403 means either an unconfirmed email address (see resend_email_confirmation)
+            or that a paid subscription is required to file the report.
         """
         api = ctx.request_context.lifespan_context["api"]
         
@@ -243,11 +266,41 @@ def register_tax_tools(mcp):
             return _enrich_report_download_url(result, api=api, report_id=report_id, company_id=company_id)
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 403:
+                if _error_code(e.response) == "email_not_verified":
+                    return EMAIL_NOT_CONFIRMED_ERROR
                 return {
                     "error": "Subscription required",
                     "message": "Tax report submission is unavailable with the account's current entitlement.",
                     "status_code": 403
                 }
+            raise
+
+    @mcp.tool(
+        title="Resend Email Confirmation",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+    )
+    async def resend_email_confirmation(ctx: Context) -> Dict[str, Any]:
+        """
+        Mail a new confirmation link to the user's login email.
+
+        Filing tax reports and sending invoices need a confirmed email address; a paid
+        plan confirms it without the mail. Ask the user to open the link in the email.
+
+        Returns:
+            verified: true when an address is already confirmed; then nothing is sent.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        url = urljoin(config.api_base_url, "api/v1/auth/resend-confirmation/")
+        try:
+            return api._make_request("POST", url)
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 429:
+                return RESEND_TOO_SOON_ERROR
             raise
 
     @mcp.tool(
