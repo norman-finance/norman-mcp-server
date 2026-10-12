@@ -41,6 +41,7 @@ from norman_mcp.tools.categories import register_category_tools
 from norman_mcp.tools.rules import register_rule_tools
 from norman_mcp.tools.workflows import register_workflow_tools
 from norman_mcp.tools.tax_advisor import register_tax_advisor_tools
+from norman_mcp.tools.advisor_comms import register_advisor_comms_tools
 from norman_mcp.tools.incorporation import register_incorporation_tools
 from norman_mcp.tools.gewerbe_registration import register_gewerbe_registration_tools
 from norman_mcp.tools.corporate_tax_registration import register_corporate_tax_registration_tools
@@ -451,6 +452,7 @@ def create_app(
     register_company_tools(server)
     register_category_tools(server)
     register_tax_advisor_tools(server)
+    register_advisor_comms_tools(server)
     register_incorporation_tools(server)
     register_gewerbe_registration_tools(server)
     register_corporate_tax_registration_tools(server)
