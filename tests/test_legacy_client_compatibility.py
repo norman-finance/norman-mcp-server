@@ -32,6 +32,9 @@ states the founding-year Kleinunternehmer limit. No argument changes.
 
 The October 6 duplicate change updates one description: duplicate_invoice says
 the copy keeps the bank details of the original; no argument changes.
+
+The October 11 filing reminders add one optional argument: update_company_details
+takes notify_tax_deadlines, the switch for the UStVA and ZM reminder emails.
 """
 
 import asyncio
