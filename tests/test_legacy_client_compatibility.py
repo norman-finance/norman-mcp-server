@@ -35,6 +35,9 @@ the copy keeps the bank details of the original; no argument changes.
 
 The October 11 filing reminders add one optional argument: update_company_details
 takes notify_tax_deadlines, the switch for the UStVA and ZM reminder emails.
+
+The October 12 email confirmation fix updates one description: submit_tax_report
+says a 403 can also mean an unconfirmed email address. No argument changes.
 """
 
 import asyncio

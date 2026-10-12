@@ -1,7 +1,7 @@
 ---
 name: tax-report
 description: Review and manage German tax reports including VAT (Umsatzsteuer), income tax prepayments, and Finanzamt submissions. Use when the user asks about taxes, Steuern, VAT, USt, Finanzamt, or tax filing.
-version: 1.0.0
+version: 1.0.1
 disable-model-invocation: true
 argument-hint: "[period or tax type]"
 metadata:
@@ -27,7 +27,7 @@ Help the user with their German tax obligations:
 
 4. **Preview before submission**: Call `generate_finanzamt_preview` to show the user exactly what will be sent to the Finanzamt. Let them review all figures.
 
-5. **Submit**: Only when the user explicitly confirms, call `submit_tax_report` to file with the Finanzamt via ELSTER.
+5. **Submit**: Only when the user explicitly confirms, call `submit_tax_report` to file with the Finanzamt via ELSTER. If it answers `Email not confirmed`, call `resend_email_confirmation` and ask the user to open the link in that email; a paid plan confirms the address without it.
 
 6. **Tax settings**: Call `list_tax_settings` to review VAT registration, filing frequency, and other tax configuration.
 
