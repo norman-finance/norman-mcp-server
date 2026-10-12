@@ -71,11 +71,13 @@ def custom_validate_url(url):
         return
     validate_issuer_url(url)
 
-import mcp.server.auth.routes
-mcp.server.auth.routes.validate_issuer_url = custom_validate_url
+# Imported under an alias: a bare `import mcp...` would bind the SDK package to
+# this module's `mcp`, the name of the default server instance (see __getattr__).
+from mcp.server.auth import routes as _auth_routes
+_auth_routes.validate_issuer_url = custom_validate_url
 
 # Patch to add "none" as supported token auth method (for public clients with PKCE)
-_original_build_metadata = mcp.server.auth.routes.build_metadata
+_original_build_metadata = _auth_routes.build_metadata
 def patched_build_metadata(*args, **kwargs):
     """Add 'none' to supported token auth methods for public clients."""
     metadata = _original_build_metadata(*args, **kwargs)
@@ -84,7 +86,7 @@ def patched_build_metadata(*args, **kwargs):
             "token_endpoint_auth_methods_supported": ["none", "client_secret_post", "client_secret_basic"]
         })
     return metadata
-mcp.server.auth.routes.build_metadata = patched_build_metadata
+_auth_routes.build_metadata = patched_build_metadata
 
 # Patch redirect-URI validation to an allow-list (Cursor, Inspector use random
 # loopback ports; ChatGPT/Claude use known HTTPS origins). This is the
@@ -283,15 +285,36 @@ async def lifespan(app):
     logger.info("Shutting down Norman MCP server")
 
 
-def create_app(host=None, port=None, public_url=None, transport="sse", streamable_http_options=None):
+DEFAULT_SERVER_NAME = "Norman Finance API"
+DEFAULT_INSTRUCTIONS = "Norman Finance MCP Server - Access your financial data"
+
+
+def create_app(
+    host=None,
+    port=None,
+    public_url=None,
+    transport="sse",
+    streamable_http_options=None,
+    *,
+    name=DEFAULT_SERVER_NAME,
+    instructions=DEFAULT_INSTRUCTIONS,
+    website_url=None,
+    icons=None,
+    tool_filter=None,
+):
     """Create and configure the MCP server.
-    
+
     Args:
         host: Host to bind to (default: 0.0.0.0)
         port: Port to bind to (default: 3001)
         public_url: Public URL for OAuth callbacks (must use localhost, not 0.0.0.0)
         transport: Transport - 'stdio', 'sse', or 'streamable-http'
         streamable_http_options: Options for streamable-http transport
+        name, instructions, website_url, icons: What clients show for the server.
+            A white-label connector (a tax advisory firm's own MCP) passes its own.
+        tool_filter: Optional predicate on a tool name; tools it rejects are
+            removed after registration, so a white-label connector can offer a
+            curated set on the same code.
     """
     host = host or os.environ.get("NORMAN_MCP_HOST", "0.0.0.0")
     port = port or int(os.environ.get("NORMAN_MCP_PORT", "3001"))
@@ -343,8 +366,10 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
     live_bus = InMemorySubscriptionBus() if live_enabled else None
 
     server = MCPServer(
-        "Norman Finance API", 
-        instructions="Norman Finance MCP Server - Access your financial data",
+        name,
+        instructions=instructions,
+        website_url=website_url,
+        icons=icons,
         lifespan=lifespan,
         auth_server_provider=oauth_provider,
         auth=auth_settings,
@@ -451,7 +476,18 @@ def create_app(host=None, port=None, public_url=None, transport="sse", streamabl
         server._event_service = EventService(SubscriptionStore(events_path, events_key), oauth_provider)
         register_events(server, server._event_service)
 
+    if tool_filter is not None:
+        prune_tools(server, tool_filter)
+
     return server
+
+
+def prune_tools(server: MCPServer, keep) -> list[str]:
+    """Remove every registered tool whose name `keep` rejects; returns the removed names."""
+    removed = [tool_name for tool_name in list(server._tool_manager._tools) if not keep(tool_name)]
+    for tool_name in removed:
+        server.remove_tool(tool_name)
+    return removed
 
 
 def create_cors_app(server: MCPServer):
@@ -475,8 +511,19 @@ def create_cors_app(server: MCPServer):
     return cors_app
 
 
-# Create default server instance
-mcp = create_app(transport="streamable-http" if os.environ.get("NORMAN_MCP_EVENTS_DB") else "sse")
+def __getattr__(attribute):
+    """Build the default server instance on first use of `norman_mcp.server.mcp`.
+
+    Importing this module applies the OAuth hardening patches above. A connector
+    that builds its own server with create_app (a white-label MCP) imports it for
+    those patches, and would otherwise also construct this unused default server,
+    OAuth provider and state file included.
+    """
+    if attribute != "mcp":
+        raise AttributeError(f"module {__name__!r} has no attribute {attribute!r}")
+    server = create_app(transport="streamable-http" if os.environ.get("NORMAN_MCP_EVENTS_DB") else "sse")
+    globals()["mcp"] = server
+    return server
 
 if __name__ == "__main__":
     from norman_mcp.cli import main
