@@ -35,6 +35,9 @@ Ledger default for SMEs. Only trigger_datev_export metadata is updated.
 
 The October 6 duplicate change updates one description: duplicate_invoice says
 the copy keeps the bank details of the original; no argument changes.
+
+The October 11 filing reminders add one optional argument: update_company_details
+takes notify_tax_deadlines, the switch for the UStVA and ZM reminder emails.
 """
 
 import asyncio
