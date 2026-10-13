@@ -169,10 +169,12 @@ def test_invoice_link_discloses_default_transaction_item_replacement() -> None:
     tool = tools["link_transaction"]
 
     assert _annotation_tuple(tool) == DESTRUCTIVE_WRITE
-    assert "finalize it and mark the invoice paid" in tool.description
+    assert "finalize the transaction" in tool.description
+    assert "takes that booking over" in tool.description
     assert "invoice lines replace" in tool.description
     assert "empty items list skips only item replacement" in tool.description
     assert "items" not in tool.input_schema.get("required", [])
+    assert "amount" not in tool.input_schema.get("required", [])
     assert _annotation_tuple(tools["get_invoice"]) == READ_ONLY
 
 

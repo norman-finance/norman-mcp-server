@@ -782,22 +782,30 @@ def register_invoice_tools(mcp):
         invoice_id: str,
         transaction_id: str,
         items: list[TransactionInvoiceItem] | None = None,
+        amount: float | None = None,
     ) -> Dict[str, Any]:
         """
-        Link a transaction to an invoice, finalize it and mark the invoice paid.
+        Pay an invoice with a transaction and finalize the transaction.
 
-        This replaces any previous attachment link and updates transaction
-        classification from the invoice. By default, invoice lines replace the
-        transaction's existing items; nonempty items replace them with the
-        supplied lines instead. An empty items list skips only item replacement.
-        
+        German companies: an invoice is booked when it is issued. A transaction
+        that pays the whole open amount takes that booking over: it gets the
+        invoice's lines and the invoice turns paid. A smaller `amount` pays part
+        of the invoice and the rest stays open; one transaction can pay several
+        invoices this way. The response's `payments` lists what is paid and open.
+
+        Other companies: invoice lines replace the transaction's items and the
+        invoice turns paid; nonempty items replace them with the supplied lines
+        instead. An empty items list skips only item replacement.
+
         Args:
             invoice_id: ID of the invoice
-            transaction_id: ID of the transaction to link
-            items: Optional lines/categories for the transaction. An empty list skips item sync.
-            
+            transaction_id: ID of the transaction that pays it
+            items: Other companies only: lines/categories for the transaction. An empty list skips item sync.
+            amount: German companies only: what this transaction pays of the invoice, in EUR.
+                Omit it to pay what is open, at most the transaction's amount.
+
         Returns:
-            Response from the link transaction request
+            The invoice, with its payments and open amount
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -816,6 +824,8 @@ def register_invoice_tools(mcp):
         
         if items is not None:
             link_data["items"] = [TransactionInvoiceItem.model_validate(item).payload() for item in items]
+        if amount is not None:
+            link_data["amount"] = f"{amount:.2f}"
 
         return api._make_request("POST", link_url, json_data=link_data)
 
