@@ -791,7 +791,9 @@ def register_invoice_tools(mcp):
         that pays the whole open amount takes that booking over: it gets the
         invoice's lines and the invoice turns paid. A smaller `amount` pays part
         of the invoice and the rest stays open; one transaction can pay several
-        invoices this way. The response's `payments` lists what is paid and open.
+        invoices this way. A larger `amount` is capped at what is still open and at
+        what the transaction has left; the transaction keeps its rest for another
+        invoice or a category. The response's `payments` lists what is paid and open.
 
         Other companies: invoice lines replace the transaction's items and the
         invoice turns paid; nonempty items replace them with the supplied lines
@@ -828,6 +830,57 @@ def register_invoice_tools(mcp):
             link_data["amount"] = f"{amount:.2f}"
 
         return api._make_request("POST", link_url, json_data=link_data)
+
+    @mcp.tool(
+        title="Record Invoice Payment",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
+    async def record_invoice_payment(
+        ctx: Context,
+        invoice_id: str,
+        paid_on: str,
+        method: str,
+        amount: float | None = None,
+    ) -> Dict[str, Any]:
+        """
+        Record a payment that is not in the bank feed (cash, card, PayPal or a bank
+        account Norman does not see) and let it pay the invoice, in one step: if the
+        invoice cannot take it, no payment is saved.
+
+        German companies: `amount` is what the client paid, in EUR, capped at what is
+        still open; omit it to pay all that is open. Other companies: the invoice is
+        paid in full, in its currency. To pay with a transaction that is already in
+        Norman, use link_transaction.
+
+        Args:
+            invoice_id: ID of the invoice
+            paid_on: When the client paid, YYYY-MM-DD. A future date counts as today.
+            method: BANK, CASH, CREDIT_CARD or PAYPAL
+            amount: German companies only: what the client paid, in EUR.
+
+        Returns:
+            The invoice, with its payments and open amount
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        record_url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/invoices/{invoice_id}/record-payment/",
+        )
+        record_data = {"paid_on": paid_on, "method": method}
+        if amount is not None:
+            record_data["amount"] = f"{amount:.2f}"
+
+        return api._make_request("POST", record_url, json_data=record_data)
 
     @mcp.tool(
         title="Get E-Invoice XML",

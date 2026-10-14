@@ -42,6 +42,10 @@ says a 403 can also mean an unconfirmed email address. No argument changes.
 The October 13 invoice bookings add one optional argument: link_transaction takes
 amount, what a transaction pays of a German invoice; its description explains the
 booking a payment takes over and part payments.
+
+The October 14 amount caps update one description: link_transaction says a larger
+amount is capped at what is still open and what the transaction has left. No
+argument changes. The new record_invoice_payment tool needs no oracle entry.
 """
 
 import asyncio
