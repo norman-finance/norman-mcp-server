@@ -38,6 +38,10 @@ takes notify_tax_deadlines, the switch for the UStVA and ZM reminder emails.
 
 The October 12 email confirmation fix updates one description: submit_tax_report
 says a 403 can also mean an unconfirmed email address. No argument changes.
+
+The October 13 invoice bookings add one optional argument: link_transaction takes
+amount, what a transaction pays of a German invoice; its description explains the
+booking a payment takes over and part payments.
 """
 
 import asyncio
