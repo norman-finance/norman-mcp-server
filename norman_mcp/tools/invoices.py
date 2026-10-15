@@ -108,8 +108,10 @@ def register_invoice_tools(mcp):
         currency_exchanged: str | None = None,
         full_cost_origin_exchanged: float | None = None,
         tax_exempt_reason: str | None = None,
+        vat_exemption_basis: str | None = None,
         preceding_invoice_number: str | None = None,
         preceding_invoice_date: str | None = None,
+        correction_reason: str | None = None,
         instructions: str | None = None,
         message: str | None = None,
         company_email: str | None = None,
@@ -144,9 +146,13 @@ def register_invoice_tools(mcp):
             currency_exchanged: Reporting currency code.
             full_cost_origin_exchanged: Total in reporting currency in major units; omit for automatic conversion.
             tax_exempt_reason: VAT note; omit for automatic text, or use an empty string to print no note.
+            vat_exemption_basis: Polish companies only: the legal basis of a VAT exemption, art_113_1,
+                art_113_9 or art_43_1_<point>[_<letter>].
             preceding_invoice_number: For a cancel or credit_note made from scratch, the number of
                 the invoice it refers to when that invoice was issued outside Norman.
             preceding_invoice_date: That invoice's date (YYYY-MM-DD).
+            correction_reason: For a cancel or credit_note: why it is issued. A Polish correction sent
+                to KSeF states it.
             instructions: Invoice instructions.
             message: Invoice message.
             company_email: Sender email; omit to use the company email.
@@ -273,8 +279,10 @@ def register_invoice_tools(mcp):
             currency_exchanged=currency_exchanged,
             full_cost_origin_exchanged=full_cost_origin_exchanged,
             tax_exempt_reason=tax_exempt_reason,
+            vat_exemption_basis=vat_exemption_basis,
             preceding_invoice_number=preceding_invoice_number,
             preceding_invoice_date=preceding_invoice_date,
+            correction_reason=correction_reason,
             instructions=instructions,
             message=message,
             company_email=company_email,
@@ -372,6 +380,7 @@ def register_invoice_tools(mcp):
         document_design: DocumentDesign | None = None,
         discount_percents: int | None = None,
         tax_exempt_reason: str | None = None,
+        vat_exemption_basis: str | None = None,
         instructions: str | None = None,
         message: str | None = None,
         company_email: str | None = None,
@@ -430,6 +439,8 @@ def register_invoice_tools(mcp):
             document_design: Template and appearance settings; omit to inherit the company design.
             discount_percents: Overall discount percentage
             tax_exempt_reason: VAT note; omit to derive it per invoice, empty string for none.
+            vat_exemption_basis: Polish companies only: the legal basis of a VAT exemption, art_113_1,
+                art_113_9 or art_43_1_<point>[_<letter>].
             instructions: Invoice instructions
             message: Invoice message
             company_email: Sender email; omit to use the company email.
@@ -474,6 +485,7 @@ def register_invoice_tools(mcp):
             document_design=document_design,
             discount_percents=discount_percents,
             tax_exempt_reason=tax_exempt_reason,
+            vat_exemption_basis=vat_exemption_basis,
             instructions=instructions,
             message=message,
             company_email=company_email,

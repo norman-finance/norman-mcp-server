@@ -46,6 +46,12 @@ booking a payment takes over and part payments.
 The October 14 amount caps update one description: link_transaction says a larger
 amount is capped at what is still open and what the transaction has left. No
 argument changes. The new record_invoice_payment tool needs no oracle entry.
+
+The October 15 invoice fields add optional arguments to six tools: create_invoice,
+update_invoice, create_recurring_invoice and update_recurring_invoice take
+vat_exemption_basis, the legal basis of a Polish VAT exemption; create_invoice,
+update_invoice, cancel_invoice and create_credit_note take correction_reason, why a
+correction is issued. No existing argument changes.
 """
 
 import asyncio

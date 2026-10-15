@@ -5,6 +5,7 @@ from typing import Literal
 from urllib.parse import quote, urljoin
 
 from mcp.types import ToolAnnotations
+from pydantic.alias_generators import to_camel
 
 from norman_mcp import config
 from mcp.server.mcpserver.exceptions import ToolError
@@ -35,26 +36,11 @@ def _company_api(ctx: Context):
     return api, urljoin(config.api_base_url, f"api/v1/companies/{quote(str(api.company_id), safe='')}/")
 
 
-def _derivation_payload(
-    *,
-    status: str | None = None,
-    items: list[InvoiceItem] | None = None,
-    issued: str | None = None,
-    message: str | None = None,
-    delivery_date: str | None = None,
-) -> dict:
+def _derivation_payload(*, items: list[InvoiceItem] | None = None, **choices: str | None) -> dict:
     """Only what the caller decided; the API copies everything else from the source document."""
-    payload: dict = {}
-    if status is not None:
-        payload["status"] = status
+    payload = {to_camel(key): value for key, value in choices.items() if value is not None}
     if items is not None:
         payload["invoicedItems"] = item_payloads(items)
-    if issued is not None:
-        payload["issued"] = issued
-    if message is not None:
-        payload["message"] = message
-    if delivery_date is not None:
-        payload["deliveryDate"] = delivery_date
     return payload
 
 
@@ -268,6 +254,7 @@ def register_invoice_management_tools(mcp, enrich=None):
         invoice_id: str,
         issued: str | None = None,
         message: str | None = None,
+        correction_reason: str | None = None,
     ) -> dict:
         """Reverse an issued invoice with a cancellation invoice (Stornorechnung).
 
@@ -278,17 +265,24 @@ def register_invoice_management_tools(mcp, enrich=None):
         To correct part of an invoice use create_credit_note instead. Edit a
         draft directly. issued (YYYY-MM-DD) defaults to today. The amounts stay
         positive, like the invoice's; the PDF prints every amount with a minus.
+        correction_reason says why; a Polish cancellation sent to KSeF states it.
         """
-        return await _derive(ctx, invoice_id, "cancel", _derivation_payload(issued=issued, message=message))
+        return await _derive(
+            ctx,
+            invoice_id,
+            "cancel",
+            _derivation_payload(issued=issued, message=message, correction_reason=correction_reason),
+        )
 
     @mcp.tool(title="Create Credit Note", annotations=EDIT)
-    async def create_credit_note(
+    async def create_credit_note(  # noqa: PLR0913
         ctx: Context,
         invoice_id: str,
         items: list[InvoiceItem] | None = None,
         status: Literal["draft", "saved"] = "saved",
         issued: str | None = None,
         message: str | None = None,
+        correction_reason: str | None = None,
     ) -> dict:
         """Credit part or all of an issued invoice with a credit note (Rechnungskorrektur).
 
@@ -298,12 +292,15 @@ def register_invoice_management_tools(mcp, enrich=None):
         itself stays in force. The credit note refers to the invoice on the PDF
         and in the e-invoice XML. status "draft" leaves it editable; "saved"
         issues it at once. issued (YYYY-MM-DD) defaults to today.
+        correction_reason says why; a Polish credit note sent to KSeF states it.
         """
         return await _derive(
             ctx,
             invoice_id,
             "credit-note",
-            _derivation_payload(status=status, items=items, issued=issued, message=message),
+            _derivation_payload(
+                status=status, items=items, issued=issued, message=message, correction_reason=correction_reason,
+            ),
         )
 
     @mcp.tool(title="Create Delivery Note", annotations=EDIT)
