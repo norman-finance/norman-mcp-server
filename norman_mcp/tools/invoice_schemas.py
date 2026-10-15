@@ -159,6 +159,11 @@ class DocumentFields(ApiInput):
     tax_exempt_reason: str | None = Field(
         default=None, max_length=500, description="Omit to derive the VAT note; an empty string prints no note.",
     )
+    vat_exemption_basis: str | None = Field(
+        default=None, max_length=32,
+        description="Polish companies: the legal basis of a VAT exemption, art_113_1, art_113_9 or "
+        "art_43_1_<point>[_<letter>]. Other companies' invoices ignore it.",
+    )
     online_payment_enabled: bool | None = Field(
         default=None, description="Stripe/PayPal payment link; false explicitly disables it.",
     )
@@ -188,6 +193,10 @@ class InvoiceChanges(DocumentFields):
         description="A cancel or credit_note made from scratch: the invoice it refers to, issued outside Norman.",
     )
     preceding_invoice_date: str | None = Field(default=None, description="That invoice's date, YYYY-MM-DD.")
+    correction_reason: str | None = Field(
+        default=None, max_length=256,
+        description="A cancel or credit_note: why it is issued. A Polish correction sent to KSeF states it.",
+    )
     reminders_paused: bool | None = Field(
         default=None, description="Pause the automatic payment reminders of this invoice; false resumes them.",
     )
@@ -210,6 +219,11 @@ class RecurringChanges(ApiInput):
     message: str | None = None
     tax_exempt_reason: str | None = Field(
         default=None, max_length=500, description="Explicit null derives the VAT note per invoice; empty prints none.",
+    )
+    vat_exemption_basis: str | None = Field(
+        default=None, max_length=32,
+        description="Polish companies: the legal basis of a VAT exemption, art_113_1, art_113_9 or "
+        "art_43_1_<point>[_<letter>]. Other companies' invoices ignore it.",
     )
     company_email: str | None = None
     create_qr: bool | None = None
