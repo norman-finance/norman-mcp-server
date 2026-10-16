@@ -4,7 +4,7 @@
    </a>
    <h1>Norman MCP Server</h1>
    <p>AI-powered bookkeeping, accounting, and taxes for European businesses, inside your AI assistant.<br/>
-   Norman connects invoicing, transactions, receipts, ledgers, reports, taxes, and company workflows to any MCP-compatible AI.</p>
+   Norman connects invoicing, transactions, receipts, ledgers, DATEV exports, reports, taxes, and company workflows to any MCP-compatible AI.</p>
    <br/>
    <p>
       <img src="https://img.shields.io/badge/Protocol-MCP-black?style=flat-square" alt="MCP" />
@@ -34,6 +34,8 @@
 **Client emails and reminders** — Send invoices with the company's own email wording and CC recipients, see their delivery status, switch automatic payment reminders on for an invoice, and set the reminder rule (days and dunning fees per level)
 
 **Bookkeeping** — Categorize transactions, match receipts, and verify entries
+
+**DATEV** — Generate DATEV EXTF exports with SKR03 or SKR04 for your Steuerberater. [DATEV support](#datev-mcp-support-extf-skr03-and-skr04) also covers the upcoming complete Ledger export, EXTF reader, and checks before accountant handoff.
 
 **Automation rules** — "Always book Telekom to Internet costs": preview, create, and manage rules that categorize matching transactions automatically
 
@@ -95,6 +97,41 @@ Use `cancel_invoice`, `create_credit_note` and `create_delivery_note` for docume
 `send_invoice` and `send_invoice_overdue_reminder` use the company's email template when `subject` and `body` are left out; `additional_emails` go out as CC, and the company's own copy follows its setting unless `is_send_to_company` is given. `list_invoice_emails` returns every email about a document with its delivery status and the reminder the rule sends next. A send that fails at once returns an error with the reason; otherwise `email.status` is `sent`, or `queued` while Norman retries. A dunning fee is shown in the reminder with the total and is paid by bank transfer: a reminder with a fee has no online payment button.
 
 Automatic reminders are off until `autoReminders` is true on the invoice (`create_invoice`, `create_recurring_invoice`, or `update_invoice`, also after the invoice was issued); `remindersPaused` stops them for one invoice and `skip_invoice_reminder` stops one planned reminder. `remindersActive` on an invoice says whether Norman reminds by itself right now. The company's rule and wording live in `get_invoice_email_settings` / `update_invoice_email_settings` and `list_invoice_email_templates` / `save_invoice_email_template` / `reset_invoice_email_template`. `settings_on_overdue` is kept for older integrations and sends nothing. These tools need the invoice email endpoints of the API to be live before this MCP version is deployed.
+
+### DATEV MCP support: EXTF, SKR03 and SKR04
+
+**Does Norman MCP support DATEV exports?**
+
+Yes. Norman MCP Server provides DATEV EXTF (Buchungsstapel) exports for German
+bookkeeping with SKR03 and SKR04. Ask your MCP-compatible AI assistant to prepare
+a DATEV export for a period, then download the file to share with your tax advisor
+(Steuerberater). Attached receipts can be included in a ZIP package.
+
+**Can I read an EXTF file without importing it into my books?**
+
+The upcoming `read_datev_file` tool reads EXTF/DTVF Buchungsstapel files, shows
+their header and booking rows, and filters by account, document date, text or
+amount. It requires an authenticated Norman company, but no DATEV connection or
+chart setup. Reading the file does not create transactions or Ledger postings.
+
+**Can I export the full GmbH/UG Ledger and check it before accountant handoff?**
+
+The upcoming Ledger export includes opening balances, manual entries, payroll,
+depreciation and closing postings. `validate_ledger_datev_export` checks the EXTF
+structure, source coverage and requested documents. Findings help prepare the
+handoff; they do not certify tax correctness or guarantee DATEV import acceptance.
+
+Complete Ledger export, preflight and standalone file reading are pending release
+in [MCP PR #188](https://github.com/norman-finance/norman-mcp-server/pull/188), with
+[API PR #3580](https://github.com/norman-finance/norman-finance-api/pull/3580) required
+first. See [DATEV tool details](#datev-files-and-complete-ledger-exports) for limits
+and setup.
+
+Example requests for these workflows:
+
+- *"Prepare a DATEV export for my Steuerberater for last quarter."*
+- *"Read this EXTF file and show postings involving account 1800."*
+- *"Check the full GmbH Ledger export before I give it to my accountant."*
 
 ### 💬 Try asking
 
@@ -593,3 +630,32 @@ endpoints; redirects are not followed. Each callback, verification included, has
 Host support, plugin submission and production activation need separate
 verification. Local protocol and browser fixtures do not establish ChatGPT
 catalog availability or a successful production OAuth/webhook connection.
+
+### DATEV files and complete Ledger exports
+
+`trigger_datev_export` defaults to the complete Ledger for GmbH/UG (`isSme`),
+including opening, manual, payroll, depreciation and closing entries. Other
+companies retain the finalized-transactions export. Use `source="transactions"`
+only for an explicitly requested transactions-only export. A Ledger failure never
+falls back to that narrower export. The API checks the journal before returning
+an expiring download link and includes its validation findings in the response.
+With `include_documents=true`, the ZIP contains the journal, account reports and
+available linked documents; unreadable attached documents block the package.
+
+- `validate_ledger_datev_export`: preview structure, source coverage and documents
+  for a period without saving company settings, creating a download or sending it.
+- `read_datev_file`: inspect an uploaded EXTF/DTVF **Buchungsstapel** without
+  importing it. Obtain a `file_ref` through `request_file_upload` or `POST /files/upload`, then
+  filter by account, document date, text or minimum amount. Reuse that reference
+  for subsequent pages (up to 100 rows/page) until its normal upload expiry.
+  No DATEV connection or chart setup is needed; an authenticated Norman company
+  is required. CSV/TXT/EXTF uploads are limited to 20 MB / 100,000 rows; extract
+  the booking CSV from a ZIP before uploading.
+
+The reader preserves tax keys and Generalumkehr markers. Its totals are source-row
+amounts grouped by currency, **not** tax-expanded account balances or open items.
+Structural checks do not certify tax correctness or acceptance by DATEV. Nothing
+in these tools emails an accountant or pushes an export to DATEV.
+
+The API release providing Ledger `responseFormat`/`validateOnly` and
+`/companies/{id}/accounting/datev/read/` must be deployed before this MCP release.
