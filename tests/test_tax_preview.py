@@ -9,7 +9,8 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import ImageContent, TextContent
 
 from norman_mcp.tools.taxes import register_tax_tools
-from tests.mcp_harness import FakeApi, call_tool
+from tests.mcp_harness import GermanApi as FakeApi
+from tests.mcp_harness import call_tool
 
 
 @pytest.mark.parametrize(

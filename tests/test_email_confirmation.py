@@ -9,7 +9,8 @@ import json
 import pytest
 import requests
 
-from tests.mcp_harness import FakeApi, call_tool, structured
+from tests.mcp_harness import GermanApi as FakeApi
+from tests.mcp_harness import call_tool, structured
 
 
 def _forbidden(code: str):  # noqa: ANN202

@@ -23,21 +23,21 @@ SCOPED = "/api/v1/companies/company-1/taxes/reports/"
     ],
 )
 def test_report_tools_use_the_company_scoped_route(tool, arguments, method, suffix):  # noqa: ANN001
-    api = FakeApi({"pk": "report-1", "status": "NOT_COMPLETED"})
+    api = FakeApi({"country": "DE", "pk": "report-1", "status": "NOT_COMPLETED"})
 
     structured(call_tool(tool, arguments, api))
 
-    assert api.requests[0][0] == method
-    assert api.requests[0][1].endswith(SCOPED + suffix)
+    assert api.requests[-1][0] == method
+    assert api.requests[-1][1].endswith(SCOPED + suffix)
 
 
 def test_preview_uses_the_company_scoped_route():
-    api = FakeApi({"downloadUrl": "https://api.norman.finance/api/v1/dl/preview/", "mimeType": "image/jpeg"})
+    api = FakeApi({"country": "DE", "downloadUrl": "https://api.norman.finance/api/v1/dl/preview/", "mimeType": "image/jpeg"})
 
     call_tool("generate_finanzamt_preview", {"report_id": "report-1"}, api)
 
-    assert api.requests[0][0] == "POST"
-    assert api.requests[0][1].endswith(SCOPED + "report-1/generate-preview-url/")
+    assert api.requests[-1][0] == "POST"
+    assert api.requests[-1][1].endswith(SCOPED + "report-1/generate-preview-url/")
 
 
 def test_a_filed_report_links_its_pdf_through_the_scoped_route():

@@ -70,6 +70,11 @@ class InvoiceItem(ApiInput):
         | None
     ) = None
     is_split_payment: bool | None = None
+    vat_code: Literal["", "23", "8", "5", "0", "zw", "np", "oo"] | None = Field(
+        default=None,
+        description="Polish companies only: 23, 8, 5 or 0 (equal to vat_rate), or zw (exempt), np (outside Poland) "
+        "or oo (reverse charge) with vat_rate 0. Omit to derive the code from vat_rate and the buyer.",
+    )
     discount_note: str | None = Field(default=None, max_length=500, description="Deprecated alias; use description.")
     total: float | None = Field(
         default=None, exclude=True, description="Legacy input, ignored. The API calculates totals.",

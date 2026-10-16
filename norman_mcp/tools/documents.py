@@ -576,10 +576,10 @@ def register_document_tools(mcp):
         amount_exchanged: Optional[float] = Field(default=None, description="Exchanged amount in different currency"),
         attachment_number: Optional[str] = Field(default=None, description="Unique number for attachment"),
         brand_name: Optional[str] = Field(default=None, description="Brand name associated with attachment"),
-        currency: str = "EUR",
-        currency_exchanged: str = "EUR",
+        currency: Optional[str] = Field(default=None, description="ISO currency printed on the document; omit if unknown so OCR can determine it"),
+        currency_exchanged: Optional[str] = Field(default=None, description="Company accounting currency for exchanged amounts, e.g. PLN for Poland; omit if unknown"),
         description: Optional[str] = Field(default=None, description="Description of attachment"),
-        supplier_country: Optional[str] = Field(default=None, description="Country of supplier (DE, INSIDE_EU, OUTSIDE_EU)"),
+        supplier_country: Optional[str] = Field(default=None, description="Country of supplier (DE, PL, INSIDE_EU, OUTSIDE_EU)"),
         value_date: Optional[str] = Field(default=None, description="Date of value"),
         vat_sum_amount: Optional[float] = Field(default=None, description="VAT sum amount"),
         vat_sum_amount_exchanged: Optional[float] = Field(default=None, description="Exchanged VAT sum amount"),
@@ -597,10 +597,10 @@ def register_document_tools(mcp):
             amount_exchanged: Exchanged amount in different currency
             attachment_number: Unique number for attachment
             brand_name: Brand name associated with attachment
-            currency: Currency of amount (default EUR)
-            currency_exchanged: Exchanged currency (default EUR)
+            currency: Currency printed on the document; omitted when unknown
+            currency_exchanged: Company accounting currency for exchanged amounts; omitted when unknown
             description: Description of attachment
-            supplier_country: Country of supplier (DE, INSIDE_EU, OUTSIDE_EU)
+            supplier_country: Country of supplier (DE, PL, INSIDE_EU, OUTSIDE_EU)
             value_date: Date of value
             vat_sum_amount: VAT sum amount
             vat_sum_amount_exchanged: Exchanged VAT sum amount
@@ -636,8 +636,8 @@ def register_document_tools(mcp):
         if attachment_type and attachment_type not in ["invoice", "receipt", "contract", "other"]:
             return {"error": "attachment_type must be one of: invoice, receipt, contract, other"}
 
-        if supplier_country and supplier_country not in ["DE", "INSIDE_EU", "OUTSIDE_EU"]:
-            return {"error": "supplier_country must be one of: DE, INSIDE_EU, OUTSIDE_EU"}
+        if supplier_country and supplier_country not in ["DE", "PL", "INSIDE_EU", "OUTSIDE_EU"]:
+            return {"error": "supplier_country must be one of: DE, PL, INSIDE_EU, OUTSIDE_EU"}
 
         if sale_type and sale_type not in ["GOODS", "SERVICES"]:
             return {"error": "sale_type must be one of: GOODS, SERVICES"}

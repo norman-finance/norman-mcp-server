@@ -28,13 +28,32 @@ class FakeApi:
         self.requests: List[Tuple[str, str, Dict[str, Any]]] = []
         self._respond = respond if callable(respond) else (lambda *_: respond)
 
-    def _make_request(self, method: str, url: str, params=None, json_data=None, files=None):  # noqa: ANN001
+    def _make_request(self, method: str, url: str, params=None, json_data=None, files=None, company_id=None):  # noqa: ANN001
         kwargs = {"params": params, "json_data": json_data, "files": files}
+        if company_id is not None:
+            kwargs["company_id"] = company_id
         self.requests.append((method, url, kwargs))
         return self._respond(method, url, kwargs)
 
-    async def arequest(self, method: str, url: str, params=None, json_data=None, files=None):  # noqa: ANN001
-        return self._make_request(method, url, params=params, json_data=json_data, files=files)
+    async def arequest(self, method: str, url: str, params=None, json_data=None, files=None, company_id=None):  # noqa: ANN001
+        return self._make_request(method, url, params=params, json_data=json_data, files=files, company_id=company_id)
+
+
+class GermanApi(FakeApi):
+    """A German company plus a separate fixture for the domain endpoint.
+
+    Country preflights are recorded separately so payroll/filing tests can keep
+    asserting the domain calls and mutations independently of the applicability read.
+    """
+    def __init__(self, respond=None, company_id="company-1"):
+        super().__init__(respond, company_id)
+        self.company_checks = []
+
+    def _make_request(self, method, url, **kwargs):
+        if method == "GET" and url.endswith(f"/companies/{self.company_id}/"):
+            self.company_checks.append((method, url, kwargs))
+            return {"publicId": self.company_id, "country": "DE", "isSme": True}
+        return super()._make_request(method, url, **kwargs)
 
 
 def _in_request(api: Any, request: Any) -> Any:

@@ -164,13 +164,13 @@ def register_company_tools(mcp):
         city: Optional[str] = None,
         country: Optional[str] = None,
         vat_id: Optional[str] = None,
-        tax_id: Optional[str] = Field(default=None, description="Business Steuernummer for the company, not a personal 11-digit Steuer-ID/IdNr; enter personal identifiers only in Norman's authenticated forms."),
+        tax_id: Optional[str] = Field(default=None, description="Business tax number: German Steuernummer or Polish NIP. Enter personal identifiers only in authenticated forms."),
         phone: Optional[str] = None,
         tax_state: Optional[str] = None,
         activity_start: Optional[date] = Field(default=None, description="Business activity start date (YYYY-MM-DD)"),
-        chart_of_accounts: Optional[str] = Field(default=None, description="Chart of accounts template code: 'skr03' or 'skr04'. Only for SME companies."),
-        datev_advisor_number: Optional[str] = Field(default=None, description="DATEV tax advisor number"),
-        datev_client_number: Optional[str] = Field(default=None, description="DATEV client/Mandant number"),
+        chart_of_accounts: Optional[str] = Field(default=None, description="Country-supported chart template from list_coa_templates: SKR03/SKR04 or PL_KPIR/PL_FULL."),
+        datev_advisor_number: Optional[str] = Field(default=None, description="German companies only: DATEV tax advisor number"),
+        datev_client_number: Optional[str] = Field(default=None, description="German companies only: DATEV client/Mandant number"),
         notify_tax_deadlines: Optional[bool] = Field(
             default=None,
             description="Email reminders a week before and on the due date of each UStVA and ZM. False turns them off.",
@@ -178,7 +178,7 @@ def register_company_tools(mcp):
     ) -> Dict[str, Any]:
         """Update company information.
 
-        For SME companies you can also set chart_of_accounts, DATEV advisor/client numbers.
+        Use a chart_of_accounts template supported by the company country. DATEV advisor/client numbers are German-only.
         notify_tax_deadlines switches the UStVA and ZM deadline reminder emails on or off.
         """
         api = ctx.request_context.lifespan_context["api"]
@@ -257,8 +257,8 @@ def register_company_tools(mcp):
         ),
     ) -> Dict[str, Any]:
         """
-        List SME company categories from the DATEV chart of accounts (SKR03/SKR04).
-        These categories are specific to the company and are used for GmbH/UG bookkeeping.
+        List categories from the selected company chart (SKR03/SKR04, PL_KPIR or PL_FULL).
+        Use these company-specific IDs whenever usesCompanyChart or isSme is true.
         Each category has a code (e.g. '4200'), name, cashflow type, and sourceTemplate —
         the chart of accounts it was provisioned from ('' for hand-made ones). A company
         showing both SKR03 and SKR04 accounts can be cleaned up with
@@ -297,7 +297,7 @@ def register_company_tools(mcp):
         ),
     )
     async def list_coa_templates(ctx: Context) -> Dict[str, Any]:
-        """List available Chart of Accounts templates (e.g. SKR03, SKR04) that can be assigned to an SME company."""
+        """List available Chart of Accounts templates (e.g. SKR03, SKR04, PL_KPIR, PL_FULL) supported for the selected company."""
         api = ctx.request_context.lifespan_context["api"]
         
         templates_url = urljoin(

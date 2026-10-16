@@ -269,7 +269,7 @@ def register_tax_advisor_tools(mcp):
 
         tax_settings_url = urljoin(config.api_base_url, "api/v1/taxes/tax-settings/")
         try:
-            result["taxSettings"] = api._make_request("GET", tax_settings_url)
+            result["taxSettings"] = api._make_request("GET", tax_settings_url, company_id=company_id)
         except Exception as e:
             result["taxSettings"] = {"error": str(e)}
 
