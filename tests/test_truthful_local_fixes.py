@@ -99,6 +99,7 @@ def test_datev_export_asks_for_a_download_link_and_reads_the_chart_code():
         if method == "GET":
             # The company serializer renders the chart as an object.
             return {
+                "country": "DE",
                 "datevAdvisorNumber": "1234",
                 "datevClientNumber": "5678",
                 "chartOfAccounts": {"publicId": "c-1", "name": "SKR03", "code": "skr03"},

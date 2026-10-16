@@ -1,3 +1,4 @@
+from norman_mcp.bookkeeping_context import company_bookkeeping_context
 from norman_mcp.context import Context, get_api_client
 from typing import Dict, Any, List
 from urllib.parse import urljoin
@@ -10,10 +11,12 @@ def register_resources(mcp):
     
     @mcp.resource("company://current")
     async def get_company() -> str:
-        """Get details about the current company including SME status and Chart of Accounts."""
+        """Get the selected company country, accounting currency, legal form and chart of accounts."""
         api = get_api_client()
 
         company_id = api.company_id
+        if not company_id:
+            return "No company selected."
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
         
         try:
@@ -23,40 +26,7 @@ def register_resources(mcp):
             if not isinstance(company_data, dict) or company_data.get("error"):
                 return f"Error getting company details: {company_data}"
 
-            is_sme = company_data.get('isSme', False)
-            account_type = company_data.get('accountType', 'N/A')
-            coa = company_data.get('chartOfAccounts')
-            coa_info = f"{coa['name']} ({coa['code'].upper()})" if coa else "None"
-            
-            company_info = (
-                f"# {company_data.get('name', 'Unknown Company')}\n\n"
-                f"**Account Type**: {account_type}\n"
-                f"**Is SME (GmbH/UG)**: {'Yes' if is_sme else 'No'}\n"
-                f"**Chart of Accounts**: {coa_info}\n"
-                f"**Activity Start**: {company_data.get('activityStart', 'N/A')}\n"
-                f"**VAT ID**: {company_data.get('vatNumber', 'N/A')}\n"
-                f"**Tax ID**: {company_data.get('taxNumber', 'N/A')}\n"
-                f"**Tax State**: {company_data.get('taxState', 'N/A')}\n"
-                f"**Profession**: {company_data.get('profession', 'N/A')}\n"
-                f"**DATEV Advisor Number**: {company_data.get('datevAdvisorNumber', 'N/A')}\n"
-                f"**DATEV Client Number**: {company_data.get('datevClientNumber', 'N/A')}\n"
-                f"**Address**: {company_data.get('address', '')} "
-                f"{company_data.get('zipCode', '')} "
-                f"{company_data.get('city', '')}, "
-                f"{company_data.get('countryName', '')}\n"
-            )
-
-            if is_sme:
-                company_info += (
-                    f"\n## SME Bookkeeping Info\n"
-                    f"This company uses **accrual-based accounting** (Soll-Versteuerung).\n"
-                    f"Tax obligations are based on the document/invoice date, not the payment date.\n"
-                    f"Categories come from the DATEV standard chart of accounts ({coa_info}).\n"
-                    f"Transactions support **payment date** and **payment type** fields.\n"
-                    f"DATEV export is available for sending data to the tax advisor.\n"
-                )
-            
-            return company_info
+            return company_bookkeeping_context(company_data)
         except Exception as e:
             return f"Error getting company details: {str(e)}"
 
@@ -230,10 +200,10 @@ def register_resources(mcp):
 
         company_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/")
         company = api._make_request("GET", company_url)
-        if not company.get("isSme"):
+        if company.get("country") != "DE" or not company.get("isSme"):
             return (
-                "SKR catalog search is only available for SME companies (GmbH/UG). "
-                "The current company is a freelance account."
+                "SKR catalog search requires a German SME (GmbH/UG). "
+                "Use company-categories://list for the selected company chart."
             )
 
         lookup_url = urljoin(
@@ -258,10 +228,10 @@ def register_resources(mcp):
 
     @mcp.resource("company-categories://list")
     async def list_company_categories() -> str:
-        """List company-specific bookkeeping categories (SME / DATEV chart of accounts).
+        """List company-specific bookkeeping categories (company chart: SKR03/SKR04, PL_KPIR or PL_FULL).
         
-        These are used for GmbH and UG companies that use a DATEV standard chart
-        of accounts (SKR03 or SKR04). Each category has a numeric code, name, 
+        Use these for any company with usesCompanyChart=true, including Polish JDG
+        and sp. z o.o. Each category has an account code, name,
         cashflow type, and optional metadata for amortization rules.
         """
         api = get_api_client()

@@ -3,7 +3,8 @@
 from mcp.server.mcpserver import MCPServer
 
 from norman_mcp.tools.payroll import register_payroll_tools
-from tests.mcp_harness import FakeApi, call_tool, structured
+from tests.mcp_harness import GermanApi as FakeApi
+from tests.mcp_harness import call_tool, structured, error_payload
 
 BASE = "/api/v1/companies/company-1/payroll/"
 
@@ -142,7 +143,7 @@ def test_a_company_without_max_learns_why():
 
 def test_no_company_means_no_request():
     api = FakeApi({}, company_id=None)
-    result = structured(call_tool("get_payroll_month", {"year": 2026, "month": 12}, api))
+    result = error_payload(call_tool("get_payroll_month", {"year": 2026, "month": 12}, api))
     assert result == {"error": "No company available. Please authenticate first."}
     assert api.requests == []
 

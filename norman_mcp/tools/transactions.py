@@ -18,7 +18,7 @@ ITEMS_TOTAL_TOLERANCE = 0.02
 ITEM_TAX_FIELDS = {
     "public_id": "publicId", "tax_treatment": "taxTreatment",
     "vat_amount_mode": "vatAmountMode", "vat_document_id": "vatDocumentId",
-    "professional_use_part": "professionalUsePart", "metadata": "metadata",
+    "professional_use_part": "professionalUsePart", "metadata": "metadata", "vat_code": "vatCode",
 }
 ITEM_TAX_DESCRIPTION = (
     " DE GmbH/UG expense items also accept public_id (preserve existing IDs on update), "
@@ -285,7 +285,7 @@ def register_transaction_tools(mcp):
             description="Cashflow type of the transaction (INCOME, EXPENSE)"
         ),
         supplier_country: str = Field(
-            description="Country of the supplier (DE, INSIDE_EU, OUTSIDE_EU)"
+            description="Supplier country: DE or PL for domestic purchases, INSIDE_EU or OUTSIDE_EU for cross-border purchases"
         ),
         category_id: Optional[str] = Field(
             default=None,
@@ -293,10 +293,10 @@ def register_transaction_tools(mcp):
         ),
         company_category_id: Optional[str] = Field(
             default=None,
-            description="SME company category ID from the DATEV chart of accounts (for GmbH/UG companies). Use list_company_categories to find the right ID.",
+            description="SME company category ID from the selected company chart (DE SKR03/SKR04, PL_KPIR or PL_FULL). Use list_company_categories to find the right ID.",
         ),
         vat_rate: Optional[int] = Field(
-            default=None, description="VAT rate (0, 7, 19)"
+            default=None, description="VAT percentage valid for the company country: e.g. PL 23/8/5/0, DE 19/7/0"
         ),
         currency: Optional[str] = Field(
             default=None, description="ISO 4217 currency shown on the document"
@@ -310,6 +310,14 @@ def register_transaction_tools(mcp):
         ),
         reverse_charge: Optional[bool] = Field(
             default=None, description="Whether reverse charge applies"
+        ),
+        vat_code: str | None = Field(
+            default=None,
+            description=(
+                "Polish companies only: the VAT the document states, 23, 8, 5 or 0 (equal to vat_rate), or zw "
+                "(exempt), np (supply outside Poland) or oo (reverse charge), which carry vat_rate 0. Read it from "
+                "the document; an empty string clears it."
+            ),
         ),
         is_refund: bool = Field(
             default=False, description="Whether this reverses a sale or expense"
@@ -344,7 +352,7 @@ def register_transaction_tools(mcp):
             description=(
                 "Complete split lines for documents with multiple categories or VAT rates. "
                 "Each line: {description, amount (positive gross), vat_rate, vat_type?, "
-                "category_id? or company_category_id?}; lines must sum to the transaction total."
+                "category_id? or company_category_id?, vat_code? (PL 23/8/5/0/zw/np/oo)}; lines must sum to the transaction total."
                 + ITEM_TAX_DESCRIPTION
             ),
         ),
@@ -380,6 +388,9 @@ def register_transaction_tools(mcp):
             "isRefund": is_refund,
             "company": company_id,
         }
+
+        if vat_code is not None:
+            transaction_data["vatCode"] = vat_code
 
         if category_id:
             transaction_data["category"] = category_id
@@ -447,7 +458,7 @@ def register_transaction_tools(mcp):
             description="Transaction date (document/invoice date) in YYYY-MM-DD format",
         ),
         vat_rate: Optional[int] = Field(
-            default=None, description="VAT rate (0, 7, 19)"
+            default=None, description="VAT percentage valid for the company country: e.g. PL 23/8/5/0, DE 19/7/0"
         ),
         currency: Optional[str] = Field(
             default=None, description="ISO 4217 currency shown on the document"
@@ -461,6 +472,14 @@ def register_transaction_tools(mcp):
         reverse_charge: Optional[bool] = Field(
             default=None, description="Whether reverse charge applies"
         ),
+        vat_code: str | None = Field(
+            default=None,
+            description=(
+                "Polish companies only: the VAT the document states, 23, 8, 5 or 0 (equal to vat_rate), or zw "
+                "(exempt), np (supply outside Poland) or oo (reverse charge), which carry vat_rate 0. Read it from "
+                "the document; an empty string clears it."
+            ),
+        ),
         is_refund: Optional[bool] = Field(
             default=None, description="Whether this is a refund/reversal transaction"
         ),
@@ -472,7 +491,7 @@ def register_transaction_tools(mcp):
         ),
         supplier_country: Optional[str] = Field(
             default=None,
-            description="Country of the supplier (DE, INSIDE_EU, OUTSIDE_EU)",
+            description="Supplier country: DE or PL for domestic purchases, INSIDE_EU or OUTSIDE_EU for cross-border purchases",
         ),
         cashflow_type: Optional[str] = Field(
             default=None,
@@ -562,6 +581,8 @@ def register_transaction_tools(mcp):
             update_data["category"] = category
         if date is not None:
             update_data["valueDate"] = date
+        if vat_code is not None:
+            update_data["vatCode"] = vat_code
         if vat_rate is not None and not items:
             update_data["vatRate"] = vat_rate
         if sale_type is not None:

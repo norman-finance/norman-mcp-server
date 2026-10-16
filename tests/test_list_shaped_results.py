@@ -8,7 +8,8 @@ server's tools/call handler, where that validation runs.
 
 import pytest
 
-from tests.mcp_harness import FakeApi, call_tool, structured
+from tests.mcp_harness import GermanApi as FakeApi
+from tests.mcp_harness import call_tool, structured
 
 TEMPLATES = [{"code": "skr03", "name": "SKR03"}, {"code": "skr04", "name": "SKR04"}]
 MATCHES = [{"accountNumber": "4200", "nameDe": "Raumkosten", "nameEn": "Occupancy costs"}]

@@ -165,3 +165,18 @@ def test_without_a_selection_the_first_listed_company_is_used(
 
     call = next(c for c in fake_norman.seen if c["path"].endswith("/invoices/"))
     assert call["company_header"] == "co-default"
+
+
+def test_parallel_explicit_company_requests_do_not_change_the_active_company(api, fake_norman):
+    import asyncio
+    client, base = api
+
+    async def read_clients():
+        await asyncio.gather(*(client.arequest("GET", urljoin(base, "api/v1/taxes/tax-settings/"),
+                                               company_id=company_id)
+                               for company_id in ("client-a", "client-b")))
+        assert client.company_id == "co-chosen"
+
+    _in_request(lambda: (client.set_company("co-chosen"), asyncio.run(read_clients())))
+    calls = [c for c in fake_norman.seen if c["path"].endswith("/tax-settings/")]
+    assert {call["company_header"] for call in calls} == {"client-a", "client-b"}

@@ -366,13 +366,14 @@ def register_tax_tools(mcp):
         reporting_frequency: Optional[str] = Field(default=None, description="Frequency of reporting (e.g. 'monthly')")
     ) -> Dict[str, Any]:
         """
-        Update a tax setting. Always generate a preview of the tax report @generate_finanzamt_preview before submitting it to the Finanzamt.
+        Update a tax setting for the selected company. Read its country and supported settings first.
+        Review the report through its country-specific tools before any submission.
         
         Args:
             setting_id: Public ID of the tax setting to update
             tax_type: Type of tax (e.g. "sales"); Options: "sales", "trade", "income", "profit_loss"
-            vat_type: VAT type (e.g. "vat_subject"), Options: "vat_subject", "kleinunternehmer", "vat_exempt"
-            vat_percent: VAT percentage; Options: 0, 7, 19
+            vat_type: API VAT status for the selected company; use the values returned by get_tax_settings.
+            vat_percent: VAT percentage supported for the company country (Germany and Poland differ).
             start_tax_report_date: Start date for tax reporting (YYYY-MM-DD)
             reporting_frequency: Frequency of reporting (e.g. "monthly"), Options: "monthly", "quarterly", "yearly"
             
@@ -461,3 +462,80 @@ def register_tax_tools(mcp):
         )
         
         return await api.arequest("GET", vat_url)
+
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False))
+    async def get_vat_proportion(ctx: Context) -> dict[str, Any]:
+        """
+        Polish VAT payers with both taxed and VAT-exempt (art. 43) sales: the VAT deduction proportion of
+        art. 90 by tax year. For each year: the percent purchases marked "proportion" deduct, where it comes
+        from (computed from the previous year's turnover, estimated by the owner, or as filed), the turnover
+        it is worked out of, and for the last closed year the art. 91 correction Norman puts into the next
+        January's JPK_V7. Norman prepares the figures; the owner checks and files.
+
+        Returns:
+            hasExemptSales, usesProportion and years[] with percent, source, turnovers, settings, correction
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+        return await api.arequest(
+            "GET", urljoin(config.api_base_url, f"api/v1/companies/{company_id}/taxes/vat-proportion/"),
+        )
+
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False))
+    async def update_vat_proportion(  # noqa: PLR0913 - one argument per choice the endpoint takes
+        ctx: Context,
+        year: int = Field(description="Tax year the choices are for, e.g. 2027"),
+        estimated_percent: int | None = Field(
+            default=None, ge=0, le=100,
+            description="Estimated proportion for the year (art. 90 ust. 8-9), when the previous year had less "
+            "than PLN 30,000 turnover or is unrepresentative. The owner must notify the tax office.",
+        ),
+        clear_estimate: bool | None = Field(
+            default=None, description="True to drop the estimate and use the previous year's turnover again.",
+        ),
+        round_to_whole: bool | None = Field(
+            default=None, description="Take above 98 % as 100 % and 2 % or less as 0 % (art. 90 ust. 10).",
+        ),
+        previous_taxed_turnover: str | None = Field(
+            default=None, description="Previous year's turnover with the right to deduct, PLN net, e.g. '120000.00'",
+        ),
+        previous_exempt_turnover: str | None = Field(
+            default=None, description="Previous year's VAT-exempt turnover, PLN net, e.g. '30000.00'",
+        ),
+        fixed_asset_correction: str | None = Field(
+            default=None,
+            description="The year's correction of fixed assets' input VAT (art. 91 ust. 2), PLN, + or -, e.g. "
+            "'-120.00'. Goes into K_44 of the next January.",
+        ),
+    ) -> dict[str, Any]:
+        """
+        Set the owner's choices about the Polish VAT deduction proportion (art. 90) of one tax year. Only
+        what is given changes. Confirm the numbers with the user first: they come from the user's records.
+
+        Returns:
+            The year as get_vat_proportion describes it
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+        data: dict[str, Any] = {}
+        if clear_estimate:
+            data["estimatedPercent"] = None
+        elif estimated_percent is not None:
+            data["estimatedPercent"] = estimated_percent
+        given = {
+            "roundToWhole": round_to_whole,
+            "previousTaxedTurnover": previous_taxed_turnover,
+            "previousExemptTurnover": previous_exempt_turnover,
+            "fixedAssetCorrection": fixed_asset_correction,
+        }
+        data |= {key: value for key, value in given.items() if value is not None}
+        if not data:
+            return {"message": "Nothing to change."}
+        return await api.arequest(
+            "PUT", urljoin(config.api_base_url, f"api/v1/companies/{company_id}/taxes/vat-proportion/{year}/"),
+            json_data=data,
+        )
