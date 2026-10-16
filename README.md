@@ -3,8 +3,8 @@
       <img width="140px" src="https://github.com/user-attachments/assets/d2cb1df3-69f1-460e-b675-beb677577b06" alt="Norman" />
    </a>
    <h1>Norman MCP Server</h1>
-   <p>AI-powered bookkeeping, accounting, and tax workflows for businesses in Germany and Poland, inside your AI assistant.<br/>
-   Connect invoices, receipts and transactions to German SKR/DATEV books or Polish KPiR, full books and JPK VAT registers.</p>
+   <p>AI-powered bookkeeping, accounting, invoicing, and tax workflows for European businesses through MCP.<br/>
+   Connect Norman Finance to your AI for bookkeeping, invoices, transactions, documents, ledgers, reports, and tax workflows.</p>
    <br/>
    <p>
       <img src="https://img.shields.io/badge/Protocol-MCP-black?style=flat-square" alt="MCP" />
@@ -74,7 +74,7 @@ followed by URL entries from the deprecated `file_paths` alias; successfully fet
 files are still uploaded. Structured imports report errors per document. Download
 errors omit signed URLs, and temporary downloads are cleaned up after use or cancellation.
 
-### Germany and Poland
+### Market-specific capabilities
 
 Select the company before working with its books. `company://current` identifies
 the selected company, country, accounting currency, legal form and chart of
