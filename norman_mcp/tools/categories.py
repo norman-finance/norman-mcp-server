@@ -24,17 +24,18 @@ async def _check_sme(api) -> bool:
     """Return True if the active company is an SME account with a chart of accounts."""
     company_url = urljoin(config.api_base_url, f"api/v1/companies/{api.company_id}/")
     company = api._make_request("GET", company_url)
-    return bool(company.get("isSme"))
+    return company.get("country") == "DE" and bool(company.get("isSme"))
+
+
+
+async def _check_company_chart(api) -> bool:
+    company_url = urljoin(config.api_base_url, f"api/v1/companies/{api.company_id}/")
+    company = await api.arequest("GET", company_url)
+    return bool(company.get("usesCompanyChart") or company.get("isSme"))
 
 
 def register_category_tools(mcp):
-    """Register SME-only tools for searching the full SKR chart of accounts catalog.
-
-    IMPORTANT: These tools are for SME (GmbH/UG) companies ONLY.
-    They search the full SKR03/SKR04 DATEV standard chart of accounts.
-    For freelance accounts, use 'categorize_transaction' instead — it uses a
-    different set of freelance categories and a separate AI flow.
-    """
+    """Register company-chart tools and German-only SKR catalog lookups."""
 
     @mcp.tool(
         title="Search SKR Categories by Code (SME only)",
@@ -150,20 +151,19 @@ def register_category_tools(mcp):
         description: Optional[str] = Field(default=None, description="Optional description"),
     ) -> Dict[str, Any]:
         """
-        Create a new custom company category for the active SME company.
+        Create a new custom company category for the active company.
 
-        ⚠️ SME ONLY — only works for GmbH/UG companies with a DATEV chart of
-        accounts. Not applicable to freelance accounts.
+        ⚠️ For companies using their own chart, including PL_KPIR and PL_FULL.
 
-        Use search_skr_by_code or suggest_skr_category first to find the right
-        account number from the full SKR catalog, then create the category here.
+        Read list_company_categories first and use the selected company's chart.
+        Only German SMEs should use search_skr_by_code or suggest_skr_category.
         """
         api = ctx.request_context.lifespan_context["api"]
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        if not await _check_sme(api):
-            return _SME_ONLY_ERROR
+        if not await _check_company_chart(api):
+            return {"error": "Select a company using its own chart of accounts."}
 
         categories_url = urljoin(
             config.api_base_url,
@@ -221,9 +221,9 @@ def register_category_tools(mcp):
         ),
     ) -> Dict[str, Any]:
         """
-        Hide or unhide SME company categories in bulk.
+        Hide or unhide company categories in bulk.
 
-        ⚠️ SME ONLY — GmbH/UG companies with a DATEV chart of accounts.
+        ⚠️ For companies using SKR03/SKR04, PL_KPIR or PL_FULL.
 
         Hidden categories disappear from the category pickers in the app and from
         the candidate list the AI categorizer picks from. Nothing is deleted:
@@ -244,8 +244,8 @@ def register_category_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        if not await _check_sme(api):
-            return _SME_ONLY_ERROR
+        if not await _check_company_chart(api):
+            return {"error": "Select a company using its own chart of accounts."}
 
         normalized = (action or "").strip().lower()
         if normalized not in ("hide", "unhide"):

@@ -381,6 +381,7 @@ class NormanAPI:
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
         files: Optional[Any] = None,
+        company_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Make a request to the Norman Finance API with security controls."""
         # Resolve the caller's token for THIS request. Keep it in a local: it
@@ -430,10 +431,10 @@ class NormanAPI:
         # be the calling user's own company. The companies list is not scoped: it is how
         # a caller discovers which companies they have.
         if not url.endswith("companies/"):
-            company_id = self.company_id
-            if company_id:
-                logger.debug(f"Using company ID for request: {company_id}")
-                headers["X-Company-Id"] = company_id
+            selected_company = company_id or self.company_id
+            if selected_company:
+                logger.debug(f"Using company ID for request: {selected_company}")
+                headers["X-Company-Id"] = selected_company
 
         # Log token source for debugging
         logger.debug(
@@ -520,7 +521,7 @@ class NormanAPI:
                             "error": "Authentication failed. Check NORMAN_EMAIL/NORMAN_PASSWORD.",
                             "status_code": 401,
                         }
-                    return self._make_request(method, url, params, json_data, files)
+                    return self._make_request(method, url, params, json_data, files, company_id=company_id)
 
                 # OAuth mode: try to refresh the Norman token transparently
                 # using the refresh token we stored at code-exchange time.
@@ -529,7 +530,7 @@ class NormanAPI:
                 # per-request instead of us caching it on the shared client.
                 new_norman_token = self._refresh_oauth_norman_token()
                 if new_norman_token:
-                    return self._make_request(method, url, params, json_data, files)
+                    return self._make_request(method, url, params, json_data, files, company_id=company_id)
 
                 logger.warning("Cannot refresh Norman token; client must reconnect")
                 set_api_token(None)
@@ -604,6 +605,7 @@ class NormanAPI:
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
         files: Optional[Any] = None,
+        company_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Run the blocking requests client off the MCP event loop."""
         return await asyncio.to_thread(
@@ -613,6 +615,7 @@ class NormanAPI:
             params,
             json_data,
             files,
+            **({"company_id": company_id} if company_id is not None else {}),
         )
 
     def _refresh_oauth_norman_token(self) -> Optional[str]:

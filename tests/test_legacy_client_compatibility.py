@@ -38,6 +38,30 @@ the copy keeps the bank details of the original; no argument changes.
 
 The October 11 filing reminders add one optional argument: update_company_details
 takes notify_tax_deadlines, the switch for the UStVA and ZM reminder emails.
+
+The October 12 email confirmation fix updates one description: submit_tax_report
+says a 403 can also mean an unconfirmed email address. No argument changes.
+
+The October 13 invoice bookings add one optional argument: link_transaction takes
+amount, what a transaction pays of a German invoice; its description explains the
+booking a payment takes over and part payments.
+
+The October 14 amount caps update one description: link_transaction says a larger
+amount is capped at what is still open and what the transaction has left. No
+argument changes. The new record_invoice_payment tool needs no oracle entry.
+
+The October 15 invoice fields add optional arguments to six tools: create_invoice,
+update_invoice, create_recurring_invoice and update_recurring_invoice take
+vat_exemption_basis, the legal basis of a Polish VAT exemption; create_invoice,
+update_invoice, cancel_invoice and create_credit_note take correction_reason, why a
+correction is issued. No existing argument changes.
+
+The October 16 Poland parity changes intentionally update 19 tool signatures:
+VAT codes on shared invoice items and transactions, optional Polish asset fields,
+attachment currency omission, and country/chart-aware descriptions. Two resources
+and two prompts also receive country-aware metadata; create_transaction_prompt
+makes currency optional. Existing names/required arguments stay unchanged.
+Only those reviewed entries are updated; all unrelated hashes remain pinned.
 """
 
 import asyncio

@@ -68,7 +68,7 @@ def register_prompts(mcp):
     _register_skill_prompts(mcp)
     
     @mcp.prompt()
-    def create_transaction_prompt(amount: float, description: str, cashflow_type: str = "EXPENSE") -> str:
+    def create_transaction_prompt(amount: float, description: str, cashflow_type: str = "EXPENSE", currency: Optional[str] = None) -> str:
         """
         Create a prompt for adding a new transaction with essential information.
         
@@ -89,15 +89,15 @@ def register_prompts(mcp):
         
         return (
             f"Create a new {cashflow_type.lower()} transaction with the following details:\n\n"
-            f"Amount: {formatted_amount} EUR\n"
+            f"Amount: {formatted_amount} {currency or '(confirm document currency)'}\n"
             f"Description: {description}\n\n"
             f"Please confirm the transaction details before submitting. "
             f"You can also add more information such as VAT rate, transaction date, "
             f"or assign a specific category.\n\n"
-            f"**For SME companies (GmbH/UG):** Use company categories from the DATEV chart "
-            f"of accounts (list_company_categories) instead of freelance categories. "
-            f"You can also set payment_date and payment_type (BANK_TRANSFER, CASH, CREDIT_CARD, "
-            f"PAYPAL, DIRECT_DEBIT, OTHER)."
+            "First read company://current for the selected company and country. "
+            "Use its company chart where available (SKR03/SKR04, PL_KPIR or PL_FULL). "
+            "Preserve operation date separately from payment_date and document currency separately "
+            "from accounting currency. For Poland preserve vat_code; never infer np/oo/zw from 0% alone."
         )
 
     @mcp.prompt()
@@ -196,7 +196,7 @@ def register_prompts(mcp):
             base.UserMessage("Please show me the report details and totals."),
             base.AssistantMessage("I'll fetch the report data and show you the key information. Would you like me to generate a PDF preview that you can check before submission?"),
             base.UserMessage("Yes, please generate a preview."),
-            base.AssistantMessage("I'll generate a preview PDF. Once you've reviewed it, let me know if you want to:\n1. Make any adjustments\n2. Submit the report to Finanzamt\n3. Save it for later")
+            base.AssistantMessage("I'll generate a preview PDF. Once you've reviewed it, let me know if you want to:\n1. Make any adjustments\n2. Use the filing method supported for the selected company and report\n3. Save it for later")
         ]
 
     @mcp.prompt()
@@ -229,32 +229,16 @@ def register_prompts(mcp):
 
     @mcp.prompt()
     def sme_bookkeeping_prompt() -> str:
-        """
-        Prompt that explains SME bookkeeping context for GmbH/UG companies.
-        Covers DATEV chart of accounts, accrual accounting, payment tracking, and DATEV export.
-        """
+        """Company-aware bookkeeping instructions for German and Polish businesses."""
         return (
-            "## SME Bookkeeping Context\n\n"
-            "This company is a German SME (GmbH or UG) and uses **accrual-based accounting** "
-            "(Soll-Versteuerung) with a DATEV standard chart of accounts.\n\n"
-            "### Key Differences from Freelancer Bookkeeping\n"
-            "- **Categories**: Uses DATEV chart of accounts (SKR03 or SKR04) with numeric codes "
-            "(e.g. '4200 - Telefonkosten'). Use `list_company_categories` to see available categories.\n"
-            "- **Payment Tracking**: Each transaction can have a `payment_date` (when paid) and "
-            "`payment_type` (BANK_TRANSFER, CASH, CREDIT_CARD, PAYPAL, DIRECT_DEBIT, OTHER).\n"
-            "- **Tax Logic**: VAT and tax obligations are based on the invoice/document date "
-            "(valueDate), NOT the payment date.\n"
-            "- **DATEV Export**: Finalized transactions can be exported as a DATEV EXTF package "
-            "(ZIP with CSV + documents) to send to the tax advisor.\n"
-            "- **Chart of Accounts**: The company's CoA template (SKR03 or SKR04) can be viewed "
-            "and switched in settings.\n\n"
-            "### Available Tools for SME\n"
-            "- `list_company_categories` — browse DATEV categories\n"
-            "- `set_company_categories_visibility` — hide/unhide categories in bulk (e.g. a company "
-            "carrying both SKR03 and SKR04 accounts: hide the chart it does not use)\n"
-            "- `list_coa_templates` — see available CoA templates\n"
-            "- `trigger_datev_export` — generate DATEV export for tax advisor\n"
-            "- `create_transaction` / `update_transaction` — with company_category_id, payment_date, payment_type\n"
+            "Read company://current first; verify the selected company before every workflow. "
+            "For German GmbH/UG use its SKR03/SKR04 chart, German ledger and DATEV. "
+            "For Polish JDG use PL_KPIR and get_polish_tax_book; for PL_FULL companies use "
+            "list_polish_ledger_journal, get_polish_trial_balance and Polish financial statements. "
+            "Use list_company_categories for the company's real accounts. "
+            "Keep operation date separate from payment_date; the API owns tax calculations. "
+            "For Polish VAT inspect get_polish_jpk_register and get_polish_jpk_filing_status. "
+            "An export or XML download is not successful filing. Require confirmed acceptance and UPO."
         )
 
     @mcp.prompt()

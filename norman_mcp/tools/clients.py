@@ -122,7 +122,7 @@ def register_client_tools(mcp):
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
         
-        if client_type not in ["business", "private"]:
+        if client_type not in ["business", "private", "person"]:
             return {"error": "client_type must be either 'business' or 'private'"}
         
         clients_url = urljoin(
@@ -132,7 +132,7 @@ def register_client_tools(mcp):
         
         client_data = {
             "name": name,
-            "clientType": client_type
+            "clientType": {"private": "person"}.get(client_type, client_type)
         }
     
         if email:
@@ -198,7 +198,7 @@ def register_client_tools(mcp):
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
         
-        if client_type and client_type not in ["business", "private"]:
+        if client_type and client_type not in ["business", "private", "person"]:
             return {"error": "client_type must be either 'business' or 'private'"}
         
         client_url = urljoin(
@@ -214,7 +214,7 @@ def register_client_tools(mcp):
         if name:
             update_data["name"] = name
         if client_type:
-            update_data["clientType"] = client_type
+            update_data["clientType"] = {"private": "person"}.get(client_type, client_type)
         if email:
             update_data["email"] = email
         if phone:

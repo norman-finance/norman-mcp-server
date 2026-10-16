@@ -11,13 +11,14 @@ import json
 import mimetypes
 from contextlib import ExitStack
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional
+from typing import Annotated, Any, Dict, Literal, Optional
 from urllib.parse import urljoin
 
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
 from norman_mcp import config
+from norman_mcp.tools.polish_assets import PolishAssetTax
 from norman_mcp.context import Context
 
 from norman_mcp.files.upload import resolve_ref
@@ -817,7 +818,7 @@ def register_accounting_tools(mcp: Any) -> None:
         name: str,
         asset_type: str = Field(description="tangible or intangible"),
         acquisition_date: str = Field(
-            description="Original acquisition date in YYYY-MM-DD format; AfA starts in its month"
+            description="Original acquisition date in YYYY-MM-DD format; the API derives depreciation timing from the country and Polish entry_date"
         ),
         depreciation_basis: float = Field(
             gt=0, description="Net basis, or gross when input VAT is not deductible"
@@ -828,7 +829,7 @@ def register_accounting_tools(mcp: Any) -> None:
             gt=0,
             description=(
                 "Purchase price including VAT, as on the invoice. Recorded with the asset; "
-                "AfA is always computed from depreciation_basis. Defaults to "
+                "Polish depreciation is calculated by the API from polish_tax and the purchase price. Defaults to "
                 "depreciation_basis, which is exact when input VAT is not deductible"
             ),
         ),
@@ -836,6 +837,10 @@ def register_accounting_tools(mcp: Any) -> None:
         ledger_account_code: Optional[str] = None,
         transaction_id: Optional[str] = None,
         transaction_item_id: Optional[str] = None,
+        polish_tax: Annotated[Optional[PolishAssetTax], Field(description="Required for Polish assets: pass reviewed inputs. API calculates the schedule and validates eligibility; never invent confirmations.")] = None,
+        opening_date: Annotated[Optional[str], Field(description="Opening balance date YYYY-MM-DD for an existing asset")] = None,
+        opening_book_value: Annotated[Optional[float], Field(ge=0, description="Remaining book value at opening_date")] = None,
+        bill_id: Annotated[Optional[str], Field(description="Purchase bill belonging to the selected company")] = None,
     ) -> Dict[str, Any]:
         """Create an active asset, optionally linked to a Norman Transaction or split item.
 
@@ -869,6 +874,10 @@ def register_accounting_tools(mcp: Any) -> None:
                 "usefulLifetime": useful_lifetime_months,
                 "amortizationMethod": "straightLine",
                 "ledgerAccountCode": ledger_account_code,
+                "polishTax": polish_tax.payload() if polish_tax is not None else None,
+                "openingDate": opening_date,
+                "openingBookValue": opening_book_value,
+                "bill": bill_id,
                 "transaction": transaction_id,
                 "transactionItem": transaction_item_id,
             }
@@ -886,7 +895,7 @@ def register_accounting_tools(mcp: Any) -> None:
         asset_id: str,
         name: Optional[str] = None,
         acquisition_date: Optional[str] = Field(
-            default=None, description="Acquisition date in YYYY-MM-DD format; AfA starts in its month"
+            default=None, description="Acquisition date in YYYY-MM-DD format; the API derives depreciation timing from the country and Polish entry_date"
         ),
         depreciation_basis: Optional[float] = Field(default=None, gt=0),
         gross_purchase_price: Optional[float] = Field(
@@ -908,6 +917,10 @@ def register_accounting_tools(mcp: Any) -> None:
                 "acquisition date; AfA ends in its month"
             ),
         ),
+        polish_tax: Annotated[Optional[PolishAssetTax], Field(description="Required for Polish assets: pass reviewed inputs. API calculates the schedule and validates eligibility; never invent confirmations.")] = None,
+        opening_date: Annotated[Optional[str], Field(description="Opening balance date YYYY-MM-DD for an existing asset")] = None,
+        opening_book_value: Annotated[Optional[float], Field(ge=0, description="Remaining book value at opening_date")] = None,
+        bill_id: Annotated[Optional[str], Field(description="Purchase bill belonging to the selected company")] = None,
     ) -> Dict[str, Any]:
         """Edit an asset through the audited Asset service.
 
@@ -934,6 +947,10 @@ def register_accounting_tools(mcp: Any) -> None:
                 if business_use_percent is not None
                 else None,
                 "ledgerAccountCode": ledger_account_code,
+                "polishTax": polish_tax.payload() if polish_tax is not None else None,
+                "openingDate": opening_date,
+                "openingBookValue": opening_book_value,
+                "bill": bill_id,
                 "status": status,
             }
         )

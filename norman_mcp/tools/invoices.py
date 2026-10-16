@@ -108,8 +108,10 @@ def register_invoice_tools(mcp):
         currency_exchanged: str | None = None,
         full_cost_origin_exchanged: float | None = None,
         tax_exempt_reason: str | None = None,
+        vat_exemption_basis: str | None = None,
         preceding_invoice_number: str | None = None,
         preceding_invoice_date: str | None = None,
+        correction_reason: str | None = None,
         instructions: str | None = None,
         message: str | None = None,
         company_email: str | None = None,
@@ -144,9 +146,13 @@ def register_invoice_tools(mcp):
             currency_exchanged: Reporting currency code.
             full_cost_origin_exchanged: Total in reporting currency in major units; omit for automatic conversion.
             tax_exempt_reason: VAT note; omit for automatic text, or use an empty string to print no note.
+            vat_exemption_basis: Polish companies only: the legal basis of a VAT exemption, art_113_1,
+                art_113_9 or art_43_1_<point>[_<letter>].
             preceding_invoice_number: For a cancel or credit_note made from scratch, the number of
                 the invoice it refers to when that invoice was issued outside Norman.
             preceding_invoice_date: That invoice's date (YYYY-MM-DD).
+            correction_reason: For a cancel or credit_note: why it is issued. A Polish correction sent
+                to KSeF states it.
             instructions: Invoice instructions.
             message: Invoice message.
             company_email: Sender email; omit to use the company email.
@@ -273,8 +279,10 @@ def register_invoice_tools(mcp):
             currency_exchanged=currency_exchanged,
             full_cost_origin_exchanged=full_cost_origin_exchanged,
             tax_exempt_reason=tax_exempt_reason,
+            vat_exemption_basis=vat_exemption_basis,
             preceding_invoice_number=preceding_invoice_number,
             preceding_invoice_date=preceding_invoice_date,
+            correction_reason=correction_reason,
             instructions=instructions,
             message=message,
             company_email=company_email,
@@ -372,6 +380,7 @@ def register_invoice_tools(mcp):
         document_design: DocumentDesign | None = None,
         discount_percents: int | None = None,
         tax_exempt_reason: str | None = None,
+        vat_exemption_basis: str | None = None,
         instructions: str | None = None,
         message: str | None = None,
         company_email: str | None = None,
@@ -430,6 +439,8 @@ def register_invoice_tools(mcp):
             document_design: Template and appearance settings; omit to inherit the company design.
             discount_percents: Overall discount percentage
             tax_exempt_reason: VAT note; omit to derive it per invoice, empty string for none.
+            vat_exemption_basis: Polish companies only: the legal basis of a VAT exemption, art_113_1,
+                art_113_9 or art_43_1_<point>[_<letter>].
             instructions: Invoice instructions
             message: Invoice message
             company_email: Sender email; omit to use the company email.
@@ -474,6 +485,7 @@ def register_invoice_tools(mcp):
             document_design=document_design,
             discount_percents=discount_percents,
             tax_exempt_reason=tax_exempt_reason,
+            vat_exemption_basis=vat_exemption_basis,
             instructions=instructions,
             message=message,
             company_email=company_email,
@@ -782,22 +794,32 @@ def register_invoice_tools(mcp):
         invoice_id: str,
         transaction_id: str,
         items: list[TransactionInvoiceItem] | None = None,
+        amount: float | None = None,
     ) -> Dict[str, Any]:
         """
-        Link a transaction to an invoice, finalize it and mark the invoice paid.
+        Pay an invoice with a transaction and finalize the transaction.
 
-        This replaces any previous attachment link and updates transaction
-        classification from the invoice. By default, invoice lines replace the
-        transaction's existing items; nonempty items replace them with the
-        supplied lines instead. An empty items list skips only item replacement.
-        
+        German companies: an invoice is booked when it is issued. A transaction
+        that pays the whole open amount takes that booking over: it gets the
+        invoice's lines and the invoice turns paid. A smaller `amount` pays part
+        of the invoice and the rest stays open; one transaction can pay several
+        invoices this way. A larger `amount` is capped at what is still open and at
+        what the transaction has left; the transaction keeps its rest for another
+        invoice or a category. The response's `payments` lists what is paid and open.
+
+        Other companies: invoice lines replace the transaction's items and the
+        invoice turns paid; nonempty items replace them with the supplied lines
+        instead. An empty items list skips only item replacement.
+
         Args:
             invoice_id: ID of the invoice
-            transaction_id: ID of the transaction to link
-            items: Optional lines/categories for the transaction. An empty list skips item sync.
-            
+            transaction_id: ID of the transaction that pays it
+            items: Other companies only: lines/categories for the transaction. An empty list skips item sync.
+            amount: German companies only: what this transaction pays of the invoice, in EUR.
+                Omit it to pay what is open, at most the transaction's amount.
+
         Returns:
-            Response from the link transaction request
+            The invoice, with its payments and open amount
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -816,8 +838,61 @@ def register_invoice_tools(mcp):
         
         if items is not None:
             link_data["items"] = [TransactionInvoiceItem.model_validate(item).payload() for item in items]
+        if amount is not None:
+            link_data["amount"] = f"{amount:.2f}"
 
         return api._make_request("POST", link_url, json_data=link_data)
+
+    @mcp.tool(
+        title="Record Invoice Payment",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
+    async def record_invoice_payment(
+        ctx: Context,
+        invoice_id: str,
+        paid_on: str,
+        method: str,
+        amount: float | None = None,
+    ) -> Dict[str, Any]:
+        """
+        Record a payment that is not in the bank feed (cash, card, PayPal or a bank
+        account Norman does not see) and let it pay the invoice, in one step: if the
+        invoice cannot take it, no payment is saved.
+
+        German companies: `amount` is what the client paid, in EUR, capped at what is
+        still open; omit it to pay all that is open. Other companies: the invoice is
+        paid in full, in its currency. To pay with a transaction that is already in
+        Norman, use link_transaction.
+
+        Args:
+            invoice_id: ID of the invoice
+            paid_on: When the client paid, YYYY-MM-DD. A future date counts as today.
+            method: BANK, CASH, CREDIT_CARD or PAYPAL
+            amount: German companies only: what the client paid, in EUR.
+
+        Returns:
+            The invoice, with its payments and open amount
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        record_url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/invoices/{invoice_id}/record-payment/",
+        )
+        record_data = {"paid_on": paid_on, "method": method}
+        if amount is not None:
+            record_data["amount"] = f"{amount:.2f}"
+
+        return api._make_request("POST", record_url, json_data=record_data)
 
     @mcp.tool(
         title="Get E-Invoice XML",

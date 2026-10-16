@@ -30,7 +30,7 @@ Guide the user through a complete monthly reconciliation:
 ## Step 3: Invoice Reconciliation
 - Call `list_invoices` to find invoices from the period
 - Cross-reference with incoming payments in transactions
-- Use `link_transaction` to match payments to invoices
+- Use `link_transaction` to match payments to invoices. A German invoice is booked when it is issued; a payment of its whole open amount takes that booking over. For a part payment pass `amount`: the rest stays open, and the invoice's `payments` shows what is paid and open. One transfer for several invoices is linked to each invoice with its own `amount`; an `amount` above what is open is capped, and the transfer keeps the rest. A payment that is not in the bank feed (cash, card, PayPal) is recorded with `record_invoice_payment`, which saves the payment and pays the invoice in one step.
 - Flag any overdue unpaid invoices and suggest sending reminders via `send_invoice_overdue_reminder`
 
 ## Step 4: Document Check

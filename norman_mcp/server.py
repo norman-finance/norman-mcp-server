@@ -26,6 +26,8 @@ from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.auth.routes import validate_issuer_url
 
 from norman_mcp.api.client import NormanAPI
+from norman_mcp.tools.country_scope import CountryScopedTools
+from norman_mcp.tools.polish_accounting import register_polish_accounting_tools
 from norman_mcp.tools.accounting import register_accounting_tools
 from norman_mcp.tools.datev import register_datev_tools
 from norman_mcp.tools.clients import register_client_tools
@@ -438,28 +440,30 @@ def create_app(
     )
     
     # Register tools, prompts, and resources
-    register_client_tools(server)
-    register_product_tools(server)
-    register_vendor_tools(server)
-    register_bill_tools(server)
-    register_invoice_tools(server)
-    register_offer_tools(server)
-    register_tax_tools(server)
-    register_transaction_tools(server)
-    register_accounting_tools(server)
-    register_datev_tools(server)
-    register_rule_tools(server)
-    register_workflow_tools(server)
-    register_document_tools(server)
-    register_company_tools(server)
-    register_category_tools(server)
-    register_tax_advisor_tools(server)
-    register_advisor_comms_tools(server)
-    register_incorporation_tools(server)
-    register_gewerbe_registration_tools(server)
-    register_corporate_tax_registration_tools(server)
-    register_tax_office_tools(server)
-    register_payroll_tools(server)
+    scoped_tools = CountryScopedTools(server)
+    register_client_tools(scoped_tools)
+    register_product_tools(scoped_tools)
+    register_vendor_tools(scoped_tools)
+    register_bill_tools(scoped_tools)
+    register_invoice_tools(scoped_tools)
+    register_offer_tools(scoped_tools)
+    register_tax_tools(scoped_tools)
+    register_transaction_tools(scoped_tools)
+    register_accounting_tools(scoped_tools)
+    register_datev_tools(scoped_tools)
+    register_polish_accounting_tools(scoped_tools)
+    register_rule_tools(scoped_tools)
+    register_workflow_tools(scoped_tools)
+    register_document_tools(scoped_tools)
+    register_company_tools(scoped_tools)
+    register_category_tools(scoped_tools)
+    register_tax_advisor_tools(scoped_tools)
+    register_advisor_comms_tools(scoped_tools)
+    register_incorporation_tools(scoped_tools)
+    register_gewerbe_registration_tools(scoped_tools)
+    register_corporate_tax_registration_tools(scoped_tools)
+    register_tax_office_tools(scoped_tools)
+    register_payroll_tools(scoped_tools)
     register_prompts(server)
     register_resources(server)
     register_public_apps(server)

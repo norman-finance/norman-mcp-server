@@ -1,6 +1,8 @@
+import pytest
+
 from norman_mcp.files.upload import store_file
 from norman_mcp.server import mcp
-from tests.mcp_harness import FakeApi, call_tool, structured
+from tests.mcp_harness import FakeApi, call_tool, error_payload, structured
 
 COMPANY = {
     "isSme": True,
@@ -37,7 +39,8 @@ def test_default_sme_export_uses_ledger_and_retains_validation():
 def test_ledger_failure_never_falls_back_to_transactions():
     api = FakeApi(lambda method, *_: COMPANY if method == "GET" else {"error": "Preflight failed"})
     call_tool("trigger_datev_export", PERIOD, api)
-    assert len(api.requests) == 2
+    # Country applicability read, export configuration read, then exactly one export attempt.
+    assert [method for method, *_ in api.requests] == ["GET", "GET", "POST"]
     assert api.requests[-1][1].endswith("/ledger/datev-export/")
 
 
@@ -50,7 +53,8 @@ def test_explicit_transactions_export_remains_available():
 def test_ledger_rejects_chart_override_instead_of_silently_ignoring_it():
     api = FakeApi(COMPANY)
     call_tool("trigger_datev_export", {**PERIOD, "skr_variant": "SKR03"}, api)
-    assert len(api.requests) == 1
+    # Applicability and configuration reads; a rejected chart override never exports.
+    assert [method for method, *_ in api.requests] == ["GET", "GET"]
 
 
 def test_preflight_uses_saved_numbers_and_is_read_only():
@@ -103,3 +107,14 @@ def test_reader_refuses_paths_expired_refs_invalid_limits_and_missing_company():
     api = FakeApi({}, company_id=None)
     call_tool("read_datev_file", {"file_ref": "ref_unused"}, api)
     assert not api.requests
+
+
+@pytest.mark.parametrize("tool", ["trigger_datev_export", "validate_ledger_datev_export"])
+def test_german_datev_exports_reject_polish_company_before_domain_request(tool):
+    api = FakeApi({**COMPANY, "country": "PL", "chartOfAccounts": {"code": "PL_FULL"}})
+    result = call_tool(tool, PERIOD, api)
+    assert error_payload(result)["code"] == "german_company_required"
+    assert len(api.requests) == 1
+    method, url, _ = api.requests[0]
+    assert method == "GET"
+    assert url.endswith("/companies/company-1/")

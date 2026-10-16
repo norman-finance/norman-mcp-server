@@ -20,6 +20,10 @@ class PreviewAPI:
         self.failure = failure
         self.calls = []
 
+    async def arequest(self, method, url, **kwargs):
+        assert method == "GET" and url.endswith("/companies/preview-fixture-company/")
+        return {"country": "DE"}
+
     def _make_request(self, method, url, **kwargs):
         # This is an offline preview response, never a Norman API request.
         assert method == "POST"
