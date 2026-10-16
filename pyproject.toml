@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "norman-mcp-server"
 version = "0.1.7"
-description = "MCP accounting for Germany and Poland: invoices, receipts, DATEV, KPiR, full books and JPK VAT registers."
+description = "AI-powered bookkeeping, accounting, invoicing, and tax workflows for European businesses through MCP."
 readme = "README.md"
 authors = [
     {name = "Norman Finance", email = "stan@norman.finance"}

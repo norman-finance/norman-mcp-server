@@ -5,14 +5,14 @@
     "email": "support@norman.finance"
   },
   "metadata": {
-    "description": "MCP accounting for Germany and Poland: invoices, receipts, DATEV, KPiR, full books and JPK VAT registers.",
+    "description": "AI-powered bookkeeping, accounting, invoicing, and tax workflows for European businesses through MCP.",
     "version": "1.0.0"
   },
   "plugins": [
     {
       "name": "norman-finance",
       "source": "./",
-      "description": "MCP accounting for Germany and Poland: invoices, receipts, DATEV, KPiR, full books and JPK VAT registers.",
+      "description": "Connect Norman Finance to your AI for bookkeeping, invoices, transactions, documents, ledgers, reports, and tax workflows.",
       "version": "1.0.0",
       "author": {
         "name": "Norman Finance"
@@ -34,8 +34,6 @@
         "ledger",
         "mcp",
         "oauth",
-        "germany",
-        "poland",
         "kpir",
         "jpk"
       ],

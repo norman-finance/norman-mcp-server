@@ -1,7 +1,7 @@
 # Norman Finance
 
-Use the Norman Finance MCP tools for German and Polish bookkeeping, accounting,
-invoicing, documents and tax workflows, plus German company administration. Authenticate with
+Use the Norman Finance MCP tools for bookkeeping, accounting, invoicing,
+documents, reports and tax workflows for European businesses. Authenticate with
 the user's Norman account when prompted; credentials must never be requested in
 chat.
 
