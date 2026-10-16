@@ -1,9 +1,21 @@
 # Polish accounting through MCP
 
+Norman MCP supports Polish **JDG** bookkeeping and **sp. z o.o.** full books
+during the Polish soft launch. Connect through the same MCP endpoint as German
+companies: `https://mcp.norman.finance/mcp`. No separate Polish MCP installation
+is required. See [connection instructions](../README.md#-get-started).
+
+## Select the company
+
 Read `company://current` before a bookkeeping workflow. It identifies the selected
 company, country, accounting currency, account type and chart. Original document
 currency and operation date remain separate from accounting currency and payment
 date. The API owns calculations, eligibility checks and permissions.
+
+Use `list_companies` and `switch_company` to select an existing company, then read
+its context again. A Polish-language conversation does not make a German company
+Polish. JDG uses the Polish tax book; full-book tools require a `PL_FULL` chart.
+Access also depends on the company's setup and API permissions.
 
 ## Reading and diagnosing books
 
@@ -23,6 +35,77 @@ Each new tool captures the selected company once and uses that ID in the company
 preflight, request URL and request header. Non-Polish companies are rejected;
 PL_FULL tools also check the chart. Follow pagination before reporting complete
 period results. An API error or absent amount is not a zero balance.
+
+## Example workflows
+
+### Explain a JDG's KPiR
+
+Call `get_polish_tax_book` for the period:
+
+```json
+{"year": 2026, "month": 9}
+```
+
+Omit `month` for the whole year. The result contains the requested period rather
+than one page. To diagnose one operation, call `get_polish_tax_book_operation`
+with its actual `transaction_id`. Use the returned inclusion/exclusion reasons
+before proposing edits; uploading a document or creating a bank payment alone
+does not establish that an entry was included in the tax book.
+
+These reads may synchronize derived entries and exchange differences. They do
+not confirm operations or submit taxes. Keep the operation's `date` distinct
+from `payment_date` and the document's OCR data when explaining the period.
+
+### Review a spółka's full books
+
+Start with `list_polish_ledger_accounts` and `get_polish_trial_balance`:
+
+```json
+{"date_from": "2026-07-01", "date_to": "2026-09-30"}
+```
+
+Use the returned chart codes with `get_polish_ledger_account`, or inspect
+`list_polish_ledger_journal` with the same period and these optional filters:
+`search`, `account`, `asset_id`, `page` and `page_size` (maximum 100).
+Follow every page needed for the question. `get_polish_ledger_entry` accepts the
+actual `entry_id` and exposes its source and reversal information.
+
+For year-end review, call `list_polish_financial_statements`, then
+`get_polish_financial_statement` with a returned `statement_id`. Inspect the
+prepared workbook, statutory lines, notes and XML issues. These tools read
+existing statements; they do not generate one, close the year or file with KRS.
+
+### Inspect VAT and tax estimates
+
+Find the existing report through `list_tax_reports`, then pass its real
+`report_id` to `get_polish_jpk_register`. Review sales, purchases, totals and
+excluded operations together. For a filing already started in Norman,
+`get_polish_jpk_filing_status` returns methods, sessions, MF status and UPO
+availability; `get_polish_pit_filing_status` reads the corresponding PIT state.
+Neither tool signs or submits a return.
+
+Call `get_polish_tax_estimates` with `year` and `month` for API-calculated
+PIT/ZUS or CIT figures. Estimates are not filed returns. A missing value or a
+failed calculation must be reported as unavailable, not zero.
+
+### Check an accountant handoff
+
+Call `preview_polish_accounting_export` with a period and one of `general`,
+`optima` or `epp`:
+
+```json
+{
+  "date_from": "2026-09-01",
+  "date_to": "2026-09-30",
+  "export_format": "optima",
+  "include_files": true
+}
+```
+
+The result contains compatibility findings, blockers, warnings and a snapshot.
+This tool does not download a package or send it to an accounting system.
+Review target database/register options with the accountant before handoff;
+a successful preview does not prove an import into their software succeeded.
 
 ## Existing write tools
 
@@ -50,15 +133,36 @@ Advisor tax-compliance reads bind the explicitly requested client company to the
 request header, without changing the shared client's selected company. Parallel
 advisor reads therefore do not switch each other's company context.
 
-## Delivery boundary
+## Troubleshooting
 
-This change adds bookkeeping reads, diagnostics and export previews, plus missing
-inputs on existing write tools. It does not add Polish manual journal writes,
+| Response | What to check |
+| --- | --- |
+| `company_required` | Select an existing company before calling Polish tools. |
+| `polish_company_required` | The selected company is not Polish; check `company://current`. |
+| `polish_jdg_required` | The KPiR tool was called for a company using full books; use the Polish Ledger tools. |
+| `polish_full_books_required` | The selected company does not use `PL_FULL`; check its accounting setup. |
+| `german_company_required` | A German procedure was called for a non-German company; use the corresponding Polish tool where available. |
+| API access or availability error | Check permissions, company setup and API deployment; do not reinterpret the error as an empty book. |
+
+## Scope and verification
+
+Polish MCP support includes bookkeeping reads, diagnostics and export previews,
+plus Polish inputs on shared write tools. It does not expose Polish manual journal writes,
 statement generation/year closing, signatures or tax submission tools. Those
 require a separate workflow using the existing API gates. A prepared/downloaded
 XML, closed year or draft statement is not proof of MF/KRS filing. Confirm tax
 acceptance and UPO before reporting a successful filing.
 
+Dedicated Polish tools return structured data. The German SKR Ledger Explorer,
+Finanzamt preview, payroll and incorporation workflows are not Polish interfaces.
+Availability in a hosted connection depends on both its MCP deployment and the
+matching API endpoints, separately from repository or package metadata.
+
 Tests exercise actual MCP argument/result validation with synthetic API responses,
 company scoping, DE/PL behavior, VAT payloads, currencies and asset inputs. They do
 not establish live OAuth, deployed API calculations, provider acceptance or UPO.
+
+Implementation: [Polish tools](../norman_mcp/tools/polish_accounting.py),
+[company guards](../norman_mcp/tools/country_scope.py),
+[Polish asset inputs](../norman_mcp/tools/polish_assets.py), and
+[protocol tests](../tests/test_polish_protocol.py).
