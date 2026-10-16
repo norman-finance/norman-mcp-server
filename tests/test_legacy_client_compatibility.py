@@ -53,11 +53,11 @@ vat_exemption_basis, the legal basis of a Polish VAT exemption; create_invoice,
 update_invoice, cancel_invoice and create_credit_note take correction_reason, why a
 correction is issued. No existing argument changes.
 
-The October 16 Poland parity changes intentionally update 18 tool signatures:
+The October 16 Poland parity changes intentionally update 19 tool signatures:
 VAT codes on shared invoice items and transactions, optional Polish asset fields,
 attachment currency omission, and country/chart-aware descriptions. Two resources
 and two prompts also receive country-aware metadata; create_transaction_prompt
-adds optional currency. Existing names/required arguments stay unchanged.
+makes currency optional. Existing names/required arguments stay unchanged.
 Only those reviewed entries are updated; all unrelated hashes remain pinned.
 """
 
