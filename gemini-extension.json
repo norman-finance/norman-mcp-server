@@ -1,7 +1,7 @@
 {
   "name": "norman-finance",
   "version": "1.0.0",
-  "description": "AI-powered bookkeeping, accounting, invoicing, and tax workflows for European businesses through MCP.",
+  "description": "MCP accounting for Germany and Poland: invoices, receipts, DATEV, KPiR, full books and JPK VAT registers.",
   "mcpServers": {
     "norman-finance": {
       "httpUrl": "https://mcp.norman.finance/mcp"

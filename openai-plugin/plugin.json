@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "app-6981ec32565481919b1c5a1627b1e330",
   "version": "2.1.0",
-  "description": "Business accounting with interactive Inbox, document review, reconciliation, Ledger and tax-preview workflows.",
+  "description": "Accounting for Germany and Poland: invoices, receipts, DATEV, KPiR, full books, JPK registers and interactive review tools.",
   "author": {
     "name": "Norman AI Inc."
   },
@@ -16,7 +16,11 @@
     "receipts",
     "tax",
     "DATEV",
-    "MCP"
+    "MCP",
+    "Germany",
+    "Poland",
+    "KPiR",
+    "JPK"
   ],
   "extensions": {
     "com.openai": {
@@ -30,7 +34,7 @@
         ],
         "developerName": "Norman AI Inc.",
         "displayName": "Norman",
-        "longDescription": "Norman connects your business accounting workspace to ChatGPT and Codex. Manage invoices and quotes, products and services, clients, receipts, transactions, Ledger accounts, DATEV exports and tax previews from the conversation.\n\nOpen focused interactive views in compatible hosts:\n• Norman Inbox: review questions blocking workflows, pending automation approvals and tax reviews. Inspect the complete proposed action before deciding.\n• Document Review: inspect extracted invoices and receipts, filter documents and find items needing a transaction match.\n• Reconciliation Cockpit: review missing documents, categories and transaction verification before closing a period.\n• Ledger Explorer: inspect account balances and drill into the underlying postings.\n• Tax Preview: review a Finanzamt test preview, tax lines, readiness and filing status. Opening a preview never submits a return.\n\nPackaged skills guide routine bookkeeping, invoicing, month-end work, tax-advisor reviews and company-registration preparation. German workflows include SKR03/SKR04, DATEV, ELSTER previews and GmbH/UG formation. Availability depends on your company, plan and the tools enabled for your connection. Hosts without interactive UI support receive the underlying tool results.\n\nChanges to your books, client messages, automation approvals and binding tax submissions require the corresponding user authorization. Personal government identifiers are entered in the authenticated Norman app. SEPA bill payments are initiated through finAPI and authorized in the external finAPI/bank interface; your bank executes the transfer. Norman stores payment-order records for accounting and status tracking.",
+        "longDescription": "Norman connects your business accounting workspace to ChatGPT and Codex. Manage invoices and quotes, products and services, clients, receipts, transactions, Ledger accounts, DATEV exports and tax previews from the conversation.\n\nOpen focused interactive views in compatible hosts:\n• Norman Inbox: review questions blocking workflows, pending automation approvals and tax reviews. Inspect the complete proposed action before deciding.\n• Document Review: inspect extracted invoices and receipts, filter documents and find items needing a transaction match.\n• Reconciliation Cockpit: review missing documents, categories and transaction verification before closing a period.\n• German Ledger Explorer: inspect SKR account balances and drill into the underlying postings.\n• German Tax Preview: review a Finanzamt test preview, tax lines, readiness and filing status. Opening a preview never submits a return.\n\nPackaged skills guide routine bookkeeping, invoicing, month-end work, tax-advisor reviews and company-registration preparation. German workflows include SKR03/SKR04, DATEV, ELSTER previews and GmbH/UG formation. Polish support is in soft launch: structured tools inspect JDG KPiR, sp. z o.o. full books and prepared financial statements, JPK VAT registers, PIT/ZUS or CIT estimates, export compatibility and existing JPK/PIT filing status. Shared tools accept Polish VAT codes and depreciation inputs. Polish signing, tax submission and year closing are not exposed through these MCP tools. Select the company first; its country and accounting setup determine the applicable workflow. Availability depends on your company, plan and the tools enabled for your connection. Hosts without interactive UI support receive the underlying tool results.\n\nChanges to your books, client messages, automation approvals and binding tax submissions require the corresponding user authorization. Personal government identifiers are entered in the authenticated Norman app. SEPA bill payments are initiated through finAPI and authorized in the external finAPI/bank interface; your bank executes the transfer. Norman stores payment-order records for accounting and status tracking.",
         "privacyPolicyURL": "https://norman.finance/privacy-policy",
         "shortDescription": "Accounting and tax workspace",
         "termsOfServiceURL": "https://norman.finance/terms-and-conditions",
