@@ -3,8 +3,8 @@
       <img width="140px" src="https://github.com/user-attachments/assets/d2cb1df3-69f1-460e-b675-beb677577b06" alt="Norman" />
    </a>
    <h1>Norman MCP Server</h1>
-   <p>AI-powered bookkeeping, accounting, and taxes for European businesses, inside your AI assistant.<br/>
-   Norman connects invoicing, transactions, receipts, ledgers, DATEV exports, reports, taxes, and company workflows to any MCP-compatible AI.</p>
+   <p>AI-powered bookkeeping, accounting, invoicing, and tax workflows for European businesses through MCP.<br/>
+   Connect Norman Finance to your AI for bookkeeping, invoices, transactions, documents, ledgers, reports, and tax workflows.</p>
    <br/>
    <p>
       <img src="https://img.shields.io/badge/Protocol-MCP-black?style=flat-square" alt="MCP" />
@@ -29,13 +29,15 @@
 
 ### What you can do
 
-**Invoicing** — Create and edit invoices, quotes, and recurring schedules, including document templates, line discounts, units, service dates, payment links, and ZUGFeRD e-invoices; cancel an issued invoice with a Stornorechnung, credit part of it with a Rechnungskorrektur, or make a delivery note (Lieferschein) from an invoice or an approved quote
+**Invoicing** — Create and edit invoices, quotes, and recurring schedules, including document templates, line discounts, units, service dates and payment links. Polish invoice items preserve VAT codes. German workflows include ZUGFeRD, Stornorechnung, Rechnungskorrektur and Lieferschein.
 
 **Client emails and reminders** — Send invoices with the company's own email wording and CC recipients, see their delivery status, switch automatic payment reminders on for an invoice, and set the reminder rule (days and dunning fees per level)
 
 **Bookkeeping** — Categorize transactions, match receipts, and verify entries
 
-**DATEV** — Generate DATEV EXTF exports with SKR03 or SKR04 for your Steuerberater. [DATEV support](#datev-mcp-support-extf-skr03-and-skr04) also covers the upcoming complete Ledger export, EXTF reader, and checks before accountant handoff.
+**Polish accounting** — Inspect a JDG's KPiR and explain why an operation is included or excluded. For sp. z o.o. using PL_FULL, read the journal, chart of accounts, account sheets, trial balance and prepared financial statements. Preview accounting-export compatibility for General, Optima and EPP formats. See [Polish MCP tools and examples](docs/polish-accounting.md).
+
+**DATEV** — Generate German DATEV EXTF exports with SKR03 or SKR04 for your Steuerberater. [DATEV support](#datev-mcp-support-extf-skr03-and-skr04) includes complete Ledger export, standalone EXTF reading and checks before accountant handoff.
 
 **Automation rules** — "Always book Telekom to Internet costs": preview, create, and manage rules that categorize matching transactions automatically
 
@@ -45,9 +47,9 @@
 
 **Products & Services** — Keep a catalog of what you sell, with prices, VAT rates and units, and fill invoice lines from it
 
-**Tax Filing** — Generate Finanzamt previews, file VAT returns, and track deadlines
+**Tax reports** — For Germany, generate Finanzamt previews and submit supported returns after confirmation. For Poland, inspect JPK sales and purchases, PIT/ZUS or CIT estimates, and existing JPK/PIT filing status and UPO availability. Polish signing and submission are not exposed as MCP tools.
 
-**Payroll** — Run the monthly Lohnabrechnung of a GmbH/UG (Max plan): calculate and approve the month, see social insurance per Krankenkasse and the Minijob-Zentrale, save the Beitragsnachweis estimate, file the Lohnsteuer-Anmeldung, correct an approved month, and get payslips and the Lohnkonto as download links. Steuer-IDs, insurance numbers and bank details stay in the Norman app
+**German payroll** — Run the monthly Lohnabrechnung of a GmbH/UG (Max plan): calculate and approve the month, see social insurance per Krankenkasse and the Minijob-Zentrale, save the Beitragsnachweis estimate, file the Lohnsteuer-Anmeldung, correct an approved month, and get payslips and the Lohnkonto as download links. Steuer-IDs, insurance numbers and bank details stay in the Norman app
 
 **Company Overview** — Check your balance, revenue, and financial health at a glance
 
@@ -72,7 +74,55 @@ followed by URL entries from the deprecated `file_paths` alias; successfully fet
 files are still uploaded. Structured imports report errors per document. Download
 errors omit signed URLs, and temporary downloads are cleaned up after use or cancellation.
 
-Norman is built as a multi-market European accounting platform. Market-specific capabilities are added as Norman expands; current German coverage includes SKR03/SKR04, DATEV, ELSTER, ZUGFeRD, and GmbH/UG workflows.
+### Market-specific capabilities
+
+Select the company before working with its books. `company://current` identifies
+the selected company, country, accounting currency, legal form and chart of
+accounts. Use `list_companies` and `switch_company` when working across companies;
+the conversation language does not determine the tax jurisdiction.
+
+| Market | Books and reports | Tax workflow through MCP |
+|:--|:--|:--|
+| **Germany** | SKR03/SKR04, Ledger, DATEV EXTF exports, GmbH/UG year-end workflows | Finanzamt previews and supported ELSTER submission tools, with explicit confirmation |
+| **Poland — JDG** | KPiR (`PL_KPIR`), operation inclusion diagnostics, PLN accounting with original document currencies preserved | JPK VAT register, PIT/ZUS estimates, existing JPK/PIT filing status and UPO availability |
+| **Poland — sp. z o.o.** | Full books (`PL_FULL`): journal, chart, account sheets, trial balance and prepared financial statements | JPK VAT register, CIT estimates and existing JPK filing status and UPO availability |
+
+Polish support is in **soft launch**. Availability depends on the selected
+company's setup, plan, permissions and deployed Norman API. Polish tools check
+company country and book type; German procedures such as DATEV export, ELSTER,
+payroll and incorporation reject Polish companies.
+
+The Polish MCP tools cover books, diagnostics, export previews and existing filing
+state. They do not create manual Polish journal postings, generate or close annual
+statements, sign returns or submit them to MF/KRS. An XML download is not a filing
+receipt: report success only from confirmed acceptance and UPO.
+
+### Poland: KPiR, full books and JPK
+
+The [Polish accounting guide](docs/polish-accounting.md) lists all 14 dedicated
+tools, their arguments and workflow limits. Shared invoice, transaction and asset
+tools also support Polish VAT codes and depreciation inputs.
+
+- **JDG:** inspect monthly or annual KPiR, then explain an individual operation's
+  inclusion or exclusion with `get_polish_tax_book_operation`.
+- **Spółki:** follow journal entries back to their source, inspect account balances
+  and review an existing financial statement's workbook, notes and XML issues.
+- **VAT:** compare JPK sales, purchases, totals and exclusions with the underlying
+  operations. Preserve `vat_code`; a numeric 0% rate alone does not identify
+  exemption, reverse charge or a supply outside Poland.
+- **Accountant handoff:** preview General, Optima or EPP export compatibility and
+  review blockers before preparing the handoff in Norman.
+
+Try asking:
+
+- *"Pokaż KPiR mojej JDG za wrzesień i wyjaśnij, dlaczego ten koszt nie trafił do księgi."*
+- *"Pokaż zestawienie obrotów i sald mojej spółki za trzeci kwartał."*
+- *"Sprawdź rejestr JPK_V7: sprzedaż, zakupy i pominięte operacje."*
+- *"Sprawdź status wysyłki JPK i dostępność UPO. Niczego nie wysyłaj."*
+
+KPiR and tax-estimate reads can synchronize derived records in the API; these
+tools declare `readOnlyHint=false`. The API remains responsible for calculations,
+eligibility and access checks.
 
 <br/>
 
@@ -109,23 +159,21 @@ a DATEV export for a period, then download the file to share with your tax advis
 
 **Can I read an EXTF file without importing it into my books?**
 
-The upcoming `read_datev_file` tool reads EXTF/DTVF Buchungsstapel files, shows
+The `read_datev_file` tool reads EXTF/DTVF Buchungsstapel files, shows
 their header and booking rows, and filters by account, document date, text or
 amount. It requires an authenticated Norman company, but no DATEV connection or
 chart setup. Reading the file does not create transactions or Ledger postings.
 
 **Can I export the full GmbH/UG Ledger and check it before accountant handoff?**
 
-The upcoming Ledger export includes opening balances, manual entries, payroll,
+The Ledger export includes opening balances, manual entries, payroll,
 depreciation and closing postings. `validate_ledger_datev_export` checks the EXTF
 structure, source coverage and requested documents. Findings help prepare the
 handoff; they do not certify tax correctness or guarantee DATEV import acceptance.
 
-Complete Ledger export, preflight and standalone file reading are pending release
-in [MCP PR #188](https://github.com/norman-finance/norman-mcp-server/pull/188), with
-[API PR #3580](https://github.com/norman-finance/norman-finance-api/pull/3580) required
-first. See [DATEV tool details](#datev-files-and-complete-ledger-exports) for limits
-and setup.
+Complete Ledger export, preflight and standalone file reading are implemented in
+this repository and require the matching Norman API endpoints. See
+[DATEV tool details](#datev-files-and-complete-ledger-exports) for limits and setup.
 
 Example requests for these workflows:
 
@@ -138,6 +186,8 @@ Example requests for these workflows:
 Once connected, talk to your books in plain language:
 
 - *"Prepare and file my UStVA for last month."*
+- *"Show my Polish company's September JPK register and explain excluded operations."*
+- *"Review my sp. z o.o. trial balance and prepared financial statement."*
 - *"Send a €1,200 invoice to ACME for consulting."*
 - *"What did I spend on software this quarter?"*
 - *"Find tax deductions I might have missed."*
@@ -157,9 +207,9 @@ with the current accounting context.
 |:--|:--|
 | **Norman Inbox** | See current bank balances, bookkeeping tasks and quick chat actions. Review blocked workflows and pending automation approvals before explicitly approving or dismissing. |
 | **Document Review** | Review uploaded invoices and receipts, find documents that still need a transaction match, and inspect linked records. |
-| **Reconciliation Cockpit** | Find transactions with missing documents, missing categories, or accounts from a previous SKR before month-end or year-end close. |
-| **Ledger Explorer** | Browse the chart of accounts, inspect balances, and drill into the postings behind an account. |
-| **Tax Preview & Submission** | Review the Finanzamt test PDF, tax lines, period, total, and readiness checks before filing. Submission is a separate explicit action and stays disabled until the user confirms the preview. |
+| **Reconciliation Cockpit** | Find transactions with missing documents or categories; German SKR checks also identify accounts from a previous chart. |
+| **German Ledger Explorer** | Browse SKR accounts, inspect balances, and drill into postings. Polish PL_FULL books use the dedicated structured tools linked below. |
+| **German Tax Preview & Submission** | Review the Finanzamt test PDF, tax lines, period, total, and readiness checks before filing. Submission is a separate explicit action and stays disabled until the user confirms the preview. |
 
 Try prompts such as:
 
@@ -174,6 +224,11 @@ does not change accounting data. Binding actions, including tax submission,
 remain separate MCP tool calls with their normal confirmation and permission
 checks. Clients without MCP Apps support receive the same underlying results as
 structured or text tool output.
+
+Polish KPiR, full books, financial statements and JPK are available through the
+[dedicated structured tools](docs/polish-accounting.md). The German Ledger
+Explorer and Finanzamt preview do not imply equivalent Polish interactive or
+submission workflows.
 
 The SDK 2 HTTP transport limits MCP JSON request bodies to 4 MiB. Send larger
 documents through `file_url` or the upload page's `file_ref`, rather than inline
@@ -246,6 +301,10 @@ Found a German **GmbH or UG (haftungsbeschränkt)** end-to-end — Norman collec
 ## 🚀 Get Started
 
 Before connecting, [create a free Norman account](https://app.norman.finance/sign-up?utm_source=mcp_server) if you don't have one yet. Log in with your Norman credentials via OAuth — your password never touches the AI.
+
+For a Polish business, use [Polish signup](https://app.norman.finance/sign-up?country=PL&lang=pl&utm_source=mcp_server).
+After connecting, confirm the selected company through `company://current`
+before inspecting or changing its books.
 
 <details>
 <summary><strong>Claude Connectors</strong></summary>
@@ -434,8 +493,8 @@ Ready-to-use skills compatible with **Claude Code**, **OpenClaw**, and the [Agen
 | `create-invoice` | Step-by-step invoice creation and sending |
 | `manage-clients` | List, create, and update client records |
 | `manage-products` | List, create, update, and archive catalog products; fill invoice lines from them |
-| `tax-report` | Review, preview, and file tax reports with the Finanzamt |
-| `run-payroll-month` | Monthly payroll — changes, calculation, approval, social insurance, payment, and Lohnsteuer-Anmeldung |
+| `tax-report` | German reports: review, preview, and file with the Finanzamt |
+| `run-payroll-month` | German payroll — changes, calculation, approval, social insurance, payment, and Lohnsteuer-Anmeldung |
 | `categorize-transactions` | Categorize and verify bank transactions |
 | `find-receipts` | Find missing receipts from Gmail or email and attach them |
 | `overdue-reminders` | Identify overdue invoices and send payment reminders |
@@ -483,7 +542,7 @@ Ready-to-use skills compatible with **Claude Code**, **OpenClaw**, and the [Agen
 
 ### Mixed VAT and documented input tax
 
-See [the VAT item workflow](docs/vat-item-workflows.md) for item-level treatments, fixed documented EUR input VAT, refunds and manual VAT-only corrections. Requires the corresponding API migrations and calculation updates.
+See [the German VAT item workflow](docs/vat-item-workflows.md) for item-level treatments, fixed documented EUR input VAT, refunds and manual VAT-only corrections. For Poland, see [VAT codes and document currencies](docs/polish-accounting.md#existing-write-tools). Requires the corresponding API migrations and calculation updates.
 
 
 ### Norman Inbox and MCP Events (development)
@@ -633,9 +692,9 @@ catalog availability or a successful production OAuth/webhook connection.
 
 ### DATEV files and complete Ledger exports
 
-`trigger_datev_export` defaults to the complete Ledger for GmbH/UG (`isSme`),
+For German companies, `trigger_datev_export` defaults to the complete Ledger for GmbH/UG (`isSme`),
 including opening, manual, payroll, depreciation and closing entries. Other
-companies retain the finalized-transactions export. Use `source="transactions"`
+German companies retain the finalized-transactions export. Use `source="transactions"`
 only for an explicitly requested transactions-only export. A Ledger failure never
 falls back to that narrower export. The API checks the journal before returning
 an expiring download link and includes its validation findings in the response.

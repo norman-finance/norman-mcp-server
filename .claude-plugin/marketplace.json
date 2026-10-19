@@ -33,7 +33,9 @@
         "freelancer",
         "ledger",
         "mcp",
-        "oauth"
+        "oauth",
+        "kpir",
+        "jpk"
       ],
       "category": "finance",
       "tags": [
@@ -43,7 +45,13 @@
         "finanzamt",
         "umsatzsteuer",
         "kleinunternehmer",
-        "freiberufler"
+        "freiberufler",
+        "ksiegowosc",
+        "faktury",
+        "podatki",
+        "jdg",
+        "kpir",
+        "jpk"
       ]
     }
   ]

@@ -14,7 +14,7 @@ Thanks for your interest in contributing! Here's how to get started.
 ```bash
 git clone https://github.com/norman-finance/norman-mcp-server.git
 cd norman-mcp-server
-pip install -e ".[dev]"
+pip install -e ".[dev,sse]" -c constraints.txt
 ```
 
 ### Environment
@@ -66,6 +66,8 @@ norman-mcp-server/
 │       ├── invoices.py         # Invoice management and e-invoicing
 │       ├── transactions.py     # Transaction search, categorization
 │       ├── taxes.py            # Tax reports, VAT filing, Finanzamt
+│       ├── polish_accounting.py # KPiR, PL_FULL, JPK and Polish filing status
+│       ├── country_scope.py     # Invocation guards for German procedures
 │       ├── documents.py        # Attachment upload and linking
 │       └── company.py          # Company details and balance
 ├── skills/                     # Claude Code / OpenClaw skills
@@ -108,6 +110,32 @@ async def my_new_tool(ctx: Context, param: str) -> Dict[str, Any]:
 3. Include OpenClaw-compatible metadata for cross-platform support
 4. Update the skills table in `README.md`
 
+## Country-specific accounting
+
+Support both Germany and Poland without assuming the user's chat language,
+currency or first company determines the active market. Read the selected
+company and bind company-scoped requests to its ID. Polish full-book tools
+require `PL_FULL`; KPiR tools apply to JDG. Use the company's chart codes rather
+than hard-coding German SKR accounts.
+
+Keep original document currency, accounting currency, operation date and payment
+date distinct. Preserve Polish `vat_code`, including explicit empty values; a
+zero numeric VAT rate does not identify a tax treatment. Calculations and
+eligibility stay in the Norman API. Document tools that synchronize derived
+records with `readOnlyHint=false`, even if their user-facing purpose is reading.
+
+See the [Polish accounting guide](docs/polish-accounting.md). Changes to these
+contracts should cover JDG, PL_FULL, German regression behavior, multi-company
+isolation and pagination. Run the existing focused checks:
+
+```bash
+python -m pytest -q tests/test_polish_parity.py tests/test_polish_protocol.py tests/test_distribution_manifests.py tests/test_datev_tools.py
+```
+
+Keep README and distribution descriptions aligned with the implemented tools.
+A repository update or passing local test is separate from a hosted deployment,
+client-directory publication or confirmed tax filing.
+
 ## Code Style
 
 This project uses:
@@ -125,7 +153,7 @@ mypy norman_mcp/
 ## Pull Requests
 
 1. Fork the repository
-2. Create a feature branch from `main`
+2. Create a feature branch from `develop` and target `develop` in the pull request
 3. Make your changes
 4. Run formatting and type checks
 5. Submit a pull request with a clear description of what changed and why

@@ -22,7 +22,9 @@
     "freelancer",
     "ledger",
     "mcp",
-    "oauth"
+    "oauth",
+    "kpir",
+    "jpk"
   ],
   "logo": "assets/logo.svg"
 }

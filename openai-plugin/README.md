@@ -6,6 +6,13 @@ package name and existing OAuth MCP endpoint at `https://mcp.norman.finance/mcp`
 The hosted server owns UI resources; this ZIP contains metadata, skills and
 the brand icon, with no credentials or generated app bindings.
 
+The general package description covers European businesses. Polish
+KPiR, PL_FULL, prepared financial statements, JPK registers and filing-status
+reads use structured tools; the SKR Ledger Explorer and Finanzamt preview remain
+German workflows. See [Polish accounting scope](../docs/polish-accounting.md).
+Editing this package's description does not update the published directory
+listing; upload and review remain separate steps.
+
 ## Build
 
 Run from the repository root with Python 3.10 or later:
