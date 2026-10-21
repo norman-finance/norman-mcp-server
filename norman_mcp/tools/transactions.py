@@ -44,7 +44,10 @@ CATEGORY_METADATA_DESCRIPTION = (
     "{car_use_type (BUSINESS_TRIP or DRIVE_TO_WORK), car_usage_start_date, car_usage_finish_date, "
     "car_usage_distance (km there and back for a trip, one way to work), car_usage_days? "
     "(DRIVE_TO_WORK), car_usage_method (FLAT_RATE calculates, ACTUAL_COSTS keeps the amount)}}. "
-    "Keep the dates in one calendar year. Without days, the entry keeps the amount passed."
+    "Keep the dates in one calendar year. Without days, the entry keeps the amount passed. "
+    "A depreciable purchase {amortization: {useful_lifetime (months), amortization_method? (straightLine, "
+    "or instant for German computer hardware and software: the whole amount in the month of purchase), "
+    "professional_use_part? (0 to 1)}} keeps its asset in sync when the amount is above the category's limit."
 )
 CategoryMetadata = Annotated[dict | None, Field(description=CATEGORY_METADATA_DESCRIPTION)]
 
@@ -243,7 +246,8 @@ def register_transaction_tools(mcp):
             description="Public ID of the home office entry being edited: its own amount does not count as booked",
         ),
     ) -> dict[str, Any]:
-        """Official flat rates Norman uses for the travel meal allowance and the home office flat rate.
+        """German official (BMF) flat rates Norman uses for the travel meal allowance and the home office
+        flat rate of German sole proprietors; none apply to a Polish company.
 
         mealAllowance gives per country the fullDay and travelDay rates, and city rates with the key
         to pass as trip_place. homeOffice gives perDay, mostPerYear and what the year's other home
@@ -324,7 +328,7 @@ def register_transaction_tools(mcp):
         ),
         client_id: Optional[str] = Field(
             default=None,
-            description="Client public ID for income and EU sales/ZM attribution",
+            description="Client public ID for income attribution (and a German company's EU sales in its ZM)",
         ),
         vendor_id: Optional[str] = Field(
             default=None,
@@ -502,7 +506,10 @@ def register_transaction_tools(mcp):
         ),
         company_category_id: Optional[str] = Field(
             default=None,
-            description="SME company category ID from DATEV chart of accounts (for GmbH/UG)",
+            description=(
+                "Company category ID from the selected company chart (DE SKR03/SKR04, PL_KPIR or "
+                "PL_FULL). Use list_company_categories to find the right ID."
+            ),
         ),
         payment_date: Optional[str] = Field(
             default=None,

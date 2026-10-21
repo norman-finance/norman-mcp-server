@@ -1,7 +1,7 @@
 ---
 name: manage-clients
 description: Manage business clients - list, search, create, or update client information. Use when the user mentions clients, contacts, customers, Kunden, or needs to manage their client database.
-version: 1.0.0
+version: 1.0.1
 metadata:
   openclaw:
     emoji: "\U0001F465"
@@ -21,8 +21,9 @@ Help the user manage their client database:
 When creating a client with `create_client`, gather:
 - **Required**: Client name (company or individual)
 - **Recommended**: Email, phone, address (street, city, postal code, country)
-- **Optional**: Tax ID (Steuernummer), VAT ID (USt-IdNr.), payment terms, notes
+- **Optional**: Tax ID (DE Steuernummer, PL NIP), EU VAT ID (DE USt-IdNr., PL NIP with the PL prefix), payment terms, notes
 - For German businesses: ask about Kleinunternehmer status if relevant
+- For Polish businesses: ask about the VAT exemption (zwolnienie podmiotowe z VAT) if relevant
 
 ## Updating a client
 - Call `get_client` first to show current details
@@ -31,5 +32,5 @@ When creating a client with `create_client`, gather:
 
 ## Best practices
 - Always verify client details before creating invoices
-- For EU clients, the VAT ID (USt-IdNr.) is important for reverse charge invoices
+- For EU business clients, their EU VAT ID is needed for reverse charge invoices, the German ZM and the Polish VAT-UE
 - Suggest cleaning up duplicate clients if detected

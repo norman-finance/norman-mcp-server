@@ -26,7 +26,8 @@ def register_tax_office_tools(mcp):
             description="Name, town or postcode of the tax office; omit it for the full list",
         ),
     ) -> dict[str, Any]:
-        """Search German tax offices (Finanzämter) by name, town or postcode.
+        """Search German tax offices (Finanzämter) by name, town or postcode. Germany only: a Polish
+        company's urząd skarbowy is not in this directory.
 
         Returns `tax_offices` with the 4-digit BuFa number (`value`) and the office name
         (`label`). For an address, prefer suggest_tax_office.
@@ -51,7 +52,7 @@ def register_tax_office_tools(mcp):
         street: str | None = Field(default=None),
         house_number: str | None = Field(default=None),
     ) -> dict[str, Any]:
-        """Find the Finanzamt responsible for an address.
+        """Find the German Finanzamt responsible for a German address (Germany only).
 
         Use the home address for a self-employed person and the management address
         (Geschäftsleitung) for a GmbH/UG. `suggested` is set only when exactly one office

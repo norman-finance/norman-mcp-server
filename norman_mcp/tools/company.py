@@ -193,13 +193,19 @@ def register_company_tools(mcp):
         datev_client_number: Optional[str] = Field(default=None, description="German companies only: DATEV client/Mandant number"),
         notify_tax_deadlines: Optional[bool] = Field(
             default=None,
-            description="Email reminders a week before and on the due date of each UStVA and ZM. False turns them off.",
+            description=(
+                "Tax deadline reminders. German companies: e-mails a week before and on the due date "
+                "of each UStVA and ZM. Polish companies: in the app, by push and by e-mail, a few days "
+                "before and on the day, for the JPK_V7, VAT-UE, PIT and CIT advances, ZUS DRA, annual "
+                "PIT and CIT-8. False turns them off."
+            ),
         ),
     ) -> Dict[str, Any]:
         """Update company information.
 
         Use a chart_of_accounts template supported by the company country. DATEV advisor/client numbers are German-only.
-        notify_tax_deadlines switches the UStVA and ZM deadline reminder emails on or off.
+        notify_tax_deadlines switches the tax deadline reminders on or off: the UStVA and ZM e-mails
+        of a German company, the JPK_V7, VAT-UE, PIT, CIT and ZUS reminders of a Polish one.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id

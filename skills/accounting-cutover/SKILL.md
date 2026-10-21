@@ -1,6 +1,6 @@
 ---
 name: accounting-cutover
-description: Analyze and migrate opening balances or prior DATEV books into Norman's SME Ledger. Use when a GmbH or UG is starting its books, changing accounting systems, importing DATEV opening balances, or performing an accounting cutover.
+description: Analyze and migrate opening balances or prior DATEV books into Norman's SME Ledger. Germany only, for a GmbH or UG on SKR03/SKR04. Use when a GmbH or UG is starting its books, changing accounting systems, importing DATEV opening balances, or performing an accounting cutover.
 metadata:
   openclaw:
     emoji: "\U0001F4DA"
