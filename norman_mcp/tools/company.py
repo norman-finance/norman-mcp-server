@@ -9,6 +9,7 @@ from norman_mcp.context import Context
 from norman_mcp import config
 from norman_mcp.tools.results import as_object
 from norman_mcp.company_profile import without_company_personal_identifiers
+from norman_mcp.tools.polish_settings import company_country, propose_company_details, summarize
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,25 @@ def _company_summary(company: Dict[str, Any], active_id: Optional[str]) -> Dict[
         "isArchived": company.get("isArchived"),
         "active": bool(company_id) and company_id == active_id,
     }
+
+
+# A Polish company's tax settings among the company details: proposed, never written here (the API refuses them).
+POLISH_TAX_DETAILS = ("vatNumber", "taxNumber", "activityStart", "isToNotifyTaxDeadlines")
+
+
+async def _update_polish_company(
+    api: Any, company_url: str, update_data: Dict[str, Any], tax_details: Dict[str, Any],
+) -> Dict[str, Any]:
+    """A Polish company: its NIP, EU VAT number, business start and reminders are proposed for the owner to apply in
+    Norman; the other details are written as before."""
+    answer = summarize(await propose_company_details(api, tax_details))
+    other = {key: value for key, value in update_data.items() if key not in POLISH_TAX_DETAILS}
+    if other:
+        answer["company"] = without_company_personal_identifiers(
+            api._make_request("PATCH", company_url, json_data=other)  # noqa: SLF001 - the client's write path
+        )
+        answer["updated"] = sorted(other)
+    return answer
 
 
 def register_company_tools(mcp):
@@ -229,6 +249,12 @@ def register_company_tools(mcp):
             update_data["datevClientNumber"] = datev_client_number
         if notify_tax_deadlines is not None:
             update_data["isToNotifyTaxDeadlines"] = notify_tax_deadlines
+
+        if POLISH_TAX_DETAILS & update_data.keys() and await company_country(api) == "PL":
+            return await _update_polish_company(api, company_url, update_data, {
+                "tax_id": tax_id, "vat_id": vat_id, "activity_start": activity_start,
+                "notify_tax_deadlines": notify_tax_deadlines,
+            })
 
         if not update_data:
             current_data = without_company_personal_identifiers(await api.arequest("GET", company_url))

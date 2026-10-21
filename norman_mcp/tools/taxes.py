@@ -10,6 +10,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from norman_mcp.context import Context
 from norman_mcp import config
 from norman_mcp.tools.results import as_object, first_text
+from norman_mcp.tools.polish_settings import company_country, propose, propose_vat_status
 
 logger = logging.getLogger(__name__)
 
@@ -369,6 +370,8 @@ def register_tax_tools(mcp):
         """
         Update a tax setting for the selected company. Read its country and supported settings first.
         Review the report through its country-specific tools before any submission.
+        For a Polish company it changes nothing itself: it proposes this year's VAT status and JPK_V7 frequency,
+        and the owner applies it in Norman through the returned openUrl (propose_tax_setting_change).
         
         Args:
             setting_id: Public ID of the tax setting to update
@@ -387,6 +390,13 @@ def register_tax_tools(mcp):
             config.api_base_url,
             f"api/v1/taxes/tax-settings/{setting_id}/"
         )
+        if await company_country(api) == "PL":
+            return await propose_vat_status(
+                api, setting_url, vat_type=vat_type, reporting_frequency=reporting_frequency,
+                others={
+                    "tax_type": tax_type, "vat_percent": vat_percent, "start_tax_report_date": start_tax_report_date,
+                },
+            )
         
         update_data = {}
         if tax_type:
@@ -517,6 +527,7 @@ def register_tax_tools(mcp):
         """
         Set the owner's choices about the Polish VAT deduction proportion (art. 90) of one tax year. Only
         what is given changes. Confirm the numbers with the user first: they come from the user's records.
+        It proposes them: the owner applies the proposal in Norman through the returned openUrl.
 
         Returns:
             The year as get_vat_proportion describes it
@@ -539,6 +550,8 @@ def register_tax_tools(mcp):
         data |= {key: value for key, value in given.items() if value is not None}
         if not data:
             return {"message": "Nothing to change."}
+        if await company_country(api) == "PL":
+            return await propose(api, "vat_proportion", {"year": year, **data})
         return await api.arequest(
             "PUT", urljoin(config.api_base_url, f"api/v1/companies/{company_id}/taxes/vat-proportion/{year}/"),
             json_data=data,

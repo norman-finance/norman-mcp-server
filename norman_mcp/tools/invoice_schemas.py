@@ -285,8 +285,14 @@ class InvoiceSettings(ApiInput):
     show_customer_number: bool | None = None
     show_contact_person: bool | None = None
     online_payments_default: bool | None = None
-    tax_office_name: str | None = None
-    tax_office_city: str | None = None
+    tax_office_code: str | None = Field(
+        default=None,
+        description="Polish companies: the 4-digit code (KodUrzedu) of the tax office their JPK and annual "
+        "returns name, from search_polish_tax_offices. Proposed for the owner to apply in Norman.",
+    )
+    tax_office_confirmed: bool | None = Field(
+        default=None, description="True proposes confirming the stored tax office; only the owner confirms it.",
+    )
 
 
 class ReminderStep(ApiInput):

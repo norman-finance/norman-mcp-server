@@ -190,6 +190,11 @@ def register_polish_accounting_tools(mcp: Any) -> None:  # noqa: C901 - one regi
     async def get_polish_jpk_filing_status(ctx: Context, report_id: UUID) -> dict[str, Any]:
         """Read available filing methods, sessions, MF status and UPO availability. Only confirmed
         acceptance and UPO prove success; XML preparation/download does not. Does not submit or sign.
+        blockReason/blockMessage say why Norman cannot file for the owner now; subscription_required means
+        the plan has no filing (JDG Pro and Sp. z o.o. Max file): relay blockMessage, never a generic error.
+        warnings (sales_without_invoice, cash_method_sales, unreviewed_operations) never block filing.
+        refusal (code, description, reference_number, sent_at) is MF's refusal of the period's latest return:
+        quote MF's description and code as MF gave them, then point to the report page to fix and send again.
         """
         return await _request(ctx, f"taxes/reports/{report_id}/jpk-filing/")
 

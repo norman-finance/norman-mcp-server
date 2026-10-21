@@ -49,6 +49,7 @@ from norman_mcp.tools.incorporation import register_incorporation_tools
 from norman_mcp.tools.gewerbe_registration import register_gewerbe_registration_tools
 from norman_mcp.tools.corporate_tax_registration import register_corporate_tax_registration_tools
 from norman_mcp.tools.tax_offices import register_tax_office_tools
+from norman_mcp.tools.polish_settings import register_polish_settings_tools
 from norman_mcp.tools.payroll import register_payroll_tools
 from norman_mcp.prompts.templates import register_prompts
 from norman_mcp.resources.endpoints import register_resources
@@ -463,6 +464,8 @@ def create_app(
     register_gewerbe_registration_tools(scoped_tools)
     register_corporate_tax_registration_tools(scoped_tools)
     register_tax_office_tools(scoped_tools)
+    # A Polish company's tax settings: proposed for the owner to apply in Norman, never written by a tool.
+    register_polish_settings_tools(scoped_tools)
     register_payroll_tools(scoped_tools)
     register_prompts(server)
     register_resources(server)
