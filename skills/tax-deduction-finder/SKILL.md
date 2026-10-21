@@ -28,7 +28,7 @@ Review each transaction and flag potential deductions that may be miscategorized
 
 **Technology & software:**
 - SaaS subscriptions (Adobe, Google Workspace, Slack, hosting)
-- Computer hardware (fully deductible up to 800 EUR net, otherwise depreciated)
+- Computer hardware and software (fully deductible up to 800 EUR net; above that, written off in full in the year of purchase with the asset depreciation "In full in the year of purchase" (instant), BMF letter of 22 Feb 2022)
 - Phone and mobile plans (business portion)
 
 **Travel & transportation (Reisekosten):**
@@ -72,5 +72,6 @@ Present a summary:
 Tips:
 - Items up to 800 EUR net (GWG - Geringwertige Wirtschaftsgüter) can be fully deducted in the purchase year
 - Items over 800 EUR must be depreciated over their useful life (AfA)
+- Computer hardware, peripherals and software at any price may be written off in full in the year of purchase (instant): suggest it for a computer whose depreciation runs into later years
 - Mixed-use items (e.g., phone) should only claim the business portion
 - Keep receipts for all deductions - suggest attaching any missing ones

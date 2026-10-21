@@ -44,7 +44,10 @@ CATEGORY_METADATA_DESCRIPTION = (
     "{car_use_type (BUSINESS_TRIP or DRIVE_TO_WORK), car_usage_start_date, car_usage_finish_date, "
     "car_usage_distance (km there and back for a trip, one way to work), car_usage_days? "
     "(DRIVE_TO_WORK), car_usage_method (FLAT_RATE calculates, ACTUAL_COSTS keeps the amount)}}. "
-    "Keep the dates in one calendar year. Without days, the entry keeps the amount passed."
+    "Keep the dates in one calendar year. Without days, the entry keeps the amount passed. "
+    "A depreciable purchase {amortization: {useful_lifetime (months), amortization_method? (straightLine, "
+    "or instant for German computer hardware and software: the whole amount in the month of purchase), "
+    "professional_use_part? (0 to 1)}} keeps its asset in sync when the amount is above the category's limit."
 )
 CategoryMetadata = Annotated[dict | None, Field(description=CATEGORY_METADATA_DESCRIPTION)]
 
