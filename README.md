@@ -1,11 +1,9 @@
 <div align="center">
    <a href="https://norman.finance/?utm_source=mcp_server">
-      <img width="140px" src="https://github.com/user-attachments/assets/d2cb1df3-69f1-460e-b675-beb677577b06" alt="Norman" />
+      <img width="140" src="https://github.com/user-attachments/assets/d2cb1df3-69f1-460e-b675-beb677577b06" alt="Norman" />
    </a>
    <h1>Norman MCP Server</h1>
-   <p>AI-powered bookkeeping, accounting, invoicing, and tax workflows for European businesses through MCP.<br/>
-   Connect Norman Finance to your AI for bookkeeping, invoices, transactions, documents, ledgers, reports, and tax workflows.</p>
-   <br/>
+   <p>Invoicing, full accounting, year-end preparation and taxes for freelancers<br/>and small businesses in the EU, including Germany and Poland.</p>
    <p>
       <img src="https://img.shields.io/badge/Protocol-MCP-black?style=flat-square" alt="MCP" />
       <img src="https://img.shields.io/badge/Transport-Streamable_HTTP-black?style=flat-square" alt="Streamable HTTP" />
@@ -13,482 +11,192 @@
       <img src="https://img.shields.io/badge/License-MIT-black?style=flat-square" alt="MIT" />
    </p>
    <code>https://mcp.norman.finance/mcp</code>
-   <br/><br/>
-   <strong>Claude</strong> &nbsp;·&nbsp; <strong>ChatGPT</strong> &nbsp;·&nbsp; <strong>Gemini</strong> &nbsp;·&nbsp; <strong>Grok</strong> &nbsp;·&nbsp; <strong>Perplexity</strong> &nbsp;·&nbsp; <strong>Cursor</strong> &nbsp;·&nbsp; <strong>Any MCP Client</strong>
 </div>
-<br/>
-<div align="center">
 
-   <a href="https://github.com/user-attachments/assets/10718781-34f2-4640-9253-be4c82de6159"></a>
-</div>
-<br/>
+<p align="center">
+   <a href="#what-you-can-do">Capabilities</a> ·
+   <a href="#get-started">Connect</a> ·
+   <a href="#germany-accounting-vat-and-year-end">Germany</a> ·
+   <a href="#poland-kpir-full-books-and-jpk">Poland</a> ·
+   <a href="#documentation">Documentation</a>
+</p>
 
----
+Connect Norman Finance to your AI assistant to create invoices, organize receipts,
+reconcile transactions, keep your books up to date and prepare tax returns.
+Work from the same company records you use in the Norman app.
 
-<br/>
+Use the remote MCP connection with Claude, ChatGPT, Gemini, Grok, Perplexity,
+Cursor and other compatible clients. [Client setup instructions](docs/connecting.md)
+distinguish directory installs, extensions and custom connections.
 
-### What you can do
+## See Norman in action
 
-For Polish businesses, use the same connection to review **KPiR for JDG**, full
-books and trial balances for **sp. z o.o.**, **JPK** register data, tax estimates
-and existing filing status with **UPO** availability. Shared tools also support
-invoices, receipts and transactions with Polish VAT codes. Select the company
-first; access depends on its setup and permissions. Polish MCP tools do not sign
-or submit returns. See the [Polish workflows and limits](docs/polish-accounting.md).
+https://github.com/user-attachments/assets/10718781-34f2-4640-9253-be4c82de6159
 
-**Invoicing** — Create and edit invoices, quotes, and recurring schedules, including document templates, line discounts, units, service dates and payment links. Polish invoice items preserve VAT codes. German workflows include ZUGFeRD, Stornorechnung, Rechnungskorrektur and Lieferschein.
+[Watch the full Norman demo](https://github.com/user-attachments/assets/10718781-34f2-4640-9253-be4c82de6159) ·
+[Explore workflow examples](docs/gallery.md) ·
+[Watch the Poland introduction](#poland-kpir-full-books-and-jpk)
 
-**Client emails and reminders** — Send invoices with the company's own email wording and CC recipients, see their delivery status, switch automatic payment reminders on for an invoice, and set the reminder rule (days and dunning fees per level)
+## What you can do
 
-**Bookkeeping** — Categorize transactions, match receipts, and verify entries
+| Workflow | Ask Norman to help you |
+| :-- | :-- |
+| **Invoicing** | Create and send invoices, quotes and recurring invoices. Use your branding, product catalog, VAT codes, discounts and service dates. |
+| **Bookkeeping** | Organize receipts, categorize and verify transactions, match documents and reconcile your books. |
+| **Full accounting** | Inspect accounts, journal entries, balances and reports. Follow a figure back to its source documents. |
+| **VAT and taxes** | Calculate and review VAT, prepare returns and submit supported German returns after explicit confirmation. Review Polish registers, estimates and existing filing status. |
+| **Year-end preparation** | Review balances, prepare a German annual-close workspace and closing adjustments, or inspect existing Polish financial statements. |
+| **Clients and reminders** | Manage clients, track invoice delivery and prepare or send payment reminders when requested. |
+| **Automation** | Preview bookkeeping rules, start month-end or reconciliation workflows, answer their questions and schedule recurring work. |
 
-**Polish accounting** — Inspect a JDG's KPiR and explain why an operation is included or excluded. For sp. z o.o. using PL_FULL, read the journal, chart of accounts, account sheets, trial balance and prepared financial statements. Preview accounting-export compatibility for General, Optima and EPP formats. See [Polish MCP tools and examples](docs/polish-accounting.md).
+### Try asking
 
-**DATEV** — Generate German DATEV EXTF exports with SKR03 or SKR04 for your Steuerberater. [DATEV support](#datev-mcp-support-extf-skr03-and-skr04) includes complete Ledger export, standalone EXTF reading and checks before accountant handoff.
+- "Create a draft invoice for consulting and use my saved company branding."
+- "Which transactions are missing a receipt?"
+- "What did we spend on software this quarter?"
+- "Review my books and tell me what still needs attention before year-end."
+- "Prepare my German VAT return preview. Do not submit it yet."
+- "Show my Polish company's JPK register and explain excluded operations."
 
-**Automation rules** — "Always book Telekom to Internet costs": preview, create, and manage rules that categorize matching transactions automatically
+<a id="-get-started"></a>
 
-**Workflows** — "Close August for me": Norman runs month-end close, bank reconciliation, VAT-return readiness, invoice-to-payment and client document requests on its own servers, stops only to ask you something, and can run them by itself every month; answer its questions and see what the agents did this week from your AI client
+## Get started
 
-**Client Management** — Maintain your client database and contact details
+1. [Create a Norman account](https://app.norman.finance/sign-up?utm_source=mcp_server), or use your existing one.
+2. Add Norman in your AI client's directory or as a remote HTTP MCP server:
+   `https://mcp.norman.finance/mcp`.
+3. Complete Norman OAuth, then confirm the company you want to work with.
 
-**Products & Services** — Keep a catalog of what you sell, with prices, VAT rates and units, and fill invoice lines from it
-
-**Tax reports** — For Germany, generate Finanzamt previews and submit supported returns after confirmation. For Poland, inspect JPK sales and purchases, PIT/ZUS or CIT estimates, and existing JPK/PIT filing status and UPO availability. Polish signing and submission are not exposed as MCP tools.
-
-**German payroll** — Run the monthly Lohnabrechnung of a GmbH/UG (Max plan): calculate and approve the month, see social insurance per Krankenkasse and the Minijob-Zentrale, save the Beitragsnachweis estimate, file the Lohnsteuer-Anmeldung, correct an approved month, and get payslips and the Lohnkonto as download links. Steuer-IDs, insurance numbers and bank details stay in the Norman app
-
-**Company Overview** — Check your balance, revenue, and financial health at a glance
-
-**Company Formation** — Found a German **GmbH or UG**: collect the founders' data, check the name against the Handelsregister, generate the founding documents (Musterprotokoll, Gesellschafterliste), match with a notary, and track every step through to registration
-
-**Documents** — Upload and attach receipts, invoices, and supporting files
-
-`create_attachment.file_url`, bulk `file_urls`, and structured document imports
-accept HTTP(S) download links, including unexpired presigned S3 URLs with query
-parameters. Pass the entire link unchanged; the file host must accept the request
-without additional authorization headers. The URL downloader has no domain allowlist,
-URL-length cap, or explicit file-size cap. Its connect/read timeout is 30 seconds
-(not a total download deadline). The separate browser upload route defaults to
-50 MiB, configurable with `MCP_UPLOAD_MAX_SIZE`; API file validation still applies.
-
-URL download failures return an `error` message and `code`: `download_http_error`
-(with `http_status`), `download_timeout`, `download_network_error`,
-`download_storage_error`, or `download_error`. A 403 from the file host can mean an
-expired or rejected signature; obtain a fresh link and check the host response.
-Bulk uploads include `download_errors` for failed URLs, indexed within `file_urls`
-followed by URL entries from the deprecated `file_paths` alias; successfully fetched
-files are still uploaded. Structured imports report errors per document. Download
-errors omit signed URLs, and temporary downloads are cleaned up after use or cancellation.
-
-### Market-specific capabilities
-
-Select the company before working with its books. `company://current` identifies
-the selected company, country, accounting currency, legal form and chart of
-accounts. Use `list_companies` and `switch_company` when working across companies;
-the conversation language does not determine the tax jurisdiction.
-
-| Market | Books and reports | Tax workflow through MCP |
-|:--|:--|:--|
-| **Germany** | SKR03/SKR04, Ledger, DATEV EXTF exports, GmbH/UG year-end workflows | Finanzamt previews and supported ELSTER submission tools, with explicit confirmation |
-| **Poland — JDG** | KPiR (`PL_KPIR`), operation inclusion diagnostics, PLN accounting with original document currencies preserved | JPK VAT register, PIT/ZUS estimates, existing JPK/PIT filing status and UPO availability |
-| **Poland — sp. z o.o.** | Full books (`PL_FULL`): journal, chart, account sheets, trial balance and prepared financial statements | JPK VAT register, CIT estimates and existing JPK filing status and UPO availability |
-
-Polish support is in **soft launch**. Availability depends on the selected
-company's setup, plan, permissions and deployed Norman API. Polish tools check
-company country and book type; German procedures such as DATEV export, ELSTER,
-payroll and incorporation reject Polish companies.
-
-The Polish MCP tools cover books, diagnostics, export previews and existing filing
-state. They do not create manual Polish journal postings, generate or close annual
-statements, sign returns or submit them to MF/KRS. An XML download is not a filing
-receipt: report success only from confirmed acceptance and UPO.
-
-### Poland: KPiR, full books and JPK
-
-The [Polish accounting guide](docs/polish-accounting.md) lists all 14 dedicated
-tools, their arguments and workflow limits. Shared invoice, transaction and asset
-tools also support Polish VAT codes and depreciation inputs.
-
-- **JDG:** inspect monthly or annual KPiR, then explain an individual operation's
-  inclusion or exclusion with `get_polish_tax_book_operation`.
-- **Spółki:** follow journal entries back to their source, inspect account balances
-  and review an existing financial statement's workbook, notes and XML issues.
-- **VAT:** compare JPK sales, purchases, totals and exclusions with the underlying
-  operations. Preserve `vat_code`; a numeric 0% rate alone does not identify
-  exemption, reverse charge or a supply outside Poland.
-- **Accountant handoff:** preview General, Optima or EPP export compatibility and
-  review blockers before preparing the handoff in Norman.
-
-Try asking:
-
-- *"Pokaż KPiR mojej JDG za wrzesień i wyjaśnij, dlaczego ten koszt nie trafił do księgi."*
-- *"Pokaż zestawienie obrotów i sald mojej spółki za trzeci kwartał."*
-- *"Sprawdź rejestr JPK_V7: sprzedaż, zakupy i pominięte operacje."*
-- *"Sprawdź status wysyłki JPK i dostępność UPO. Niczego nie wysyłaj."*
-
-KPiR and tax-estimate reads can synchronize derived records in the API; these
-tools declare `readOnlyHint=false`. The API remains responsible for calculations,
-eligibility and access checks.
-
-<br/>
-
-#### Invoice appearance and updates
-
-Use `list_invoice_templates` to discover the templates, appearance controls and the active company's plan access. Use `get_invoice_settings` to read its logo and saved defaults.
-
-`create_invoice`, `create_recurring_invoice` and `create_offer` accept `document_design`, for example:
+For clients that accept an MCP configuration file:
 
 ```json
-{"template": "sovereign", "logoSize": 75, "textSize": "medium", "spacing": "compact", "tableBorders": "grid"}
+{
+  "mcpServers": {
+    "norman-finance": {
+      "url": "https://mcp.norman.finance/mcp"
+    }
+  }
+}
 ```
 
-Omit `document_design`, `font`, and `color_schema` to inherit saved branding. On create, a partial design uses that template's defaults. Paid templates require an active subscription.
-
-Use `update_invoice` for an invoice or quote, `update_recurring_invoice` for a schedule, and `update_invoice_settings` for future document defaults. Their typed `changes` object accepts camelCase or snake_case field names. Unset fields stay unchanged; explicit `false`, `0`, empty strings and valid nulls keep their meaning. A partial document design keeps the document's other saved controls; changing its template starts from that template's defaults. Keep existing line IDs when editing lines. Rates use minor currency units; the API calculates totals. Only set `isToSend` when sending is intended.
-
-Use `cancel_invoice`, `create_credit_note` and `create_delivery_note` for documents derived from an existing invoice or an approved quote; each links back to its source, and a cancelled invoice is read-only afterwards. `duplicate_invoice` copies an invoice or quote into a fresh draft without a link. API keys need `read_invoices` for template/settings reads and `write_invoices` for edits. Settings updates use the invoice-specific endpoint and cannot edit other company fields. Deploy the matching invoice API endpoints before deploying this MCP version.
-
-#### Client emails and payment reminders
-
-`send_invoice` and `send_invoice_overdue_reminder` use the company's email template when `subject` and `body` are left out; `additional_emails` go out as CC, and the company's own copy follows its setting unless `is_send_to_company` is given. `list_invoice_emails` returns every email about a document with its delivery status and the reminder the rule sends next. A send that fails at once returns an error with the reason; otherwise `email.status` is `sent`, or `queued` while Norman retries. A dunning fee is shown in the reminder with the total and is paid by bank transfer: a reminder with a fee has no online payment button.
-
-Automatic reminders are off until `autoReminders` is true on the invoice (`create_invoice`, `create_recurring_invoice`, or `update_invoice`, also after the invoice was issued); `remindersPaused` stops them for one invoice and `skip_invoice_reminder` stops one planned reminder. `remindersActive` on an invoice says whether Norman reminds by itself right now. The company's rule and wording live in `get_invoice_email_settings` / `update_invoice_email_settings` and `list_invoice_email_templates` / `save_invoice_email_template` / `reset_invoice_email_template`. `settings_on_overdue` is kept for older integrations and sends nothing. These tools need the invoice email endpoints of the API to be live before this MCP version is deployed.
-
-### DATEV MCP support: EXTF, SKR03 and SKR04
-
-**Does Norman MCP support DATEV exports?**
-
-Yes. Norman MCP Server provides DATEV EXTF (Buchungsstapel) exports for German
-bookkeeping with SKR03 and SKR04. Ask your MCP-compatible AI assistant to prepare
-a DATEV export for a period, then download the file to share with your tax advisor
-(Steuerberater). Attached receipts can be included in a ZIP package.
-
-**Can I read an EXTF file without importing it into my books?**
-
-The `read_datev_file` tool reads EXTF/DTVF Buchungsstapel files, shows
-their header and booking rows, and filters by account, document date, text or
-amount. It requires an authenticated Norman company, but no DATEV connection or
-chart setup. Reading the file does not create transactions or Ledger postings.
-
-**Can I export the full GmbH/UG Ledger and check it before accountant handoff?**
-
-The Ledger export includes opening balances, manual entries, payroll,
-depreciation and closing postings. `validate_ledger_datev_export` checks the EXTF
-structure, source coverage and requested documents. Findings help prepare the
-handoff; they do not certify tax correctness or guarantee DATEV import acceptance.
-
-Complete Ledger export, preflight and standalone file reading are implemented in
-this repository and require the matching Norman API endpoints. See
-[DATEV tool details](#datev-files-and-complete-ledger-exports) for limits and setup.
-
-Example requests for these workflows:
-
-- *"Prepare a DATEV export for my Steuerberater for last quarter."*
-- *"Read this EXTF file and show postings involving account 1800."*
-- *"Check the full GmbH Ledger export before I give it to my accountant."*
-
-### 💬 Try asking
-
-Once connected, talk to your books in plain language:
-
-- *"Prepare and file my UStVA for last month."*
-- *"Show my Polish company's September JPK register and explain excluded operations."*
-- *"Review my sp. z o.o. trial balance and prepared financial statement."*
-- *"Send a €1,200 invoice to ACME for consulting."*
-- *"What did I spend on software this quarter?"*
-- *"Find tax deductions I might have missed."*
-- *"Which invoices are overdue? Send reminders."*
-
-<br/>
-
-### Interactive UI inside your AI assistant
-
-Norman is more than a collection of background tools. In MCP Apps-compatible
-ChatGPT and Claude clients, Norman can render focused accounting workspaces
-directly inside the conversation. You can filter and inspect the underlying
-data, move between related views, and use **Ask AI** to continue the discussion
-with the current accounting context.
-
-| Interactive workspace | Use case |
-|:--|:--|
-| **Norman Inbox** | See current bank balances, bookkeeping tasks and quick chat actions. Review blocked workflows and pending automation approvals before explicitly approving or dismissing. |
-| **Document Review** | Review uploaded invoices and receipts, find documents that still need a transaction match, and inspect linked records. |
-| **Reconciliation Cockpit** | Find transactions with missing documents or categories; German SKR checks also identify accounts from a previous chart. |
-| **German Ledger Explorer** | Browse SKR accounts, inspect balances, and drill into postings. Polish PL_FULL books use the dedicated structured tools linked below. |
-| **German Tax Preview & Submission** | Review the Finanzamt test PDF, tax lines, period, total, and readiness checks before filing. Submission is a separate explicit action and stays disabled until the user confirms the preview. |
-
-Try prompts such as:
-
-- *"Open my Norman Inbox and show what needs my attention."*
-- *"Open my Document Review for the last 60 days."*
-- *"Show my Reconciliation Cockpit and highlight missing documents or categories."*
-- *"Open the Ledger Explorer and show the postings for account 1200."*
-- *"Open my VAT return for July, generate the Finanzamt test preview, and explain anything I should review before submission."*
-
-The Norman API remains the source of truth. Opening or filtering a workspace
-does not change accounting data. Binding actions, including tax submission,
-remain separate MCP tool calls with their normal confirmation and permission
-checks. Clients without MCP Apps support receive the same underlying results as
-structured or text tool output.
-
-Polish KPiR, full books, financial statements and JPK are available through the
-[dedicated structured tools](docs/polish-accounting.md). The German Ledger
-Explorer and Finanzamt preview do not imply equivalent Polish interactive or
-submission workflows.
-
-The SDK 2 HTTP transport limits MCP JSON request bodies to 4 MiB. Send larger
-documents through `file_url` or the upload page's `file_ref`, rather than inline
-base64. The separate multipart upload route keeps its own 50 MiB default,
-configurable with `MCP_UPLOAD_MAX_SIZE`.
-
-<br/>
-
-### 🏢 Starting a company
-
-Found a German **GmbH or UG (haftungsbeschränkt)** end-to-end — Norman collects the data, prepares the documents, and hands off to a notary:
-
-- *"I want to start a GmbH in Berlin — walk me through it."*
-- *"Found a UG for me and two co-founders, split the shares 60/40."*
-- *"Is 'Wunderbar Robotics' still free in the Handelsregister?"*
-- *"Reword my business purpose so it's ready for the register."*
-- *"Generate the Musterprotokoll and find me a notary who does online notarization."*
-- *"What's left before my company is officially registered?"*
-- *"Which Finanzamt is responsible for my company's address?"*
-
-> Choosing GmbH/UG also sets your Norman account to the corporate **SKR04** chart of accounts, so bookkeeping and taxes are ready from day one. The documents are drafts to prepare the notary appointment — not legal advice.
-
-<br/>
-
-<details open>
-<summary>
-<h3>👀 See it in action</h3>
-</summary>
-<br/>
-<table>
-   <tr>
-      <td align="center">
-         <p><strong>Filing a VAT return</strong></p>
-         <img src="https://github.com/user-attachments/assets/00bdf6df-1e37-4ecd-9f12-2747d8f53484" alt="Filing VAT tax report" width="400">
-      </td>
-      <td align="center">
-         <p><strong>Transaction insights</strong></p>
-         <img src="https://github.com/user-attachments/assets/534c7aac-4fed-4b28-8a5e-3a3411e13bca" alt="Transaction insights" width="400">
-      </td>
-   </tr>
-   <tr>
-      <td align="center">
-         <p><strong>Syncing Stripe payments</strong></p>
-         <img src="https://github.com/user-attachments/assets/2f13bc4e-6acb-4b39-bddc-a4a1ca6787f0" alt="Syncing Stripe payments" width="400">
-      </td>
-      <td align="center">
-         <p><strong>Receipts from Gmail</strong></p>
-         <img src="https://github.com/user-attachments/assets/2380724b-7a79-45a4-93bd-ddc13a175525" alt="Creating transactions from Gmail receipts" width="200">
-      </td>
-   </tr>
-   <tr>
-      <td align="center">
-         <p><strong>Chasing overdue invoices</strong></p>
-         <img src="https://github.com/user-attachments/assets/d59ed22a-5e75-46f6-ad82-db2f637cf7a2" alt="Managing overdue invoices" width="300">
-      </td>
-      <td align="center">
-         <p><strong>Sending payment reminders</strong></p>
-         <img src="https://github.com/user-attachments/assets/26cfb8e9-4725-48a9-b413-077dfb5902e7" alt="Sending payment reminders" width="350">
-      </td>
-   </tr>
-</table>
-</details>
-
-<br/>
-
----
-
-<br/>
-
-## 🚀 Get Started
-
-Before connecting, [create a free Norman account](https://app.norman.finance/sign-up?utm_source=mcp_server) if you don't have one yet. Log in with your Norman credentials via OAuth — your password never touches the AI.
-
-For a Polish business, use [Polish signup](https://app.norman.finance/sign-up?country=PL&lang=pl&utm_source=mcp_server).
-After connecting, confirm the selected company through `company://current`
-before inspecting or changing its books.
-
-<details>
-<summary><strong>Claude Connectors</strong></summary>
-<br/>
-
-1. Go to [Claude Connectors](https://claude.ai/new#settings/customize-connectors)
-2. Click **Add**
-3. Find and connect: **Norman Finance**
-
-MCP Apps-compatible Claude hosts can open Norman's [interactive accounting
-workspaces](#interactive-ui-inside-your-ai-assistant) directly in the
-conversation. Other Claude clients receive the same data as normal tool output.
-</details>
-
-<details>
-<summary><strong>Claude Code</strong></summary>
-<br/>
-
-Norman is available as a [Claude Code plugin](https://code.claude.com/docs/en/plugins) with built-in skills.
+**Using Claude Code?**
 
 ```bash
 /plugin marketplace add norman-finance/norman-mcp-server
 /plugin install norman-finance@norman-finance
 ```
 
-Or install directly from GitHub:
+[All setup guides](docs/connecting.md): Claude Connectors, Claude Code, ChatGPT,
+Gemini, Grok, Perplexity, Cursor, Replit, OpenClaw, n8n and other MCP clients.
 
-```bash
-claude /plugin install github:norman-finance/norman-mcp-server
-```
-</details>
+Your company is the accounting context, not the language of the conversation.
+Use `list_companies` and `switch_company` to change it; `company://current`
+identifies its country, currency, legal form and chart of accounts.
 
-<details>
-<summary><strong>ChatGPT Plugins</strong></summary>
-<br/>
+## Market-specific capabilities
 
-1. Install it from the official [ChatGPT Plugins Directory](https://chatgpt.com/plugins/plugin_asdk_app_6981ec32565481919b1c5a1627b1e330).
+One connection supports both Germany and Poland. The workflows differ by jurisdiction:
 
-The plugin includes Norman's [interactive accounting
-workspaces](#interactive-ui-inside-your-ai-assistant), including Document
-Review, Reconciliation, Ledger Explorer, and the explicit tax preview and
-submission flow.
+| | Germany | Poland |
+| :-- | :-- | :-- |
+| **Bookkeeping** | SKR03/SKR04, transactions and Ledger | KPiR for JDG; full books for sp. z o.o. |
+| **VAT and tax review** | Finanzamt previews, VAT and annual reports | JPK registers, PIT/ZUS or CIT estimates |
+| **Year-end** | Draft annual close, closing adjustments and workbook review | Review already prepared statements, notes and XML issues |
+| **Accountant handoff** | DATEV EXTF exports and preflight checks | General, Optima and EPP export compatibility previews |
+| **Filing through MCP** | Supported returns after preview and explicit confirmation | Existing filing status and UPO checks; no signing or submission |
 
-</details>
+## Germany: accounting, VAT and year-end
 
-<details>
-<summary><strong>Gemini</strong></summary>
-<br/>
+Keep day-to-day bookkeeping and full GmbH/UG accounting connected to the same AI
+workflow. Review SKR03/SKR04 accounts, reconcile transactions, calculate VAT and
+prepare supported VAT and annual tax returns.
 
-**Gemini CLI extension**
+For year-end, create a **Draft annual-close workspace**, review the workbook and
+post closing adjustments. Preparing that workspace does not lock the year or
+submit a return. Tax submission is a separate, explicitly confirmed action.
 
-```bash
-gemini extensions install https://github.com/norman-finance/norman-mcp-server
-```
+German invoice workflows also support **ZUGFeRD**, cancellations
+(**Stornorechnung**), corrections (**Rechnungskorrektur**) and delivery notes
+(**Lieferschein**).
 
-Start Gemini CLI and authenticate the remote server when prompted, or run:
+Additional workflows include German GmbH/UG payroll and company-formation
+preparation. Payroll tools cover calculation, approval, payslips and supported
+Lohnsteuer-Anmeldung filing; sensitive employee identifiers stay in the app.
+Formation tools prepare draft documents and a notary handoff, not a legal incorporation
+by chat. [Detailed workflows](docs/tool-workflows.md).
 
-```text
-/mcp auth norman-finance
-```
+### DATEV MCP support: EXTF, SKR03 and SKR04
 
-**Gemini Spark custom app**
+Prepare a **DATEV EXTF Buchungsstapel** with **SKR03 or SKR04** for your tax advisor
+(**Steuerberater**), with linked documents when requested. The complete GmbH/UG
+Ledger export includes opening balances, manual entries, payroll, depreciation
+and closing postings.
 
-Create a Spark, add a custom app, and use
-`https://mcp.norman.finance/mcp` as its MCP server URL. Availability depends on
-your Gemini account and region. See Google's [custom app
-guide](https://support.google.com/gemini/answer/17209137).
-</details>
+- `trigger_datev_export`: prepare the export and download package.
+- `validate_ledger_datev_export`: check structure, source coverage and documents before handoff.
+- `read_datev_file`: inspect an **EXTF/DTVF** file without importing postings into your books.
 
-<details>
-<summary><strong>Perplexity</strong></summary>
-<br/>
+Try: "Check the full GmbH Ledger export before I give it to my accountant."
 
-1. Open **Account settings → Connectors**
-2. Click **+ Custom Connector** and select **Remote**
-3. Enter **Norman Finance** and `https://mcp.norman.finance/mcp`
-4. Save the connector and complete Norman OAuth
+[DATEV details and API requirements](docs/tool-workflows.md#datev-files-and-complete-ledger-exports).
+Validation is a handoff check, not certification of tax correctness or DATEV import acceptance.
 
-Organization administrators can share the remote connector with their team.
-</details>
+## Poland: KPiR, full books and JPK
 
-<details>
-<summary><strong>Grok</strong></summary>
-<br/>
+### Cześć, Polsko
 
-**Grok web**
+[![Watch Norman in Poland: English film with Polish subtitles](docs/assets/poland-video-preview.jpg)](docs/assets/poland-en-pl-subtitles.mp4)
 
-1. Go to [Grok Connectors](https://grok.com/connectors)
-2. Click **New Connector → Custom**
-3. Enter `https://mcp.norman.finance/mcp` and complete Norman OAuth
+**[Watch the Poland film](docs/assets/poland-en-pl-subtitles.mp4)** · 24 seconds ·
+English on-screen text with Polish subtitles built into the video.
 
-**Grok CLI**
+This is a product introduction, not a recording of MCP tool calls.
+The [Polish landing page](https://norman.finance/pl/mcp) and
+[English landing page](https://norman.finance/pl/en/mcp) introduce the connection
+in each language.
 
-```bash
-grok mcp add --transport http norman-finance https://mcp.norman.finance/mcp
-```
+### What the Polish tools cover
 
-Grok CLI also discovers this repository's `.mcp.json` automatically.
-</details>
+- **JDG / KPiR:** review monthly or annual tax books and explain why an operation
+  is included or excluded.
+- **Sp. z o.o. / full books:** inspect the journal, chart of accounts, account
+  sheets and trial balance; review prepared financial statements and their notes.
+- **VAT / JPK_V7:** compare sales, purchases, totals and exclusions with source operations.
+- **Tax estimates and status:** review PIT/ZUS or CIT estimates, existing JPK/PIT
+  filing status and UPO availability.
+- **Invoices, receipts and assets:** use shared tools with Polish VAT codes,
+  document currencies and depreciation inputs.
+- **Accountant handoff:** preview General, Optima or EPP compatibility and review blockers.
 
-<details>
-<summary><strong>Cursor</strong></summary>
-<br/>
+Try asking:
 
-[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en-US/install-mcp?name=norman-finance&config=eyJ1cmwiOiJodHRwczovL21jcC5ub3JtYW4uZmluYW5jZS9tY3AifQ%3D%3D)
-</details>
+- "Pokaż KPiR mojej JDG za wrzesień i wyjaśnij pominięte koszty."
+- "Pokaż zestawienie obrotów i sald mojej spółki za trzeci kwartał."
+- "Sprawdź rejestr JPK_V7: sprzedaż, zakupy i pominięte operacje."
+- "Sprawdź status wysyłki JPK i dostępność UPO. Niczego nie wysyłaj."
 
-<details>
-<summary><strong>Replit</strong></summary>
-<br/>
+The Polish MCP tools do **not** sign or submit returns to MF/KRS, create manual
+Polish journal postings, or generate or close annual statements. They inspect
+existing filing state; an XML download is not an acceptance receipt or UPO.
 
-[![Add to Replit](https://replit.com/badge?caption=Add%20to%20Replit)](https://replit.com/integrations?mcp=eyJkaXNwbGF5TmFtZSI6Ik5vcm1hbiBNQ1AgU2VydmVyIiwiYmFzZVVybCI6Imh0dHBzOi8vbWNwLm5vcm1hbi5maW5hbmNlL21jcCJ9)
-</details>
+[Polish tool guide, arguments and examples](docs/polish-accounting.md) ·
+[Start with a Polish company](https://app.norman.finance/sign-up?country=PL&lang=pl&utm_source=mcp_server)
 
-<details>
-<summary><strong>OpenClaw</strong></summary>
-<br/>
+## Interactive UI inside your AI assistant
 
-**Option 1 — Remote with OAuth**
+MCP Apps-compatible hosts can show focused accounting workspaces inside the conversation:
 
-Run in OpenClaw:
+| Workspace | What you can review |
+| :-- | :-- |
+| **Norman Inbox** | Balances, bookkeeping tasks, blocked workflows and pending approvals |
+| **Document Review** | Uploaded invoices, receipts and missing transaction matches |
+| **Reconciliation Cockpit** | Missing documents, categories and bookkeeping issues |
+| **German Ledger Explorer** | SKR accounts, balances and linked postings |
+| **German Tax Preview & Submission** | Finanzamt test PDF, tax lines and readiness checks before a separate confirmed filing |
 
-```
-mcp add https://mcp.norman.finance/mcp
-```
-
-You'll be prompted to log in with your Norman account on first use.
-
-**Option 2 — Skills only**
-
-```bash
-git clone https://github.com/norman-finance/norman-mcp-server.git
-cp -r norman-mcp-server/skills/* ~/.openclaw/skills/
-openclaw gateway restart
-```
-
-**Option 3 — Local stdio**
-
-```bash
-pip install norman-mcp-server
-```
-
-```bash
-openclaw mcp add norman -- norman-mcp --transport stdio
-```
-
-Set your credentials as environment variables (`NORMAN_EMAIL`, `NORMAN_PASSWORD`) before starting the gateway.
-</details>
-
-<details>
-<summary><strong>n8n</strong></summary>
-<br/>
-
-1. Create an **MCP OAuth2 API** credential
-2. Enable **Dynamic Client Registration**
-3. Set Server URL: `https://mcp.norman.finance/`
-4. Click **Connect my account** and log in with Norman
-5. Add an **MCP Client Tool** node to your AI Agent workflow
-6. Set the URL to `https://mcp.norman.finance/mcp` and select the credential
-</details>
-
-<details>
-<summary><strong>Any MCP Client</strong></summary>
-<br/>
-
-Add a remote HTTP MCP server with URL:
-
-```
-https://mcp.norman.finance/mcp
-```
-</details>
-
-<br/>
-
----
-
-<br/>
+Clients without MCP Apps support receive structured or text results.
+Polish accounting uses the [dedicated structured tools](docs/polish-accounting.md);
+the German workspaces do not imply equivalent Polish filing functionality.
 
 ## Skills
 
@@ -496,232 +204,82 @@ Ready-to-use skills compatible with **Claude Code**, **OpenClaw**, and the [Agen
 
 | Skill | What it does |
 |:--|:--|
-| `financial-overview` | Full dashboard — balance, transactions, invoices, and tax status |
+| `financial-overview` | Full dashboard : balance, transactions, invoices, and tax status |
 | `create-invoice` | Step-by-step invoice creation and sending |
 | `manage-clients` | List, create, and update client records |
 | `manage-products` | List, create, update, and archive catalog products; fill invoice lines from them |
 | `tax-report` | German reports: review, preview, and file with the Finanzamt |
-| `run-payroll-month` | German payroll — changes, calculation, approval, social insurance, payment, and Lohnsteuer-Anmeldung |
+| `run-payroll-month` | German payroll : changes, calculation, approval, social insurance, payment, and Lohnsteuer-Anmeldung |
 | `categorize-transactions` | Categorize and verify bank transactions |
 | `find-receipts` | Find missing receipts from Gmail or email and attach them |
 | `overdue-reminders` | Identify overdue invoices and send payment reminders |
 | `expense-report` | Expense breakdown by category, top vendors, and trends |
 | `tax-deduction-finder` | Scan transactions for missed deductions and suggest fixes |
-| `monthly-reconciliation` | Full monthly close — transactions, invoices, receipts, and taxes |
+| `monthly-reconciliation` | Full monthly close : transactions, invoices, receipts, and taxes |
 | `run-workflow` | Start a Norman workflow, answer its questions, and schedule it to run by itself |
-| `company-incorporation` | Found a German GmbH/UG — data, documents, name check, and notary hand-off |
+| `company-incorporation` | Found a German GmbH/UG : data, documents, name check, and notary hand-off |
 
-<br/>
 
-> **Claude Code** &nbsp;—&nbsp; `/plugin marketplace add norman-finance/norman-mcp-server`
->
-> **Claude Code (local)** &nbsp;—&nbsp; `claude --plugin-dir ./norman-mcp-server`
->
-> **OpenClaw** &nbsp;—&nbsp; `cp -r skills/* ~/.openclaw/skills/ && openclaw gateway restart`
+Browse the [skills directory](skills). Each skill guides an accounting task
+while the Norman API enforces access and action permissions.
 
-<br/>
+## Control and privacy
+
+- **You choose the company.** Company-scoped records stay in the selected accounting context.
+- **Review before binding actions.** Tax filing, payments, external messages and automation approvals require their own decision.
+- **Keep sensitive identifiers in Norman.** Complete restricted identity and payment setup in the app, not in chat.
+- **Check the result.** A draft, preview, queued request or downloaded XML is not proof of filing or payment success.
+
+Polish KPiR and estimate reads can synchronize derived records and therefore
+declare `readOnlyHint=false`. Country and book-type guards prevent German
+procedures from being applied to Polish books. Technical rollout and tool-specific
+limits are documented in the linked guides.
+
+## Documentation
+
+| Guide | Contents |
+| :-- | :-- |
+| [Connect your AI client](docs/connecting.md) | Hosted OAuth, client installs and local options |
+| [Polish accounting](docs/polish-accounting.md) | KPiR, full books, JPK, estimates, filing status and limits |
+| [Tool workflows](docs/tool-workflows.md) | Invoice settings, emails, uploads, company formation and DATEV details |
+| [German VAT item workflows](docs/vat-item-workflows.md) | Mixed VAT, input tax, refunds and corrections |
+| [Norman Inbox and MCP Events](docs/inbox-and-events.md) | UI behavior, resource subscriptions and optional webhook deployment |
+| [Workflow gallery](docs/gallery.md) | Invoices, transactions, documents and VAT examples |
+
+<details>
+<summary>Links retained from earlier README versions</summary>
+
+<a id="invoice-appearance-and-updates"></a>
+
+[Invoice appearance and updates](docs/tool-workflows.md#invoice-appearance-and-updates)
+
+<a id="client-emails-and-payment-reminders"></a>
+
+[Client emails and payment reminders](docs/tool-workflows.md#client-emails-and-payment-reminders)
+
+<a id="mixed-vat-and-documented-input-tax"></a>
+
+[Mixed VAT and documented input tax](docs/tool-workflows.md#mixed-vat-and-documented-input-tax)
+
+<a id="norman-inbox-and-mcp-events-development"></a>
+
+[Norman Inbox and MCP Events](docs/inbox-and-events.md)
+
+<a id="datev-files-and-complete-ledger-exports"></a>
+
+[DATEV files and complete Ledger exports](docs/tool-workflows.md#datev-files-and-complete-ledger-exports)
+
+</details>
 
 ---
 
-<br/>
-
-<p align="center">
-   Have a feature idea? <a href="../../issues"><strong>Share your suggestion →</strong></a>
-</p>
-
-<br/>
+[Website](https://norman.finance/?utm_source=mcp_server) ·
+[Report an issue or suggest a feature](https://github.com/norman-finance/norman-mcp-server/issues) ·
+[MIT license](LICENSE)
 
 <p align="center">
    <a href="https://mcpbeat.com/mcp-servers/norman/mcp-server/"><img src="https://mcpbeat.com/badge/norman/mcp-server.svg" alt="mcpbeat"></a>
-   <a href="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server"><img src="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server/badge" alt="Norman Finance MCP server" width="200" /></a>&nbsp;&nbsp;&nbsp;
-</p>
-
-<p align="center">
-   <br/>
-   <a href="https://norman.finance/?utm_source=mcp_server">
-      <img width="80px" src="https://github.com/user-attachments/assets/d2cb1df3-69f1-460e-b675-beb677577b06" alt="Norman" />
-   </a>
-   <br/><br/>
-   <sub>Make business effortless</sub>
+   <a href="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server"><img src="https://glama.ai/mcp/servers/@norman-finance/norman-mcp-server/badge" alt="Norman Finance MCP server" width="200" /></a>
 </p>
 
 <!-- mcp-name: finance.norman/mcp-server -->
-
-### Mixed VAT and documented input tax
-
-See [the German VAT item workflow](docs/vat-item-workflows.md) for item-level treatments, fixed documented EUR input VAT, refunds and manual VAT-only corrections. For Poland, see [VAT codes and document currencies](docs/polish-accounting.md#existing-write-tools). Requires the corresponding API migrations and calculation updates.
-
-
-### Norman Inbox and MCP Events (development)
-
-`open_norman_inbox` declares global/sidebar and thread entrypoints for hosts that
-support [plugin extensions](https://developers.openai.com/plugins/build/extensions).
-MCP Apps hosts can render the same self-contained UI; other clients can call
-`get_norman_inbox_data` and `get_norman_approval_data` for structured results.
-Workflow questions use actual blocking state. Pending approval totals include all
-pages; tax reviews are a bounded list. Source failures are shown as unavailable.
-The Inbox also shows latest synced bank balances grouped by their original
-currency, overdue unpaid invoices, unattached invoice/receipt documents and
-unfinalized transactions with status `UNVERIFIED`. These task counts cover all
-history. Transaction totals cover the previous and current calendar months, with
-the date range displayed. Counts come from pagination totals, not
-the single record requested with each counter. Overdue invoices use Norman's
-stored overdue status; bank snapshots may lag the bank and are not profit.
-Task buttons delegate work to the conversation with the selected company and
-scope. The assistant can complete supported, evidence-backed document matching,
-categorization and finalization through existing tools, then report verified
-results and genuine blockers. Financial overview is analysis-only; invoice
-follow-ups prepare drafts. External messages, payments, tax filing and automation
-approvals require a separate decision. The iframe sends a chat request rather
-than calling write tools itself; clients without messaging show a copyable request.
-Button-generated messages use readable references to the Inbox selection. Internal
-company and record IDs stay in structured app context, which is acknowledged before
-sending. When that context is unavailable, the request asks the user to confirm the
-company and relevant record; copyable requests also omit IDs.
-Below the financial overview, **You can also ask Norman** shows three contextual
-tasks with the remaining suggestions under **Explore more tasks**. Their order
-stays stable for the selected company while the panel refreshes. Spending analysis,
-tax readiness and accountant handover checks are read-only; invoice creation is
-restricted to an unsent draft, and tax previews never authorize filing.
-The additive `capabilities` object contains `ledger` and `taxPreview` discovery
-hints. One company detail read enables Ledger suggestions only for SMEs with an
-SKR03/SKR04 chart. A preview suggestion requires an existing prepared Autopilot
-run with a report ID; a missing suggestion does not mean no tax reports exist.
-Unknown eligibility hides specialized suggestions while general tasks remain
-usable. Raw company details are omitted, and the host and API still enforce
-tool availability and permissions.
-The header shows the selected company's name, legal form and country. Its picker
-loads non-archived companies on demand through `list_companies`, then switches
-with `switch_company` and re-reads the Inbox. Switching clears old decisions,
-confirmation and chat context before loading the replacement. An ambiguous timeout
-keeps actions unavailable until the requested company is verified; the switch is
-never automatically retried. The additive `company` profile reuses the existing
-company lookup and excludes tax IDs, bank details and members.
-On mobile, the Inbox has a bounded inner scroll area, uses host safe-area insets,
-and condenses empty states and explanatory text. Standard host context controls
-theme and dimensions, with legacy OpenAI globals and OS theme fallbacks. Sidebar
-icons include explicit light and dark variants. Unbounded inline hosts retain
-natural height; previously cached Inbox resource URIs remain available.
-The review card uses existing approve/dismiss/undo tools and refreshes actual
-results. Approval requires a checkbox and re-reads current values and planned
-actions immediately before executing. A changed review requires confirmation
-again. The backend remains responsible for atomic execution and permissions.
-Non-transaction approvals whose current target is unavailable can be discussed or
-dismissed; they cannot be approved from this card.
-
-The visible Inbox refreshes through `get_norman_inbox_data` 30 seconds after a
-completed read and backs off to 60, 120 and at most 300 seconds while nothing on
-screen changes; any interaction or change resets it to 30. Focus or becoming
-visible refreshes only once half the current interval has passed. It pauses while
-hidden/offscreen, during actions, on teardown, and after an expired session until
-the user acts. It keeps the selected page and typed workflow answer (a draft is
-bound to its question; if the question changes, sending needs confirmation); an
-unchanged approval keeps explicit consent, while changed current values or
-planned actions clear it. This uses the portable Apps `tools/call` bridge: iframe support for
-SDK 2 resource subscriptions is not assumed.
-
-Hosted SDK 2 clients can separately opt into resource invalidations by setting
-`NORMAN_MCP_INBOX_LIVE=1` on a **single-process** MCP deployment using the
-streamable-http transport (SSE starts one lifespan per connection, so the flag is
-ignored there with a warning). Credential-only stdio does not enable this feature. Existing tools and legacy refresh continue
-working when the setting is absent.
-
-1. Call `watch_norman_inbox` with an approval `page` (default 1). It returns an
-   opaque `resourceUri`, `expiresAt` (Unix seconds), and observation interval.
-2. Open SDK 2 `subscriptions/listen` for that exact URI. After acknowledgment,
-   call `resources/read` for the current snapshot; refetch on each
-   `notifications/resources/updated`. Events contain only the opaque URI.
-3. Reopen the watch after expiry, reconnect, token refresh, restart, or an
-   attempted `switch_company`. Watches last at most five minutes and never
-   outlive their MCP bearer token. There is no replay; always refetch on reconnect.
-
-Read and listen both check the exact OAuth grant, client and selected company.
-Observers resolve only that grant's current Norman token and pin its company.
-An expired Norman token (one hour) is refreshed through that grant; a 401 that
-survives the refresh, or a 403, closes the watch. Local grant revocation, company changes and expiry
-end its stream within one second. The observer reads only while a stream is
-connected, with 30 seconds between observation cycles. Each watch observes one
-approval page, workflow state, bounded tax reviews, discovery capabilities and the Inbox overview; it is not a complete
-company event log and may miss intermediate changes. Financial snapshots are
-never cached in the change bus. There are at most 128 leases/streams, four leases
-and four open streams per OAuth grant, four concurrent snapshot reads (normally
-ten API requests per snapshot) and two per grant. The grant-pinned reader
-permits only GET requests.
-Tokens refreshed from one authorization
-share its grant, so refreshing does not raise these limits.
-
-Leases and the SDK subscription bus are in memory. Use one process/replica;
-multiple replicas require shared lease state, OAuth state and a distributed
-subscription bus before this feature can be enabled reliably. This read-only
-feed is separate from the durable webhook events below.
-
-The opt-in `workflow.attention_required` event implements the
-[draft MCP Events contract](https://developers.openai.com/plugins/build/mcp-events)
-on SDK 2 / protocol `2026-07-28`. It watches one explicitly selected company and
-workflow through the Norman API and sends signed webhooks when the active run
-becomes blocked. It does not advance workflows, send invoice reminders or file
-taxes. Current delivery waits 30 seconds between source observation cycles; it does not yet
-consume a backend event stream and can miss transitions between observations.
-
-To enable events on a hosted **single-worker** Streamable HTTP deployment, set:
-
-- `NORMAN_MCP_EVENTS_DB`: an absolute SQLite path on a persistent private volume.
-- `NORMAN_MCP_EVENTS_KEY`: a Fernet encryption key from your secret manager. Keep
-  the same key across restarts; changing it makes stored subscriptions unreadable.
-
-Start with `norman-mcp --transport streamable-http --public-url https://your-host`.
-Both settings are required. Without them, events are not advertised. SQLite state
-contains encrypted authentication references, callback URLs, signing keys and
-pending payloads. Persist the existing `MCP_OAUTH_STATE_FILE` on a private volume
-as well: delivery after restart needs valid OAuth tokens and Norman token mappings.
-The worker reads each run with the subscriber's own grant and company; an
-expired Norman access token (one hour) is refreshed through that grant, and a
-grant that cannot be refreshed suspends delivery until the client refreshes the
-subscription. Nothing falls back to other credentials. Multiple worker
-processes/replicas require coordinated OAuth storage and a distributed delivery
-lease before enabling events.
-
-Subscriptions use `events/list`, `events/subscribe` and `events/unsubscribe`, with
-arguments `{ "company_id": "UUID", "run_id": "UUID" }` and webhook delivery
-`{ "mode": "webhook", "url": "https://public-callback", "secret": "whsec_…" }`.
-The receiver must echo the signed verification challenge. Subscription lifetime
-is capped at one hour and authentication expiry; renew before `refreshBefore`.
-Secret rotation accepts the previous signing key for five minutes. Each retry
-keeps the same `eventId`; receivers should deduplicate by it. Permanent callback
-failures stop retries until the subscription is renewed, and HTTP 410 removes
-the subscription. Callback addresses are validated and DNS-pinned to public HTTPS
-endpoints; redirects are not followed. Each callback, verification included, has
-15 seconds in total and runs in a small dedicated pool.
-
-Host support, plugin submission and production activation need separate
-verification. Local protocol and browser fixtures do not establish ChatGPT
-catalog availability or a successful production OAuth/webhook connection.
-
-### DATEV files and complete Ledger exports
-
-For German companies, `trigger_datev_export` defaults to the complete Ledger for GmbH/UG (`isSme`),
-including opening, manual, payroll, depreciation and closing entries. Other
-German companies retain the finalized-transactions export. Use `source="transactions"`
-only for an explicitly requested transactions-only export. A Ledger failure never
-falls back to that narrower export. The API checks the journal before returning
-an expiring download link and includes its validation findings in the response.
-With `include_documents=true`, the ZIP contains the journal, account reports and
-available linked documents; unreadable attached documents block the package.
-
-- `validate_ledger_datev_export`: preview structure, source coverage and documents
-  for a period without saving company settings, creating a download or sending it.
-- `read_datev_file`: inspect an uploaded EXTF/DTVF **Buchungsstapel** without
-  importing it. Obtain a `file_ref` through `request_file_upload` or `POST /files/upload`, then
-  filter by account, document date, text or minimum amount. Reuse that reference
-  for subsequent pages (up to 100 rows/page) until its normal upload expiry.
-  No DATEV connection or chart setup is needed; an authenticated Norman company
-  is required. CSV/TXT/EXTF uploads are limited to 20 MB / 100,000 rows; extract
-  the booking CSV from a ZIP before uploading.
-
-The reader preserves tax keys and Generalumkehr markers. Its totals are source-row
-amounts grouped by currency, **not** tax-expanded account balances or open items.
-Structural checks do not certify tax correctness or acceptance by DATEV. Nothing
-in these tools emails an accountant or pushes an export to DATEV.
-
-The API release providing Ledger `responseFormat`/`validateOnly` and
-`/companies/{id}/accounting/datev/read/` must be deployed before this MCP release.
