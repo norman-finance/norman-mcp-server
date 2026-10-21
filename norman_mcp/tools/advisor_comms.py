@@ -136,7 +136,8 @@ def register_advisor_comms_tools(mcp):
         invoice_id: Optional[str] = Field(default=None, description="Ask about this invoice."),
         report_id: Optional[str] = Field(default=None, description="Ask about this tax report."),
     ) -> Dict[str, Any]:
-        """Send a written question or message to the company's tax advisor (Steuerberater).
+        """Send a written question or message to the company's tax advisor (a German Steuerberater,
+        a Polish company's own accountant).
 
         For questions the advisor answers in writing: a deduction, a document, a deadline, a
         bookkeeping question. Pass at most one id to ask about a specific transaction, document,
@@ -189,7 +190,8 @@ def register_advisor_comms_tools(mcp):
             default=None, description="A conversation id from an earlier call; the newest conversation if omitted.",
         ),
     ) -> Dict[str, Any]:
-        """Read the conversation with the company's tax advisor (Steuerberater).
+        """Read the conversation with the company's tax advisor (a German Steuerberater, a Polish
+        company's own accountant).
 
         Returns the advisor's replies and the client's earlier messages, newest conversation
         first, and the advisor's open requests for documents. A conversation is either general

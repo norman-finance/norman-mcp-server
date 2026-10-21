@@ -334,7 +334,8 @@ def register_workflow_tools(mcp):
             default="day_of_month",
             description=(
                 "day_of_month: every month, covering the month that just ended. "
-                "before_vat_deadline: lead_days before each open VAT return is due (vat-readiness)"
+                "before_vat_deadline: lead_days before each open German UStVA is due (vat-readiness; "
+                "German companies only: a Polish company uses day_of_month)"
             ),
         ),
         day_of_month: int = Field(default=1, description="Day of the month, 1-28, for day_of_month"),
@@ -346,7 +347,8 @@ def register_workflow_tools(mcp):
         step needs them.
 
         Good defaults: month-end-close on day 3, monthly-reconciliation on
-        day 5, vat-readiness 5 days before the VAT deadline. Refused with
+        day 5, vat-readiness 5 days before the VAT deadline (a Polish company:
+        on a day_of_month before the JPK_V7 is due on the 25th). Refused with
         code automation_paid_feature on a plan without automatic runs — say
         so instead of retrying.
 

@@ -1,9 +1,9 @@
 ---
 name: tax-preview
-description: Open a Finanzamt test preview, inspect readiness and tax lines, or refresh filing status without filing. Use when the user wants a tax preview UI or asks to review a return before submission.
+description: Open a Finanzamt test preview, inspect readiness and tax lines, or refresh filing status without filing. German companies only; a Polish JPK_V7 is read with get_polish_jpk_register and get_polish_jpk_filing_status. Use when the user wants a tax preview UI or asks to review a return before submission.
 ---
 
-Find the existing report using `list_tax_reports`; confirm its type and period. Call `render_tax_preview(report_id=...)` directly to generate and display its test preview. Do not call `get_tax_filing_data` first, because both generate temporary preview files. Preview generation is a write to preview storage and never a binding filing.
+Find the existing report using `list_tax_reports`; confirm its type and period. This preview is the German ELSTER flow: for a Polish company, read the JPK_V7 with `get_polish_jpk_register` and its filing state with `get_polish_jpk_filing_status` instead; Norman files it only from its app, once the owner approves it. Call `render_tax_preview(report_id=...)` directly to generate and display its test preview. Do not call `get_tax_filing_data` first, because both generate temporary preview files. Preview generation is a write to preview storage and never a binding filing.
 
 Explain the returned period, lines, totals, preview and readiness errors. Show a missing or failed preview as an error, not successful filing. `get_tax_submission_status_data` refreshes a report's status without generating another preview.
 

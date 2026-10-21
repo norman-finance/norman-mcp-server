@@ -1,7 +1,7 @@
 ---
 name: overdue-reminders
 description: Find overdue invoices and send payment reminders (Zahlungserinnerungen / Mahnungen) to clients. Use when the user asks about unpaid invoices, overdue payments, payment reminders, Mahnung, or chasing payments.
-version: 1.1.0
+version: 1.1.1
 disable-model-invocation: true
 argument-hint: "[client name or 'all']"
 metadata:
@@ -60,5 +60,6 @@ Present a final report:
 Important:
 - ALWAYS let the user review and approve each reminder before sending
 - Never send reminders automatically without explicit confirmation
-- In Germany, a Mahnung (formal dunning letter) has legal implications - make sure the user is aware
+- DE: A Mahnung (formal dunning letter) has legal implications - make sure the user is aware
+- PL: A wezwanie do zapłaty (formal payment demand) has legal implications and is a prerequisite before court proceedings - make sure the user is aware
 - Suggest checking if a payment was recently received but not yet linked (use `search_transactions`)

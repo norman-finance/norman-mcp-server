@@ -1,7 +1,7 @@
 ---
 name: gewerbe-registration
-description: Prepare a German trade-office registration (Gewerbeanmeldung, form GewA 1) through a guided chat. Use when the user wants to register a trade/business with the Gewerbeamt, file a Gewerbeanmeldung, or asks what to do after founding a GmbH/UG or finishing the tax registration (Fragebogen).
-version: 1.0.0
+description: Prepare a German trade-office registration (Gewerbeanmeldung, form GewA 1) through a guided chat. Use when the user wants to register a trade/business with the Gewerbeamt, file a Gewerbeanmeldung, or asks what to do after founding a GmbH/UG or finishing the tax registration (Fragebogen). Germany only.
+version: 1.0.1
 disable-model-invocation: true
 metadata:
   openclaw:
