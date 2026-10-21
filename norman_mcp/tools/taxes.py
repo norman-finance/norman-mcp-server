@@ -123,6 +123,38 @@ def register_tax_tools(mcp):
         return _enrich_report_download_url(result, api=api, report_id=report_id, company_id=company_id)
 
     @mcp.tool(
+        title="Get Filed Report Changes",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def get_filed_report_changes(
+        ctx: Context,
+        report_id: str = Field(description="Public ID of a filed UStVA (advance VAT return)"),
+    ) -> Dict[str, Any]:
+        """
+        German companies: what changed in a filed UStVA since it was sent to ELSTER.
+
+        A late document keeps its legal date, also in a filed month. This compares the figures sent with today's,
+        per Kennzahl, and says whether a correction is due: a higher tax due must be corrected without delay
+        (§ 153 AO). Other reports, and returns not filed yet, answer changed false.
+
+        Args:
+            report_id: Public ID of the filed UStVA
+
+        Returns:
+            changed, correction_required, and the changed lines (kz, filed, now)
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        if not company_id:
+            return NO_COMPANY_ERROR
+        return await api.arequest("GET", reports_url(company_id, f"{report_id}/changes-since-filing/"))
+
+    @mcp.tool(
         title="Validate Tax Number",
         annotations=ToolAnnotations(
             readOnlyHint=True,

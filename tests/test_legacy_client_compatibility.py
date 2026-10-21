@@ -62,6 +62,12 @@ attachment currency omission, and country/chart-aware descriptions. Two resource
 and two prompts also receive country-aware metadata; create_transaction_prompt
 makes currency optional. Existing names/required arguments stay unchanged.
 Only those reviewed entries are updated; all unrelated hashes remain pinned.
+
+The October 21 document bookings add two optional filters to search_transactions:
+payment_type (NOT_PAID lists open bookings) and source (document, invoice, bank,
+non_bank). No existing argument changes. The new find_booking_payments, pay_booking,
+record_booking_payment, unlink_payment and get_filed_report_changes tools need no
+oracle entry.
 """
 
 import asyncio

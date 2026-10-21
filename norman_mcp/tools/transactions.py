@@ -134,6 +134,15 @@ def register_transaction_tools(mcp):
             default=None,
             description="Cashflow type of the transaction (INCOME, EXPENSE)",
         ),
+        payment_type: Optional[str] = Field(
+            default=None,
+            description="Payment type (BANK, CASH, CREDIT_CARD, PAYPAL, NOT_PAID). NOT_PAID lists open bookings.",
+        ),
+        source: Optional[str] = Field(
+            default=None,
+            description="Origin: document (booked by Norman from a document), invoice (a Norman invoice's booking), "
+            "bank, non_bank",
+        ),
         limit: Optional[int] = Field(
             default=None,
             description="Maximum number of results to return (default 100)",
@@ -141,6 +150,10 @@ def register_transaction_tools(mcp):
     ) -> Dict[str, Any]:
         """
         Search for transactions matching specified criteria.
+
+        German companies: an open booking (payment type NOT_PAID) waits for its payment; `openAmount` and
+        `payments` say how much is paid. List them with payment_type=NOT_PAID, and the ones Norman booked from
+        documents with source=document.
 
         Args:
             description: Text to search for in transaction descriptions
@@ -191,6 +204,10 @@ def register_transaction_tools(mcp):
             params["status"] = status
         if cashflow_type:
             params["cashflowType"] = cashflow_type
+        if payment_type:
+            params["paymentType"] = payment_type
+        if source:
+            params["source"] = source
         if limit:
             params["limit"] = limit
 
@@ -741,3 +758,169 @@ def register_transaction_tools(mcp):
         )
 
         return await api.arequest("POST", transaction_url)
+
+    @mcp.tool(
+        title="Find Booking Payments",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def find_booking_payments(
+        ctx: Context,
+        transaction_id: str = Field(description="Public ID of an open booking (payment type NOT_PAID) or of a payment"),
+    ) -> Dict[str, Any]:
+        """
+        German and Polish companies: what may pay an open booking, or what a payment may pay.
+
+        For an open booking (from a document, an invoice or made by hand) it lists the payments that fit, best
+        first; for a payment, the open bookings it fits. `automatic` marks the one certain match. Pay with
+        pay_booking; a Norman invoice's booking is paid with link_transaction.
+
+        Args:
+            transaction_id: Public ID of an open booking or of a payment
+
+        Returns:
+            Up to 10 matches with both sides' dates, amounts and descriptions
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+        url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/accounting/transactions/{transaction_id}/payment-matches/",
+        )
+        return await api.arequest("GET", url)
+
+    @mcp.tool(
+        title="Pay Booking",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
+    async def pay_booking(
+        ctx: Context,
+        booking_id: str = Field(description="Public ID of the open booking (payment type NOT_PAID)"),
+        payment_id: str = Field(description="Public ID of the bank payment that pays it"),
+        amount: Optional[float] = Field(
+            default=None,
+            description="German companies: what the payment pays of the booking, in EUR. Omit it to pay what is "
+            "open, at most the payment's amount.",
+        ),
+    ) -> Dict[str, Any]:
+        """
+        A payment pays an open booking made from a document or by hand.
+
+        German companies: a payment that pays all of it takes the booking over: one row with the booking's lines,
+        document and date, and the bank's day as payment date. A smaller amount pays part; the rest stays open.
+        Finalized or locked payments and payments that already book another document are refused. A Norman
+        invoice's booking is paid with link_transaction.
+
+        Args:
+            booking_id: Public ID of the open booking
+            payment_id: Public ID of the payment
+            amount: What the payment pays of the booking, in EUR (optional)
+
+        Returns:
+            The booking while part of it stays open, else the payment that took it over
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+        body: Dict[str, Any] = {"payment": payment_id}
+        if amount is not None:
+            body["amount"] = str(amount)
+        url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/accounting/transactions/{booking_id}/merge-payment/",
+        )
+        return await api.arequest("POST", url, json_data=body)
+
+    @mcp.tool(
+        title="Record Booking Payment",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
+    async def record_booking_payment(
+        ctx: Context,
+        booking_id: str = Field(description="Public ID of the open booking (payment type NOT_PAID)"),
+        paid_on: str = Field(description="Day it was paid, YYYY-MM-DD"),
+        method: str = Field(description="How it was paid: CASH, CREDIT_CARD, PAYPAL or BANK (a bank Norman does not see)"),
+        amount: Optional[float] = Field(
+            default=None, description="What was paid, in EUR. Omit it to pay what is open.",
+        ),
+    ) -> Dict[str, Any]:
+        """
+        German companies: an open booking paid another way, with cash, a card, PayPal or a bank Norman does not see.
+
+        Norman saves the payment and pays the booking with it in one step, as a bank payment would. A smaller
+        amount pays part; the rest stays open. For a payment Norman already has, use pay_booking.
+
+        Args:
+            booking_id: Public ID of the open booking
+            paid_on: Day it was paid (YYYY-MM-DD)
+            method: CASH, CREDIT_CARD, PAYPAL or BANK
+            amount: What was paid, in EUR (optional)
+
+        Returns:
+            The booking while part of it stays open, else the payment that took it over
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+        body: Dict[str, Any] = {"paidOn": paid_on, "method": method}
+        if amount is not None:
+            body["amount"] = str(amount)
+        url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/accounting/transactions/{booking_id}/record-payment/",
+        )
+        return await api.arequest("POST", url, json_data=body)
+
+    @mcp.tool(
+        title="Unlink Payment",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
+    async def unlink_payment(
+        ctx: Context,
+        transaction_id: str = Field(description="Public ID of the payment"),
+    ) -> Dict[str, Any]:
+        """
+        Undo what a payment pays and take its document off it.
+
+        The bookings it paid open again; a booking it took over comes back with its document. A booking Norman
+        made from its document cannot be unlinked (delete the booking instead); a Norman invoice's booking is
+        undone by cancelling the invoice.
+
+        Args:
+            transaction_id: Public ID of the payment
+
+        Returns:
+            The payment after the unlink
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+        url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/accounting/transactions/{transaction_id}/unlink/",
+        )
+        return await api.arequest("POST", url)
