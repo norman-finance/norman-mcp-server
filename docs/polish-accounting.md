@@ -109,6 +109,21 @@ a successful preview does not prove an import into their software succeeded.
 
 ## Existing write tools
 
+### Settings and sensitive identifiers
+
+`propose_tax_setting_change` persists a pending proposal on each call. It is an
+additive, non-idempotent write (`readOnlyHint=false`), not an applied settings
+change. Give the owner the returned `openUrl` to review and apply it in Norman;
+no public MCP tool applies the proposal or submits a declaration to an office.
+
+PESEL and KSeF tokens must be entered directly in the authenticated Norman app.
+The public proposal tool does not accept a PESEL field or setting. Business NIP
+and EU VAT-number proposals remain available. `get_ksef_status` reports the
+connection state, not the token. `search_polish_tax_offices` reads the available
+offices so the owner can choose the correct one.
+
+### Invoices, assets and books
+
 - Invoice items and operations preserve `vat_code`: `23`, `8`, `5`, `0`, `zw`,
   `np`, `oo`, or an explicit empty string. Do not infer an exempt, foreign supply
   or reverse-charge code from a numeric zero rate alone.

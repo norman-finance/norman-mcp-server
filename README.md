@@ -29,6 +29,13 @@
 
 ### What you can do
 
+For Polish businesses, use the same connection to review **KPiR for JDG**, full
+books and trial balances for **sp. z o.o.**, **JPK** register data, tax estimates
+and existing filing status with **UPO** availability. Shared tools also support
+invoices, receipts and transactions with Polish VAT codes. Select the company
+first; access depends on its setup and permissions. Polish MCP tools do not sign
+or submit returns. See the [Polish workflows and limits](docs/polish-accounting.md).
+
 **Invoicing** — Create and edit invoices, quotes, and recurring schedules, including document templates, line discounts, units, service dates and payment links. Polish invoice items preserve VAT codes. German workflows include ZUGFeRD, Stornorechnung, Rechnungskorrektur and Lieferschein.
 
 **Client emails and reminders** — Send invoices with the company's own email wording and CC recipients, see their delivery status, switch automatic payment reminders on for an invoice, and set the reminder rule (days and dunning fees per level)
