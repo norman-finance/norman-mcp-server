@@ -44,6 +44,11 @@ DESTRUCTIVE = ToolAnnotations(
 )
 
 
+AMORTIZATION_METHOD_HELP = (
+    "straightLine spreads the AfA evenly over the useful life. instant writes off the whole basis in the month "
+    "of purchase: German computer hardware and software (BMF letter of 22 Feb 2022); the useful life becomes "
+    "12 months. For an asset created from an expense, change it on the expense."
+)
 EBILANZ_RULES = (
     "E-Bilanz positions can be assigned only for GmbH/UG companies on SKR03 or SKR04, "
     "per fiscal year 2024, 2025 or 2026 (the year in which the financial year begins), "
@@ -824,6 +829,9 @@ def register_accounting_tools(mcp: Any) -> None:
             gt=0, description="Net basis, or gross when input VAT is not deductible"
         ),
         useful_lifetime_months: int = Field(gt=0),
+        amortization_method: Annotated[
+            Literal["straightLine", "instant"], Field(description=AMORTIZATION_METHOD_HELP)
+        ] = "straightLine",
         gross_purchase_price: Optional[float] = Field(
             default=None,
             gt=0,
@@ -872,7 +880,7 @@ def register_accounting_tools(mcp: Any) -> None:
                 # agents cannot accidentally create a 100x depreciation basis.
                 "useProfessionalPart": business_use_percent / 100,
                 "usefulLifetime": useful_lifetime_months,
-                "amortizationMethod": "straightLine",
+                "amortizationMethod": amortization_method,
                 "ledgerAccountCode": ledger_account_code,
                 "polishTax": polish_tax.payload() if polish_tax is not None else None,
                 "openingDate": opening_date,
@@ -904,6 +912,9 @@ def register_accounting_tools(mcp: Any) -> None:
             description="Purchase price including VAT; informational, AfA uses depreciation_basis",
         ),
         useful_lifetime_months: Optional[int] = Field(default=None, gt=0),
+        amortization_method: Annotated[
+            Optional[Literal["straightLine", "instant"]], Field(description=AMORTIZATION_METHOD_HELP)
+        ] = None,
         business_use_percent: Optional[float] = Field(default=None, ge=0, le=100),
         ledger_account_code: Optional[str] = None,
         status: Optional[str] = Field(
@@ -943,6 +954,7 @@ def register_accounting_tools(mcp: Any) -> None:
                 "amount": depreciation_basis,
                 "amountIncVat": gross_purchase_price,
                 "usefulLifetime": useful_lifetime_months,
+                "amortizationMethod": amortization_method,
                 "useProfessionalPart": business_use_percent / 100
                 if business_use_percent is not None
                 else None,

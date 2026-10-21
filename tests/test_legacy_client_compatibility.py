@@ -69,6 +69,11 @@ opens with "Germany only." (country_scope), and the shared tools and skills name
 each market's filing (UStVA, ZM and ELSTER for Germany; JPK_V7, VAT-UE, PIT and
 CIT advances and ZUS DRA for Poland). No name, argument, title or annotation
 changes.
+
+The October 21 instant AfA change adds one optional argument: create_asset and
+update_asset take amortization_method (straightLine or instant). The category
+metadata description of create_transaction and update_transaction now names the
+amortization block; no argument changes there.
 """
 
 import asyncio
