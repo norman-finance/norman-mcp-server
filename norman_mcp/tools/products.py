@@ -156,7 +156,7 @@ def register_product_tools(mcp):
         Args:
             name: Product or service name (unique among the company's active products)
             price: Unit price in cents (net unless is_price_gross is True)
-            vat_rate: VAT rate in percent (0, 7, 19 in Germany); the country default if omitted
+            vat_rate: VAT rate in percent (Germany 0, 7, 19; Poland 0, 5, 8, 23); the country default if omitted
             product_type: "SERVICES" (default) or "GOODS"
             unit: One of items, hours, days, kilograms, liters, meters, square_meters
             description: Optional text printed under the name on invoices (max 500 chars)

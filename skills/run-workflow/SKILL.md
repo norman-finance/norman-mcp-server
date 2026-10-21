@@ -1,7 +1,7 @@
 ---
 name: run-workflow
 description: Run a Norman workflow (month-end close, monthly reconciliation, VAT-return readiness, invoice to payment, client document requests) on Norman's servers, answer the questions it asks, and schedule it to run by itself. Use when the user asks Norman to close a month, reconcile the bank, get ready for the VAT return, or "do it every month".
-version: 1.0.0
+version: 1.0.1
 argument-hint: "[workflow, e.g. 'close August' or 'VAT return']"
 metadata:
   openclaw:
@@ -18,7 +18,7 @@ Norman runs its workflows on its own servers. You start one, relay the user's an
 - Call `list_workflows`. Match `$ARGUMENTS` or the user's words to a workflow key:
   - "close the month" → `month-end-close`
   - "reconcile" → `monthly-reconciliation`
-  - "VAT return", "UStVA" → `vat-readiness`
+  - "VAT return", the German "UStVA", the Polish "JPK_V7" → `vat-readiness`
 - If a run of that workflow is already active, continue with it (Step 3) instead of starting another.
 - Tell the user which steps it will take (the `steps` of the workflow) and for which period (`defaultScope`, or the month they named).
 
@@ -37,7 +37,7 @@ Norman runs its workflows on its own servers. You start one, relay the user's an
 
 ## Step 4: Report and offer the schedule
 - When `state` is `done` or `done_with_warnings`, summarize each step's `summary` in plain words.
-- If the workflow has no `schedule`, offer to run it by itself: month-end close on day 3, reconciliation on day 5, VAT readiness 5 days before the deadline. Only after the user agrees, call `schedule_workflow`.
+- If the workflow has no `schedule`, offer to run it by itself: month-end close on day 3, reconciliation on day 5, VAT readiness 5 days before the deadline (`before_vat_deadline` follows the German UStVA only: for a Polish company schedule it on a day of the month before the JPK_V7 is due on the 25th). Only after the user agrees, call `schedule_workflow`.
 - A refusal with code `automation_paid_feature` means automatic runs need a paid plan. Say so; running by hand stays free.
 
 Important:

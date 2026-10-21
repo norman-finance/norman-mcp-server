@@ -246,7 +246,8 @@ def register_transaction_tools(mcp):
             description="Public ID of the home office entry being edited: its own amount does not count as booked",
         ),
     ) -> dict[str, Any]:
-        """Official flat rates Norman uses for the travel meal allowance and the home office flat rate.
+        """German official (BMF) flat rates Norman uses for the travel meal allowance and the home office
+        flat rate of German sole proprietors; none apply to a Polish company.
 
         mealAllowance gives per country the fullDay and travelDay rates, and city rates with the key
         to pass as trip_place. homeOffice gives perDay, mostPerYear and what the year's other home
@@ -327,7 +328,7 @@ def register_transaction_tools(mcp):
         ),
         client_id: Optional[str] = Field(
             default=None,
-            description="Client public ID for income and EU sales/ZM attribution",
+            description="Client public ID for income attribution (and a German company's EU sales in its ZM)",
         ),
         vendor_id: Optional[str] = Field(
             default=None,
@@ -505,7 +506,10 @@ def register_transaction_tools(mcp):
         ),
         company_category_id: Optional[str] = Field(
             default=None,
-            description="SME company category ID from DATEV chart of accounts (for GmbH/UG)",
+            description=(
+                "Company category ID from the selected company chart (DE SKR03/SKR04, PL_KPIR or "
+                "PL_FULL). Use list_company_categories to find the right ID."
+            ),
         ),
         payment_date: Optional[str] = Field(
             default=None,

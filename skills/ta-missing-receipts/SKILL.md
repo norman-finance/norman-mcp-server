@@ -1,7 +1,7 @@
 ---
 name: ta-missing-receipts
 description: Find and collect missing receipts for a client company. Identify high-priority items, suggest a ping strategy, and bulk-notify the client. Use when a tax advisor asks about missing documents, Belege, or requests receipts from a client.
-version: 1.0.0
+version: 1.0.1
 metadata:
   openclaw:
     emoji: "\U0001F4CE"
@@ -21,9 +21,9 @@ Help the tax advisor identify and collect missing receipts from a client:
 Present the results in a structured format:
 
 **By priority:**
-1. **Critical** (>250 EUR) — required for Vorsteuerabzug
-2. **High** (100–250 EUR) — significant business expenses
-3. **Medium** (<100 EUR) — should be collected for compliance
+1. **Critical** (>250 [currency]) — required for VAT deduction (DE: Vorsteuerabzug)
+2. **High** (100–250 [currency]) — significant business expenses
+3. **Medium** (<100 [currency]) — should be collected for compliance
 4. **Informational** — small amounts that may be bundled
 
 **By month:** Show which months have the most gaps
@@ -43,9 +43,9 @@ Present the results in a structured format:
 ## Step 5: Summary
 - Show total missing documents before and after action
 - Recommend a follow-up date to check again
-- Remind about the 10-year retention requirement (Aufbewahrungspflicht)
+- Remind about the retention requirement (DE: 10 years Aufbewahrungspflicht / PL: 5 years)
 
 Tips for the advisor:
-- In Germany, receipts are mandatory for Vorsteuerabzug on expenses >250 EUR
-- Digital copies are GoBD-compliant when stored properly in Norman
+- DE: Receipts are mandatory for Vorsteuerabzug on expenses >250 EUR. Digital copies are GoBD-compliant when stored properly in Norman.
+- PL: Receipts are mandatory for VAT deduction on expenses >450 PLN. Documents must comply with JPK requirements.
 - Consider requesting receipts monthly to avoid large backlogs

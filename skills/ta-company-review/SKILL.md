@@ -1,7 +1,7 @@
 ---
 name: ta-company-review
 description: Full company review for tax advisors. Generates a structured health report covering financials, document completeness, tax compliance, and action items. Use when a tax advisor asks for an overview, health check, or status of a client company.
-version: 1.0.0
+version: 1.0.1
 metadata:
   openclaw:
     emoji: "\U0001F50D"
@@ -30,8 +30,8 @@ Perform a comprehensive company review for the tax advisor:
 Structure the output as follows:
 
 ### Company Profile
-- Company name, type (freelancer/GmbH/UG), chart of accounts
-- Tax state, tax ID, VAT ID status
+- Company name, type (freelancer, GmbH/UG, JDG or sp. z o.o.), chart of accounts
+- Tax state (German companies), tax ID (Steuernummer or NIP), VAT ID status
 
 ### Financial Summary
 - Current balance
@@ -51,8 +51,8 @@ Structure the output as follows:
 ### Action Items
 Prioritized list of recommended actions:
 1. Critical: overdue tax reports
-2. High: large transactions missing receipts (>250 EUR)
+2. High: large transactions missing receipts (>250 [currency])
 3. Medium: uncategorized transactions
 4. Low: missing tax registration details
 
-Be specific with amounts, dates, and report periods. Use EUR formatting.
+Be specific with amounts, dates, and report periods. Use the company's currency for formatting.
