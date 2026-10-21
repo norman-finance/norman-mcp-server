@@ -2,7 +2,8 @@
 
 The Norman API does not take a Polish company's tax settings from an OAuth client, an API key or an MCP server
 (403 `tax_setting_proposal_required`). propose_tax_setting_change stores a proposal instead (POST
-companies/<id>/tax-setting-proposals/), which the API validates as the settings screen does; it writes nothing. The
+companies/<id>/tax-setting-proposals/), which the API validates as the settings screen does. It persists a pending
+proposal, but does not apply a tax setting. The
 answer carries `openUrl`: the tax settings in the Norman app with the proposal's card, where the owner applies or
 cancels it. No tool here applies one, and the API refuses this server's requests to apply or cancel.
 
@@ -11,10 +12,11 @@ update_company_details (NIP, EU VAT number, business start, reminders), update_v
 update_invoice_settings (the tax office) propose instead of writing. A German company is not concerned.
 
 get_ksef_status reads the KSeF connection, never the token, and search_polish_tax_offices the Polish tax offices. A KSeF
-token never goes through an AI client: the owner pastes it in Norman's settings.
+token and personal government identifiers such as PESEL never go through this tool: the owner enters them in Norman.
 
 Kept in step with the in-app assistant's tools (norman-finance-api, norman_mcp/tools/polish_settings.py): the same
-arguments, values and wording, except that the owner applies a proposal through `openUrl` instead of a card in the chat.
+arguments, values and wording, except that personal identifiers are not exposed and the owner applies a proposal
+through `openUrl` instead of a card in the chat.
 """
 
 import re
@@ -37,8 +39,8 @@ POLISH_ONLY = {
 NOTHING_PROPOSED = "Nothing to propose: give the new value of the setting."
 # Opens the description of a tool for Polish companies, as "Germany only." opens the German ones'.
 POLAND_ONLY_NOTE = "Poland only."
-# Writes nothing: the owner applies the proposal in Norman.
-PROPOSE = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=False, openWorldHint=False)
+# Additive write: persists a pending proposal; only the owner can apply the setting in Norman.
+PROPOSE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False)
 READ = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
 
 SettingName = Literal[
@@ -51,7 +53,6 @@ SettingName = Literal[
     "vat_proportion",
     "nip",
     "eu_vat_number",
-    "pesel",
     "activity_start",
     "tax_office",
     "reminders",
@@ -82,7 +83,6 @@ ARGUMENTS: dict[str, dict[str, str]] = {
     },
     "nip": {"nip": "taxNumber"},
     "eu_vat_number": {"eu_vat_number": "vatNumber"},
-    "pesel": {"pesel": "pesel"},
     "activity_start": {"business_start_date": "activityStart"},
     "tax_office": {"tax_office_code": "taxOfficeCode"},
     "reminders": {"deadline_reminders": "isToNotifyTaxDeadlines"},
@@ -297,7 +297,6 @@ def register_polish_settings_tools(mcp: Any) -> None:
         ),
         nip: str | None = Field(default=None, description="nip: the 10 digits; the EU VAT number follows it."),
         eu_vat_number: str | None = Field(default=None, description="eu_vat_number, e.g. PL5260250274."),
-        pesel: str | None = Field(default=None, description="pesel (JDG owner): 11 digits; Norman masks it."),
         business_start_date: str | None = Field(default=None, description="activity_start: YYYY-MM-DD."),
         tax_office_code: str | None = Field(
             default=None, description="tax_office: the 4-digit code from search_polish_tax_offices.",
@@ -309,14 +308,15 @@ def register_polish_settings_tools(mcp: Any) -> None:
     ) -> dict[str, Any]:
         """Poland only. Propose a change to a Polish company's tax settings; the owner applies it in Norman.
 
-        Nothing changes until the owner applies it: give the owner `openUrl`, the tax settings in Norman with
+        Creates a pending proposal on each call, but does not change the tax setting until the owner applies it.
+        Give the owner `openUrl`, the tax settings in Norman with
         the proposal, and never say a setting is changed. No AI client can apply it, and none can change these
         settings directly. One setting per call; ksef_sync proposes an import from KSeF now.
         The API checks it as the settings screen does and states what it refuses.
         Norman records the setting and notifies no office: the owner reports a tax form in CEIDG or at the tax
         office, VAT changes on VAT-R, ZUS changes in ePłatnik or CEIDG.
         Facts only: never recommend a tax form, a CIT rate or a ZUS scheme. Explain the rules; the owner decides.
-        Never ask for a KSeF token: the owner pastes it in Norman's settings (get_ksef_status).
+        Never ask for a KSeF token or PESEL: the owner enters these directly in Norman's settings.
         """
         api = ctx.request_context.lifespan_context["api"]
         if not api.company_id:
@@ -333,7 +333,7 @@ def register_polish_settings_tools(mcp: Any) -> None:
             "clear_estimate": clear_estimate, "round_to_whole": round_to_whole,
             "previous_taxed_turnover": previous_taxed_turnover, "previous_exempt_turnover": previous_exempt_turnover,
             "fixed_asset_correction": fixed_asset_correction, "nip": nip, "eu_vat_number": eu_vat_number,
-            "pesel": pesel, "business_start_date": business_start_date, "tax_office_code": tax_office_code,
+            "business_start_date": business_start_date, "tax_office_code": tax_office_code,
             "deadline_reminders": deadline_reminders, "ksef_auto_import": ksef_auto_import,
         }
         try:

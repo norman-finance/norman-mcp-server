@@ -12,7 +12,7 @@
     {
       "name": "norman-finance",
       "source": "./",
-      "description": "Connect Norman Finance to your AI for bookkeeping, invoices, transactions, documents, ledgers, reports, and tax workflows.",
+      "description": "Connect Norman Finance to your AI for European bookkeeping, invoices and tax workflows. Polish tools include JDG KPiR, sp. z o.o. ledgers, JPK registers, estimates and existing filing status; they do not sign or submit Polish returns.",
       "version": "1.0.0",
       "author": {
         "name": "Norman Finance"
@@ -35,7 +35,11 @@
         "mcp",
         "oauth",
         "kpir",
-        "jpk"
+        "jpk",
+        "poland",
+        "jdg",
+        "sp-z-o-o",
+        "upo"
       ],
       "category": "finance",
       "tags": [
