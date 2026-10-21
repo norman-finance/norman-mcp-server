@@ -12,4 +12,4 @@ Source English video SHA-256:
 Caption timing and translation match the website's
 [`norman-poland-launch-pl.vtt`](https://github.com/norman-finance/norman-website/blob/main/public/videos/norman-poland-launch-pl.vtt).
 
-The README thumbnail links to the checked-in MP4, so the video does not depend on a website deployment. GitHub opens the file in its video viewer. Original English and Polish films remain separate on the website.
+The README thumbnail links to the checked-in MP4, so the video does not depend on a website deployment. Open or download the MP4 from that link. Original English and Polish films remain separate on the website.
