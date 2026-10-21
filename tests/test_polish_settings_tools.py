@@ -22,6 +22,7 @@ from norman_mcp.tools.invoice_management import register_invoice_management_tool
 from norman_mcp.tools.invoice_schemas import InvoiceSettings
 from norman_mcp.tools.polish_settings import register_polish_settings_tools
 from norman_mcp.tools.taxes import register_tax_tools
+from tests.mcp_harness import FakeApi as ProtocolApi, call_tool, structured
 
 COMPANY = "company-1"
 OPEN_URL = f"https://app.norman.finance/account?section=tax-settings&company={COMPANY}&proposal=proposal-1"
@@ -83,6 +84,51 @@ def test_the_shared_server_lists_the_tools_marked_for_poland():
         assert listed[name].description.startswith("Poland only.")
 
 
+def test_discovery_marks_a_stored_proposal_as_an_additive_non_idempotent_write():
+    listed = {tool.name: tool for tool in asyncio.run(shared_server.list_tools())}
+    proposal = listed["propose_tax_setting_change"]
+    assert proposal.annotations.read_only_hint is False
+    assert proposal.annotations.destructive_hint is False
+    assert proposal.annotations.open_world_hint is False
+    assert proposal.annotations.idempotent_hint is False
+    assert "Creates a pending proposal on each call" in proposal.description
+    for name in SETTINGS_TOOLS - {"propose_tax_setting_change"}:
+        assert listed[name].annotations.read_only_hint is True
+
+
+def test_personal_identifier_is_not_exposed_in_the_public_proposal_schema():
+    listed = {tool.name: tool for tool in asyncio.run(shared_server.list_tools())}
+    schema = listed["propose_tax_setting_change"].input_schema
+    assert "pesel" not in schema["properties"]
+    assert "pesel" not in schema["properties"]["setting"]["enum"]
+    # Business identifiers remain supported; this does not change company records.
+    assert {"nip", "eu_vat_number"} <= schema["properties"].keys()
+
+
+def test_pesel_proposal_is_rejected_by_the_protocol_before_any_api_request():
+    api = ProtocolApi()
+    result = call_tool("propose_tax_setting_change", {"setting": "pesel", "pesel": "synthetic-id"}, api)
+    assert result.is_error
+    assert api.requests == []
+
+
+def test_proposal_passes_protocol_input_and_output_validation_without_applying_settings():
+    def respond(method, url, kwargs):
+        if method == "GET":
+            return {"country": "PL"}
+        return CARD
+
+    api = ProtocolApi(respond, company_id=COMPANY)
+    result = structured(call_tool("propose_tax_setting_change", {"setting": "tax_office", "tax_office_code": "1435"}, api))
+    assert result["proposal"] == CARD
+    assert result["openUrl"] == OPEN_URL
+    writes = [(method, url, kwargs["json_data"]) for method, url, kwargs in api.requests if method != "GET"]
+    assert len(writes) == 1
+    assert writes[0][0] == "POST"
+    assert writes[0][2] == {"setting": "tax_office", "values": {"taxOfficeCode": "1435"}}
+    assert writes[0][1].endswith(f"/companies/{COMPANY}/tax-setting-proposals/")
+
+
 def test_a_proposal_returns_the_link_where_the_owner_applies_it():
     api = FakeApi()
     answer = call(
@@ -103,7 +149,6 @@ def test_a_proposal_returns_the_link_where_the_owner_applies_it():
         ({"setting": "zus", "zus_scheme": "preferential", "zus_scheme_start": "2026-01-01"},
          {"zusRelief": "preferential", "zusSchemeStart": "2026-01-01"}),
         ({"setting": "vat_cash_method", "cash_method_off": True}, {"vatCashMethodFrom": None}),
-        ({"setting": "pesel", "pesel": "44051401359"}, {"pesel": "44051401359"}),
         ({"setting": "tax_office", "tax_office_code": "1435"}, {"taxOfficeCode": "1435"}),
         ({"setting": "ksef_sync"}, {}),
     ],

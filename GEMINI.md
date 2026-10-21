@@ -12,6 +12,10 @@ ELSTER, payroll and incorporation tools require a German company. Polish tools
 do not sign or submit returns; an XML download is not confirmed acceptance or UPO.
 See [Polish accounting workflows](docs/polish-accounting.md).
 
+For Polish settings, `propose_tax_setting_change` creates a stored pending
+proposal, not an applied change. The owner reviews and applies it in Norman.
+Never ask for a PESEL or KSeF token in chat; those belong in the authenticated app.
+
 Read current Norman data before proposing a change. Explain the concrete effect
 and obtain the user's explicit approval before sending invoices or reminders,
 making payments, filing taxes, deleting or reversing records, applying an
