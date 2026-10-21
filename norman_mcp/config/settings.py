@@ -54,4 +54,11 @@ class Config:
         else:
             return "https://sandbox.norman.finance/"
 
+    @property
+    def app_base_url(self) -> str:
+        """The Norman web app, where the owner opens what a tool links to."""
+        if self.NORMAN_ENVIRONMENT.lower() == "production":
+            return "https://app.norman.finance/"
+        return "https://dev.norman.finance/"
+
 config = Config() 

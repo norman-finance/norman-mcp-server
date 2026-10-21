@@ -1,7 +1,7 @@
 ---
 name: suggest-category
-description: Find the right SKR account code for a bookkeeping category (SME only). Search the full SKR03/SKR04 chart of accounts by code or use AI to match by name or description. Use when an SME user needs help finding a category code, wants to add a new custom category, or asks "what account number is X?"
-version: 1.0.0
+description: Find the right SKR account code for a bookkeeping category (German SME only; a Polish company picks from list_company_categories). Search the full SKR03/SKR04 chart of accounts by code or use AI to match by name or description. Use when an SME user needs help finding a category code, wants to add a new custom category, or asks "what account number is X?"
+version: 1.0.1
 metadata:
   openclaw:
     emoji: "\U0001F50D"
@@ -13,12 +13,13 @@ metadata:
 
 Help the user find the correct SKR chart of accounts category.
 
-**IMPORTANT: SME accounts only.** This skill applies to GmbH/UG companies that use DATEV standard chart of accounts (SKR03/SKR04). For freelance accounts, use `categorize_transaction` instead — it has its own category set and AI detection.
+**IMPORTANT: German SME accounts only.** This skill applies to GmbH/UG companies that use DATEV standard chart of accounts (SKR03/SKR04). For freelance accounts, use `categorize_transaction` instead — it has its own category set and AI detection. A Polish company (`country: PL`) never uses the SKR tools: a JDG picks from its PL_KPIR chart, an sp. z o.o. from its PL_FULL chart, both with `list_company_categories`.
 
 ## How to determine account type
 
 Call `get_company_details` and check the `isSme` field:
-- `isSme: true` → Use this skill (SKR tools below)
+- `isSme: true` and `country: DE` → Use this skill (SKR tools below)
+- `country: PL` → Use `list_company_categories` (PL_KPIR or PL_FULL), not this skill
 - `isSme: false` → Use `categorize_transaction` for freelance AI categorization
 
 ## Workflow

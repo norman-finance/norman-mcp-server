@@ -1,7 +1,7 @@
 ---
 name: find-receipts
 description: Find and attach missing receipts for business transactions. Search Gmail, email, or other sources for invoices and receipts, then upload them to Norman. Use when the user asks about missing receipts, Belege, attaching documents, or finding invoices from emails.
-version: 1.0.0
+version: 1.0.1
 argument-hint: "[transaction description or vendor name]"
 metadata:
   openclaw:
@@ -50,6 +50,5 @@ Once the user has the receipt files:
 - Show a summary: how many receipts were found, attached, and how many are still missing
 
 Tips:
-- In Germany, receipts must be kept for 10 years (Aufbewahrungspflicht)
-- Digital copies are legally accepted (GoBD-compliant) when stored properly
-- Prioritize receipts for expenses over 250 EUR (required for Vorsteuerabzug)
+- DE: Receipts must be kept for 10 years (Aufbewahrungspflicht). Digital copies are legally accepted (GoBD-compliant) when stored properly. Prioritize receipts for expenses over 250 EUR (required for Vorsteuerabzug).
+- PL: Receipts must be kept for 5 years. Documents must comply with JPK requirements. Prioritize receipts for expenses over 450 PLN (required for VAT deduction).

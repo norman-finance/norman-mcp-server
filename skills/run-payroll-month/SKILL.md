@@ -1,7 +1,7 @@
 ---
 name: run-payroll-month
-description: Run the monthly payroll (Lohnabrechnung) of a German GmbH or UG with Norman — check people and changes, calculate, approve, pay, Beitragsnachweis and Lohnsteuer-Anmeldung. Use when the user asks about payroll, Lohnabrechnung, Gehaltsabrechnung, salaries, payslips, Minijob, Midijob, Sozialversicherung, Beitragsnachweis or Lohnsteuer-Anmeldung.
-version: 1.0.0
+description: Run the monthly payroll (Lohnabrechnung) of a German GmbH or UG with Norman — check people and changes, calculate, approve, pay, Beitragsnachweis and Lohnsteuer-Anmeldung. Use when the user asks about payroll, Lohnabrechnung, Gehaltsabrechnung, salaries, payslips, Minijob, Midijob, Sozialversicherung, Beitragsnachweis or Lohnsteuer-Anmeldung. Germany only; Norman has no payroll for Polish companies.
+version: 1.0.1
 disable-model-invocation: true
 argument-hint: "[month, e.g. 2026-12]"
 metadata:

@@ -2,7 +2,7 @@
 
 import json
 from functools import wraps
-from inspect import signature
+from inspect import cleandoc, signature
 from urllib.parse import urljoin
 
 from mcp.server.mcpserver.exceptions import ToolError
@@ -64,6 +64,11 @@ GERMAN_ONLY_TOOLS = frozenset(
 )
 
 
+# Opens every German-only tool's description. The shared server lists them for a Polish company as
+# well, so the model reads plainly that they are not its tools before a call is refused.
+GERMANY_ONLY_NOTE = "Germany only."
+
+
 class CountryScopedTools:
     """Registration facade. Check the active company at invocation, never server startup."""
 
@@ -71,11 +76,9 @@ class CountryScopedTools:
         self.server = server
 
     def tool(self, *args, **kwargs):
-        decorate = self.server.tool(*args, **kwargs)
-
         def register(fn):
             if fn.__name__ not in GERMAN_ONLY_TOOLS and fn.__module__ not in GERMAN_ONLY_MODULES:
-                return decorate(fn)
+                return self.server.tool(*args, **kwargs)(fn)
             call_signature = signature(fn, eval_str=True)
 
             @wraps(fn)
@@ -105,6 +108,8 @@ class CountryScopedTools:
             guarded.__signature__ = call_signature
             guarded.__annotations__ = {k: v.annotation for k, v in call_signature.parameters.items()}
             guarded.__annotations__["return"] = call_signature.return_annotation
-            return decorate(guarded)
+            description = kwargs.get("description") or cleandoc(fn.__doc__ or "")
+            labelled = {**kwargs, "description": f"{GERMANY_ONLY_NOTE} {description}".strip()}
+            return self.server.tool(*args, **labelled)(guarded)
 
         return register

@@ -53,6 +53,7 @@ def register_tax_advisor_tools(mcp):
                 "accountType": company.get("accountType"),
                 "isSme": company.get("isSme"),
                 "chartOfAccounts": company.get("chartOfAccounts"),
+                "country": company.get("country"),
                 "taxState": company.get("taxState"),
                 # the company endpoint serializes these as taxNumber/vatNumber
                 "vatId": company.get("vatNumber"),
@@ -282,6 +283,8 @@ def register_tax_advisor_tools(mcp):
             tax_number = company.get("taxNumber")
             vat_number = company.get("vatNumber")
             result["registration"] = {
+                # A Polish client's registration is named in Polish terms, never the Finanzamt's.
+                "country": company.get("country"),
                 "taxId": tax_number,
                 "vatId": vat_number,
                 "taxState": company.get("taxState"),
@@ -295,9 +298,17 @@ def register_tax_advisor_tools(mcp):
         reg = result.get("registration", {})
         if isinstance(reg, dict) and not reg.get("error"):
             if not reg.get("hasTaxId"):
-                action_items.append("Tax ID (Steuernummer) is missing — register with Finanzamt")
+                action_items.append(
+                    "Tax ID (NIP) is missing"
+                    if reg.get("country") == "PL"
+                    else "Tax ID (Steuernummer) is missing — register with Finanzamt"
+                )
             if not reg.get("hasVatId"):
-                action_items.append("VAT ID (USt-IdNr.) is missing — apply if EU trade is planned")
+                action_items.append(
+                    "EU VAT number (PL + NIP, VAT-UE registration) is missing — needed only for EU trade"
+                    if reg.get("country") == "PL"
+                    else "VAT ID (USt-IdNr.) is missing — apply if EU trade is planned"
+                )
 
         reports_info = result.get("reports", {})
         if isinstance(reports_info, dict) and reports_info.get("unfiled", 0) > 0:

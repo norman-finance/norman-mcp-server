@@ -29,6 +29,17 @@ REPLACE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHi
 EMAIL_LANGUAGE = Literal["de", "en", "pl", "it", "es"]
 
 
+async def _write_invoice_settings(api, company_url: str, patch: dict) -> dict:
+    """The invoice settings PATCH; a tax office in it is a Polish company's, proposed for the owner to apply."""
+    if {"taxOfficeCode", "taxOfficeConfirmed"} & patch.keys():
+        from norman_mcp.tools.polish_settings import POLISH_ONLY, company_country, propose_tax_office
+
+        if await company_country(api) != "PL":
+            return POLISH_ONLY
+        return await propose_tax_office(api, company_url, patch)
+    return await api.arequest("PATCH", company_url + "invoices/settings/", json_data=patch)
+
+
 def _company_api(ctx: Context):
     api = ctx.request_context.lifespan_context["api"]
     if not api.company_id:
@@ -165,13 +176,13 @@ def register_invoice_management_tools(mcp, enrich=None):
 
         Supply only changed settings. A partial documentDesign keeps the saved
         controls; changing its template starts from that template's defaults.
-        The API enforces paid access.
+        The API enforces paid access. A Polish company's tax office is proposed for the owner to apply in Norman.
         """
         patch = input_payload(changes, InvoiceSettings)
         if not patch:
             raise ToolError("Supply at least one invoice setting to change.")
         api, company_url = _company_api(ctx)
-        return await api.arequest("PATCH", company_url + "invoices/settings/", json_data=patch)
+        return await _write_invoice_settings(api, company_url, patch)
 
     @mcp.tool(title="Update Invoice or Quote", annotations=EDIT)
     async def update_invoice(ctx: Context, invoice_id: str, changes: InvoiceChanges) -> dict:
@@ -256,7 +267,8 @@ def register_invoice_management_tools(mcp, enrich=None):
         message: str | None = None,
         correction_reason: str | None = None,
     ) -> dict:
-        """Reverse an issued invoice with a cancellation invoice (Stornorechnung).
+        """Reverse an issued invoice with a cancellation invoice (Stornorechnung; for a Polish
+        company a faktura korygująca to zero).
 
         Creates the cancellation with the invoice's lines, the next invoice number
         and a reference to the invoice, then marks the invoice "cancelled": it is
@@ -265,7 +277,8 @@ def register_invoice_management_tools(mcp, enrich=None):
         To correct part of an invoice use create_credit_note instead. Edit a
         draft directly. issued (YYYY-MM-DD) defaults to today. The amounts stay
         positive, like the invoice's; the PDF prints every amount with a minus.
-        correction_reason says why; a Polish cancellation sent to KSeF states it.
+        correction_reason says why. A Polish cancellation of an invoice in KSeF goes there as a
+        correcting invoice (KOR) that states it; when it cannot go yet, the API refuses and says why.
         """
         return await _derive(
             ctx,
@@ -284,7 +297,8 @@ def register_invoice_management_tools(mcp, enrich=None):
         message: str | None = None,
         correction_reason: str | None = None,
     ) -> dict:
-        """Credit part or all of an issued invoice with a credit note (Rechnungskorrektur).
+        """Credit part or all of an issued invoice with a credit note (Rechnungskorrektur; for a
+        Polish company a faktura korygująca).
 
         Without items every line of the invoice is credited. Pass items (with the
         quantities and rates to credit, positive and in minor currency units) to
@@ -292,7 +306,8 @@ def register_invoice_management_tools(mcp, enrich=None):
         itself stays in force. The credit note refers to the invoice on the PDF
         and in the e-invoice XML. status "draft" leaves it editable; "saved"
         issues it at once. issued (YYYY-MM-DD) defaults to today.
-        correction_reason says why; a Polish credit note sent to KSeF states it.
+        correction_reason says why. A Polish credit note of an invoice in KSeF goes there as a
+        correcting invoice (KOR) that states it; when it cannot go yet, the API refuses and says why.
         """
         return await _derive(
             ctx,

@@ -138,7 +138,7 @@ def register_bill_tools(mcp):
         Mark a bill as paid (``status="PAID"``) WITHOUT initiating a payment.
         Use this for bills that were already paid outside Norman (e.g. migrated
         bills) to clear them from the Bills view. To actually pay a bill via SEPA,
-        use ``pay_bill`` instead.
+        use ``pay_bill`` instead (German companies only).
 
         Args:
             bill_id: ID of the bill to mark paid

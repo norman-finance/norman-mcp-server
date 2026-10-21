@@ -9,6 +9,7 @@ from norman_mcp.context import Context
 from norman_mcp import config
 from norman_mcp.tools.results import as_object
 from norman_mcp.company_profile import without_company_personal_identifiers
+from norman_mcp.tools.polish_settings import company_country, propose_company_details, summarize
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,25 @@ def _company_summary(company: Dict[str, Any], active_id: Optional[str]) -> Dict[
         "isArchived": company.get("isArchived"),
         "active": bool(company_id) and company_id == active_id,
     }
+
+
+# A Polish company's tax settings among the company details: proposed, never written here (the API refuses them).
+POLISH_TAX_DETAILS = ("vatNumber", "taxNumber", "activityStart", "isToNotifyTaxDeadlines")
+
+
+async def _update_polish_company(
+    api: Any, company_url: str, update_data: Dict[str, Any], tax_details: Dict[str, Any],
+) -> Dict[str, Any]:
+    """A Polish company: its NIP, EU VAT number, business start and reminders are proposed for the owner to apply in
+    Norman; the other details are written as before."""
+    answer = summarize(await propose_company_details(api, tax_details))
+    other = {key: value for key, value in update_data.items() if key not in POLISH_TAX_DETAILS}
+    if other:
+        answer["company"] = without_company_personal_identifiers(
+            api._make_request("PATCH", company_url, json_data=other)  # noqa: SLF001 - the client's write path
+        )
+        answer["updated"] = sorted(other)
+    return answer
 
 
 def register_company_tools(mcp):
@@ -173,13 +193,19 @@ def register_company_tools(mcp):
         datev_client_number: Optional[str] = Field(default=None, description="German companies only: DATEV client/Mandant number"),
         notify_tax_deadlines: Optional[bool] = Field(
             default=None,
-            description="Email reminders a week before and on the due date of each UStVA and ZM. False turns them off.",
+            description=(
+                "Tax deadline reminders. German companies: e-mails a week before and on the due date "
+                "of each UStVA and ZM. Polish companies: in the app, by push and by e-mail, a few days "
+                "before and on the day, for the JPK_V7, VAT-UE, PIT and CIT advances, ZUS DRA, annual "
+                "PIT and CIT-8. False turns them off."
+            ),
         ),
     ) -> Dict[str, Any]:
         """Update company information.
 
         Use a chart_of_accounts template supported by the company country. DATEV advisor/client numbers are German-only.
-        notify_tax_deadlines switches the UStVA and ZM deadline reminder emails on or off.
+        notify_tax_deadlines switches the tax deadline reminders on or off: the UStVA and ZM e-mails
+        of a German company, the JPK_V7, VAT-UE, PIT, CIT and ZUS reminders of a Polish one.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -223,6 +249,12 @@ def register_company_tools(mcp):
             update_data["datevClientNumber"] = datev_client_number
         if notify_tax_deadlines is not None:
             update_data["isToNotifyTaxDeadlines"] = notify_tax_deadlines
+
+        if POLISH_TAX_DETAILS & update_data.keys() and await company_country(api) == "PL":
+            return await _update_polish_company(api, company_url, update_data, {
+                "tax_id": tax_id, "vat_id": vat_id, "activity_start": activity_start,
+                "notify_tax_deadlines": notify_tax_deadlines,
+            })
 
         if not update_data:
             current_data = without_company_personal_identifiers(await api.arequest("GET", company_url))

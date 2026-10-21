@@ -10,6 +10,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from norman_mcp.context import Context
 from norman_mcp import config
 from norman_mcp.tools.results import as_object, first_text
+from norman_mcp.tools.polish_settings import company_country, propose, propose_vat_status
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,8 @@ def register_tax_tools(mcp):
         ),
     )
     async def list_tax_reports(ctx: Context) -> Dict[str, Any]:
-        """List all available tax reports."""
+        """List all available tax reports: a German company's UStVA, ZM, EÜR and annual returns, a Polish
+        company's JPK_V7M or JPK_V7K, VAT-UE, PIT or CIT advances, ZUS DRA, annual PIT and CIT-8."""
         api = ctx.request_context.lifespan_context["api"]
         
         company_id = api.company_id
@@ -368,6 +370,8 @@ def register_tax_tools(mcp):
         """
         Update a tax setting for the selected company. Read its country and supported settings first.
         Review the report through its country-specific tools before any submission.
+        For a Polish company it changes nothing itself: it proposes this year's VAT status and JPK_V7 frequency,
+        and the owner applies it in Norman through the returned openUrl (propose_tax_setting_change).
         
         Args:
             setting_id: Public ID of the tax setting to update
@@ -386,6 +390,13 @@ def register_tax_tools(mcp):
             config.api_base_url,
             f"api/v1/taxes/tax-settings/{setting_id}/"
         )
+        if await company_country(api) == "PL":
+            return await propose_vat_status(
+                api, setting_url, vat_type=vat_type, reporting_frequency=reporting_frequency,
+                others={
+                    "tax_type": tax_type, "vat_percent": vat_percent, "start_tax_report_date": start_tax_report_date,
+                },
+            )
         
         update_data = {}
         if tax_type:
@@ -445,7 +456,10 @@ def register_tax_tools(mcp):
     )
     async def get_vat_next_report(ctx: Context) -> Dict[str, Any]:
         """
-        Get the VAT amount for the next report period.
+        The next VAT return: its period, VAT amount and deadline. A German company's UStVA; a
+        Polish VAT payer's JPK_V7M or JPK_V7K, due the 25th (next working day); none for a Polish
+        company exempt from VAT. For "when is my next tax deadline?" also check list_tax_reports:
+        a Polish company's PIT or CIT advance and ZUS DRA fall due on the 20th.
         
         Returns:
             VAT next report amount data
@@ -513,6 +527,7 @@ def register_tax_tools(mcp):
         """
         Set the owner's choices about the Polish VAT deduction proportion (art. 90) of one tax year. Only
         what is given changes. Confirm the numbers with the user first: they come from the user's records.
+        It proposes them: the owner applies the proposal in Norman through the returned openUrl.
 
         Returns:
             The year as get_vat_proportion describes it
@@ -535,6 +550,8 @@ def register_tax_tools(mcp):
         data |= {key: value for key, value in given.items() if value is not None}
         if not data:
             return {"message": "Nothing to change."}
+        if await company_country(api) == "PL":
+            return await propose(api, "vat_proportion", {"year": year, **data})
         return await api.arequest(
             "PUT", urljoin(config.api_base_url, f"api/v1/companies/{company_id}/taxes/vat-proportion/{year}/"),
             json_data=data,

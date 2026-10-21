@@ -1,7 +1,7 @@
 ---
 name: expense-report
 description: Generate a detailed expense breakdown by category for a given period. Use when the user asks for an expense report, spending summary, Ausgabenübersicht, cost analysis, or wants to understand where their money is going.
-version: 1.0.0
+version: 1.0.1
 argument-hint: "[period, e.g. January 2026 or Q1 2026 or 2025]"
 metadata:
   openclaw:
@@ -22,7 +22,7 @@ Generate a comprehensive expense report for the user:
 ## Step 2: Categorize and group
 Group expenses by bookkeeping category. For each category show:
 - Category name
-- Total amount (EUR)
+- Total amount (in the company's currency)
 - Number of transactions
 - Percentage of total expenses
 
@@ -55,16 +55,16 @@ Structure the report clearly:
 ```
 Expense Report: [Period]
 ========================
-Total Expenses: X,XXX.XX EUR
+Total Expenses: X,XXX.XX [currency]
 
 By Category:
-  1. [Category]     X,XXX.XX EUR  (XX%)  [N transactions]
-  2. [Category]       XXX.XX EUR  (XX%)  [N transactions]
+  1. [Category]     X,XXX.XX [currency]  (XX%)  [N transactions]
+  2. [Category]       XXX.XX [currency]  (XX%)  [N transactions]
   ...
 
 Top Vendors:
-  1. [Vendor]       X,XXX.XX EUR  [N transactions]
-  2. [Vendor]         XXX.XX EUR  [N transactions]
+  1. [Vendor]       X,XXX.XX [currency]  [N transactions]
+  2. [Vendor]         XXX.XX [currency]  [N transactions]
   ...
 
 Key Insights:
@@ -72,4 +72,4 @@ Key Insights:
   - [Notable finding]
 ```
 
-Keep amounts in EUR. Use clear formatting for readability. Offer to drill down into any specific category if the user wants more detail.
+Keep amounts in the company's currency (EUR in Germany, PLN in Poland) and label it. Use clear formatting for readability. Offer to drill down into any specific category if the user wants more detail.

@@ -26,7 +26,8 @@ COMPANY = {
     [
         ("get_company_details", {}, "GET"),
         ("update_company_details", {}, "GET"),
-        ("update_company_details", {"name": "New name", "tax_id": "business-tax-number"}, "PATCH"),
+        # A Polish company's NIP is proposed for the owner to apply (tests/test_polish_settings_tools.py).
+        ("update_company_details", {"name": "New name"}, "PATCH"),
     ],
 )
 def test_company_responses_withhold_personal_ids_without_changing_business_fields_or_writes(tool, arguments, method):
@@ -43,7 +44,7 @@ def test_company_responses_withhold_personal_ids_without_changing_business_field
     assert len(api.requests) == 1
     assert api.requests[0][0] == method
     if method == "PATCH":
-        assert api.requests[0][2]["json_data"] == {"name": "New name", "taxNumber": "business-tax-number"}
+        assert api.requests[0][2]["json_data"] == {"name": "New name"}
 
 
 def test_company_resource_does_not_disclose_personal_id_even_in_upstream_error_object():

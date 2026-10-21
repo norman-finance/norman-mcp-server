@@ -1,6 +1,6 @@
 ---
 name: ledger-explorer
-description: Open interactive Ledger Explorer, inspect account balances and drill into postings for a period. Use when the user wants to explore the chart of accounts, SuSa or an account statement.
+description: Open interactive Ledger Explorer, inspect account balances and drill into postings for a period. Use when the user wants to explore the chart of accounts, SuSa or an account statement. German companies only (the SKR ledger); a Polish sp. z o.o. uses get_polish_trial_balance and get_polish_ledger_account.
 ---
 
 Call `get_ledger_explorer_data` with the requested `date_from` and `date_to`. Omit `account_code` for balances; supply the actual account code for its postings. Pass the complete returned result unchanged to `render_ledger_explorer(payload=...)`.
