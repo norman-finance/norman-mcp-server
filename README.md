@@ -145,7 +145,7 @@ Validation is a handoff check, not certification of tax correctness or DATEV imp
 
 ### Cześć, Polsko
 
-[![Watch Norman in Poland: English film with Polish subtitles](docs/assets/poland-video-preview.jpg)](docs/assets/poland-en-pl-subtitles.mp4)
+https://github.com/user-attachments/assets/aea417ad-64aa-4623-896f-ff8dc4559d4a
 
 **[Watch the Poland film](docs/assets/poland-en-pl-subtitles.mp4)** · 24 seconds ·
 English on-screen text with Polish subtitles built into the video.
