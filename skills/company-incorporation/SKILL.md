@@ -1,7 +1,7 @@
 ---
 name: company-incorporation
-description: Found a German GmbH or UG (haftungsbeschränkt) through a guided chat. Use when the user wants to open, found or incorporate a company in Germany, start a GmbH/UG, prepare founding documents (Musterprotokoll, Gesellschafterliste) or find a notary for incorporation.
-version: 1.1.0
+description: Found a German GmbH or UG (haftungsbeschränkt) through a guided chat. Use when the user wants to open, found or incorporate a company in Germany, start a GmbH/UG, prepare founding documents (Musterprotokoll, Gesellschafterliste) or find a notary for incorporation. Germany only.
+version: 1.1.1
 disable-model-invocation: true
 metadata:
   openclaw:

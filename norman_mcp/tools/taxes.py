@@ -82,7 +82,8 @@ def register_tax_tools(mcp):
         ),
     )
     async def list_tax_reports(ctx: Context) -> Dict[str, Any]:
-        """List all available tax reports."""
+        """List all available tax reports: a German company's UStVA, ZM, EÜR and annual returns, a Polish
+        company's JPK_V7M or JPK_V7K, VAT-UE, PIT or CIT advances, ZUS DRA, annual PIT and CIT-8."""
         api = ctx.request_context.lifespan_context["api"]
         
         company_id = api.company_id
@@ -136,7 +137,7 @@ def register_tax_tools(mcp):
         report_id: str = Field(description="Public ID of a filed UStVA (advance VAT return)"),
     ) -> Dict[str, Any]:
         """
-        German companies: what changed in a filed UStVA since it was sent to ELSTER.
+        What changed in a filed UStVA since it was sent to ELSTER.
 
         A late document keeps its legal date, also in a filed month. This compares the figures sent with today's,
         per Kennzahl, and says whether a correction is due: a higher tax due must be corrected without delay
@@ -477,7 +478,10 @@ def register_tax_tools(mcp):
     )
     async def get_vat_next_report(ctx: Context) -> Dict[str, Any]:
         """
-        Get the VAT amount for the next report period.
+        The next VAT return: its period, VAT amount and deadline. A German company's UStVA; a
+        Polish VAT payer's JPK_V7M or JPK_V7K, due the 25th (next working day); none for a Polish
+        company exempt from VAT. For "when is my next tax deadline?" also check list_tax_reports:
+        a Polish company's PIT or CIT advance and ZUS DRA fall due on the 20th.
         
         Returns:
             VAT next report amount data

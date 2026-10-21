@@ -1,7 +1,7 @@
 ---
 name: corporate-tax-registration
-description: Prepare the corporate tax registration (Fragebogen zur steuerlichen Erfassung for a GmbH/UG) through a guided chat. Use when a newly founded GmbH/UG needs its Steuernummer, the user asks what to do after the notary appointment, or wants to register the company with the Finanzamt. Final submission happens in the Norman app, not in chat.
-version: 1.0.1
+description: Prepare the corporate tax registration (Fragebogen zur steuerlichen Erfassung for a GmbH/UG) through a guided chat. Use when a newly founded GmbH/UG needs its Steuernummer, the user asks what to do after the notary appointment, or wants to register the company with the Finanzamt. Final submission happens in the Norman app, not in chat. Germany only.
+version: 1.0.2
 disable-model-invocation: true
 metadata:
   openclaw:

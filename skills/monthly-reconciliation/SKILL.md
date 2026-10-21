@@ -1,7 +1,7 @@
 ---
 name: monthly-reconciliation
-description: Perform a complete monthly financial reconciliation - review all transactions, match invoices, check outstanding payments, and prepare for tax filing. Use when the user wants to close the month, do monthly bookkeeping, or perform a Monatsabschluss.
-version: 1.0.1
+description: Perform a complete monthly financial reconciliation - review all transactions, match invoices, check outstanding payments, and prepare for tax filing. Use when the user wants to close the month, do monthly bookkeeping, or perform a Monatsabschluss (zamknięcie miesiąca).
+version: 1.1.1
 disable-model-invocation: true
 argument-hint: "[month, e.g. January 2026]"
 metadata:
@@ -50,9 +50,9 @@ Guide the user through a complete monthly reconciliation:
 ## Step 6: Tax Preparation
 - Call `get_company_tax_statistics` for the period overview
 - Call `get_vat_next_report` to check if a VAT report is due
-- If due, call `generate_finanzamt_preview` to show the draft
-- A late document keeps its legal date, also in a month whose UStVA is filed. For each filed UStVA of the period, `get_filed_report_changes` shows what changed per Kennzahl and whether a correction is due (§ 153 AO)
-- Only submit with explicit user confirmation via `submit_tax_report`
+- German companies: if the UStVA is due, call `generate_finanzamt_preview` to show the draft. Only submit with explicit user confirmation via `submit_tax_report`
+- German companies: a late document keeps its legal date, also in a month whose UStVA is filed; for each filed UStVA of the period, `get_filed_report_changes` shows what changed per Kennzahl and whether a correction is due (§ 153 AO)
+- Polish companies: if the JPK_V7 is due, find its report with `list_tax_reports` and read it with `get_polish_jpk_register` and `get_polish_jpk_filing_status`. There is no Polish submit tool: Norman files the JPK_V7 only after the owner approves and signs it in the Norman app
 
 ## Step 7: Summary
 Present a closing summary:

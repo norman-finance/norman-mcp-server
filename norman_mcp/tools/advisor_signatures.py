@@ -95,10 +95,11 @@ def register_advisor_signature_tools(mcp):
             default="pending", description="Which requests to list; pending by default.",
         ),
     ) -> Dict[str, Any]:
-        """For tax advisors: client declarations waiting for your signature, or their history.
+        """For tax advisors of German clients (Germany only): declarations waiting for your
+        signature, or their history.
 
-        Shows the client, the declaration and its label, and whether your ELSTER certificate is
-        uploaded and until when it is valid. Before signing, review the client's numbers
+        Shows the client, the declaration and its label, and whether your ELSTER certificate for
+        German filings is uploaded and until when it is valid. Before signing, review the client's numbers
         (switch_company, then list_tax_reports or get_tax_report).
         """
         api = ctx.request_context.lifespan_context["api"]
@@ -120,7 +121,8 @@ def register_advisor_signature_tools(mcp):
         request_id: str = Field(description="The signature request id from list_signature_requests."),
         label: str = Field(description="The request's label exactly as list_signature_requests showed it and the advisor confirmed it."),
     ) -> Dict[str, Any]:
-        """For tax advisors: sign a client's declaration with your ELSTER certificate and submit it to the Finanzamt.
+        """For tax advisors of German clients: sign a declaration with your ELSTER certificate and
+        submit it to the Finanzamt (Germany only).
 
         A binding submission that cannot be undone. Show the advisor the client, the declaration
         and its label, and call only after their explicit confirmation; the label must match the
@@ -154,7 +156,8 @@ def register_advisor_signature_tools(mcp):
         request_id: str = Field(description="The signature request id from list_signature_requests."),
         reason: str = Field(description="Why the declaration is sent back; the client sees it.", max_length=2000),
     ) -> Dict[str, Any]:
-        """For tax advisors: send a client's declaration back unsigned, with a reason the client sees.
+        """For tax advisors of German clients: send a declaration back unsigned, with a reason the
+        client sees.
 
         Cannot be undone: the client prepares a new request. Confirm the reason with the advisor first.
         """

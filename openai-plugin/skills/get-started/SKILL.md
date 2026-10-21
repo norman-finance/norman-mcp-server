@@ -5,7 +5,7 @@ description: Connect Norman and discover its accounting tools and interactive vi
 
 Explain that the user connects their existing Norman account through the host's OAuth flow. Keep passwords and tokens out of chat. Once connected, use `get_company_details` to identify the selected workspace. If several companies are available, use `list_companies` and let the user choose before `switch_company`.
 
-For attention triage, call `open_norman_inbox`. For an explicitly requested document, reconciliation or Ledger screen, use its data tool followed by its render tool with the complete result as `payload`. For a tax test preview, discover the report ID with `list_tax_reports`, then call `render_tax_preview` directly; that call creates temporary preview files but does not file anything.
+For attention triage, call `open_norman_inbox`. For an explicitly requested document, reconciliation or Ledger screen, use its data tool followed by its render tool with the complete result as `payload`. For a German company's tax test preview, discover the report ID with `list_tax_reports`, then call `render_tax_preview` directly (a Polish JPK_V7 is read with `get_polish_jpk_register`); that call creates temporary preview files but does not file anything.
 
 Use the existing invoicing, bookkeeping, products, advisor and registration skills for those tasks. Discover actual workflow availability with `list_workflows` before starting or scheduling a workflow. Explain plan, company and host restrictions from actual responses. Do not start automations or create accounting records merely to demonstrate the plugin.
 

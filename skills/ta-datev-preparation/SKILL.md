@@ -1,7 +1,7 @@
 ---
 name: ta-datev-preparation
-description: Prepare a DATEV export for a client company. Verifies all transactions are categorized, receipts attached, DATEV settings configured, and triggers the export. Use when a tax advisor asks to prepare DATEV, export bookkeeping data, or send data to their tax software.
-version: 1.0.0
+description: Prepare a DATEV export for a German client company (Germany only). Verifies all transactions are categorized, receipts attached, DATEV settings configured, and triggers the export. Use when a tax advisor asks to prepare DATEV, export bookkeeping data, or send data to their tax software.
+version: 1.0.1
 metadata:
   openclaw:
     emoji: "\U0001F4E6"

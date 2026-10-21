@@ -152,7 +152,10 @@ def register_rule_tools(mcp):
         ),
         company_category_id: Optional[str] = Field(
             default=None,
-            description="SME CompanyCategory UUID to set on matching transactions (GmbH/UG companies)",
+            description=(
+                "Company-chart CompanyCategory UUID to set on matching transactions "
+                "(GmbH/UG, sp. z o.o., or a JDG on its PL_KPIR chart)"
+            ),
         ),
         is_active: bool = Field(default=True, description="Create enabled (true) or as an inactive draft (false)"),
     ) -> Dict[str, Any]:
@@ -340,9 +343,9 @@ def register_rule_tools(mcp):
     async def list_pending_approvals(ctx: Context) -> Dict[str, Any]:
         """
         Everything an agent prepared and is waiting on the user for, in one
-        list: review-first automations, a prepared UStVA, an active workflow
-        step. Use this for "what needs me?" instead of guessing across
-        surfaces.
+        list: review-first automations, a return the tax autopilot prepared (a
+        German UStVA, a Polish JPK_V7M or JPK_V7K), an active workflow step.
+        Use this for "what needs me?" instead of guessing across surfaces.
 
         Items with an executionId can be decided here (approve_rule_execution
         or dismiss_rule_execution) once the user says so; the rest carry a link

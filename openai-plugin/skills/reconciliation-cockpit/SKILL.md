@@ -1,6 +1,6 @@
 ---
 name: reconciliation-cockpit
-description: Open the interactive Reconciliation Cockpit and inspect missing documents, categories, verification and old SKR mappings for a period. Use for a visual bookkeeping review before closing a month or year.
+description: Open the interactive Reconciliation Cockpit and inspect missing documents, categories, verification and, for a German company, old SKR mappings for a period. Use for a visual bookkeeping review before closing a month or year.
 ---
 
 Fetch `get_reconciliation_cockpit_data(date_from=..., date_to=..., limit=...)` for the requested period, then call `render_reconciliation_cockpit(payload=...)` with its full result unchanged.

@@ -1,7 +1,7 @@
 ---
 name: financial-overview
 description: Get a complete financial overview of the business including balance, recent transactions, outstanding invoices, and upcoming tax obligations. Use when the user asks about their financial status, dashboard, summary, or "how is my business doing?"
-version: 1.0.0
+version: 1.0.1
 metadata:
   openclaw:
     emoji: "\U0001F4CA"
@@ -25,6 +25,6 @@ Present the information in a clear, structured format:
 - Show a brief income vs expenses summary from recent transactions
 - List any overdue invoices that need attention
 - Highlight upcoming tax deadlines
-- End with actionable recommendations (e.g., "You have 3 overdue invoices totaling X EUR")
+- End with actionable recommendations (e.g., "You have 3 overdue invoices totaling X [currency]")
 
-Use EUR currency formatting. Be concise but thorough.
+Use the company's default currency for formatting. Be concise but thorough.

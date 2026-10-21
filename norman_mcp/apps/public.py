@@ -483,7 +483,8 @@ def register_public_apps(mcp: Any, *, widget_domain: Optional[str] = None) -> No
         ctx: Context,
         report_id: str = Field(description="Public ID of the tax report to review"),
     ) -> Dict[str, Any]:
-        """Generate and store a temporary test preview and return its readiness view.
+        """German companies only: generate and store a temporary Finanzamt test preview and return
+        its readiness view. A Polish JPK_V7 is read with get_polish_jpk_register instead.
 
         Never submits the report; repeated calls create new preview files.
         """
@@ -495,7 +496,8 @@ def register_public_apps(mcp: Any, *, widget_domain: Optional[str] = None) -> No
         ctx: Context,
         report_id: str = Field(description="Public ID of the tax report to refresh"),
     ) -> Dict[str, Any]:
-        """Refresh filing status after a submission attempt without creating a new preview."""
+        """German companies only: refresh an ELSTER filing's status after a submission attempt,
+        without creating a new preview. A Polish JPK_V7's status: get_polish_jpk_filing_status."""
         data, _preview_image = await load_tax_filing(ctx, report_id, generate_preview=False)
         data["section"] = "submission"
         return data
@@ -503,7 +505,8 @@ def register_public_apps(mcp: Any, *, widget_domain: Optional[str] = None) -> No
     @mcp.tool(
         title="Render Tax Preview",
         description=(
-            "Open a test Finanzamt preview for a tax report. This never submits the report. "
+            "German companies only: open a test Finanzamt preview for a tax report (a Polish "
+            "JPK_V7 is read with get_polish_jpk_register). This never submits the report. "
             "Generates and stores a new temporary PDF on each call. "
             "Use list_tax_reports to find the report ID, then call this directly."
         ),
@@ -530,7 +533,9 @@ def register_public_apps(mcp: Any, *, widget_domain: Optional[str] = None) -> No
     @mcp.tool(
         title="Render Tax Submission",
         description=(
-            "Open the confirmation step for a tax report. Rendering never submits anything. "
+            "German companies only: open the ELSTER confirmation step for a tax report (Norman "
+            "files a Polish JPK_V7 only from its app, once the owner approves it). Rendering never "
+            "submits anything. "
             "Each call generates and stores a new temporary test-preview PDF. "
             "The user must review the generated test preview, check the explicit confirmation "
             "box and invoke the destructive submission tool from the UI."
@@ -698,7 +703,8 @@ def register_public_apps(mcp: Any, *, widget_domain: Optional[str] = None) -> No
             description="Account code to expand into its Kontenblatt; omit for the SuSa",
         ),
     ) -> Dict[str, Any]:
-        """Use this when exploring account balances and drilling into Ledger postings."""
+        """Use this when exploring a German GmbH/UG's SKR account balances and drilling into Ledger
+        postings (Germany only; a Polish sp. z o.o. uses get_polish_trial_balance)."""
         api, company_id, error = _api_and_company(ctx)
         if error:
             return _error_view("ledger", "Ledger Explorer", error["error"])
