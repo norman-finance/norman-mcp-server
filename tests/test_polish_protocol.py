@@ -274,18 +274,21 @@ def test_vat_proportion_preserves_zero_and_explicit_clear():
             api,
         )
     )
-    assert api.requests[-1][0] == "PUT"
-    assert api.requests[-1][1].endswith(
-        "/companies/company-1/taxes/vat-proportion/2026/"
-    )
+    # A Polish company's choices are proposed for the owner to apply in Norman (tests/test_polish_settings_tools.py).
+    assert api.requests[-1][0] == "POST"
+    assert api.requests[-1][1].endswith("/companies/company-1/tax-setting-proposals/")
     assert api.requests[-1][2]["json_data"] == {
-        "estimatedPercent": 0,
-        "roundToWhole": False,
-        "previousTaxedTurnover": "1000.00",
-        "previousExemptTurnover": "500.00",
-        "fixedAssetCorrection": "-12.30",
+        "setting": "vat_proportion",
+        "values": {
+            "year": 2026,
+            "estimatedPercent": 0,
+            "roundToWhole": False,
+            "previousTaxedTurnover": "1000.00",
+            "previousExemptTurnover": "500.00",
+            "fixedAssetCorrection": "-12.30",
+        },
     }
     structured(
         call_tool("update_vat_proportion", {"year": 2026, "clear_estimate": True}, api)
     )
-    assert api.requests[-1][2]["json_data"] == {"estimatedPercent": None}
+    assert api.requests[-1][2]["json_data"]["values"] == {"year": 2026, "estimatedPercent": None}

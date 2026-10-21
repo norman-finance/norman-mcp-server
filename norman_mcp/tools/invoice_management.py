@@ -29,6 +29,17 @@ REPLACE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHi
 EMAIL_LANGUAGE = Literal["de", "en", "pl", "it", "es"]
 
 
+async def _write_invoice_settings(api, company_url: str, patch: dict) -> dict:
+    """The invoice settings PATCH; a tax office in it is a Polish company's, proposed for the owner to apply."""
+    if {"taxOfficeCode", "taxOfficeConfirmed"} & patch.keys():
+        from norman_mcp.tools.polish_settings import POLISH_ONLY, company_country, propose_tax_office
+
+        if await company_country(api) != "PL":
+            return POLISH_ONLY
+        return await propose_tax_office(api, company_url, patch)
+    return await api.arequest("PATCH", company_url + "invoices/settings/", json_data=patch)
+
+
 def _company_api(ctx: Context):
     api = ctx.request_context.lifespan_context["api"]
     if not api.company_id:
@@ -165,13 +176,13 @@ def register_invoice_management_tools(mcp, enrich=None):
 
         Supply only changed settings. A partial documentDesign keeps the saved
         controls; changing its template starts from that template's defaults.
-        The API enforces paid access.
+        The API enforces paid access. A Polish company's tax office is proposed for the owner to apply in Norman.
         """
         patch = input_payload(changes, InvoiceSettings)
         if not patch:
             raise ToolError("Supply at least one invoice setting to change.")
         api, company_url = _company_api(ctx)
-        return await api.arequest("PATCH", company_url + "invoices/settings/", json_data=patch)
+        return await _write_invoice_settings(api, company_url, patch)
 
     @mcp.tool(title="Update Invoice or Quote", annotations=EDIT)
     async def update_invoice(ctx: Context, invoice_id: str, changes: InvoiceChanges) -> dict:
