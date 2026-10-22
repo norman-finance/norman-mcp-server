@@ -74,6 +74,10 @@ The October 21 instant AfA change adds one optional argument: create_asset and
 update_asset take amortization_method (straightLine or instant). The category
 metadata description of create_transaction and update_transaction now names the
 amortization block; no argument changes there.
+
+The October 22 EU model change updates one description: suggest_skr_category
+says its query goes to Norman's AI model, processed in the EU. No argument
+changes.
 """
 
 import asyncio

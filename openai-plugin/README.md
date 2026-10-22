@@ -38,7 +38,7 @@ Replacement, cancellation and irreversible workflow actions declare
 `destructiveHint: true`. Enabling future client emails or external workflow
 actions declares `openWorldHint: true`. The legacy category-template alias has
 a distinct title. SKR AI suggestions remain bounded to the fixed SKR catalog,
-even though computation uses OpenAI; the description now makes that boundary
+even though computation uses a language model; the description now makes that boundary
 explicit. A review clarification may still be necessary for that finding.
 
 Corporate-registration tools omit known personal government-identifier fields

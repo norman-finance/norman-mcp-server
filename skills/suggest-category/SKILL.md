@@ -26,7 +26,7 @@ Call `get_company_details` and check the `isSme` field:
 
 1. **Determine the search approach** based on what the user provides:
    - If they provide an **account number or prefix** (digits like `42`, `4200`, `6300`), use `search_skr_by_code` for instant CSV-based results.
-   - If they describe a **category by name or purpose** (e.g. "office rent", "Reisekosten", "software subscriptions"), use `suggest_skr_category` which leverages OpenAI to semantically match against the full catalog.
+   - If they describe a **category by name or purpose** (e.g. "office rent", "Reisekosten", "software subscriptions"), use `suggest_skr_category` which uses Norman's AI model to semantically match against the full catalog.
 
 2. **Show results clearly**: Present the matches with:
    - Account number (code)
@@ -49,7 +49,7 @@ Call `get_company_details` and check the `isSme` field:
 | Tool | For | What it does |
 |---|---|---|
 | `search_skr_by_code` | SME only | Fast CSV lookup by account number prefix |
-| `suggest_skr_category` | SME only | AI (OpenAI) semantic search by name/description |
+| `suggest_skr_category` | SME only | AI semantic search by name/description |
 | `create_company_category` | SME only | Create a new custom DATEV category |
 | `list_company_categories` | SME only | List categories already provisioned for the company |
 | `categorize_transaction` | All accounts | AI detection for a specific transaction (freelance + SME) |
