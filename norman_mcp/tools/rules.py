@@ -15,7 +15,9 @@ EXECUTIONS_SAMPLE_SIZE = 15
 
 CONDITION_FIELDS_HELP = (
     'Condition items, each {"field", "operator", "value"}. Fields: description | '
-    "cashflow_type | amount | iban. Operators for text fields: contains | not_contains | "
+    "cashflow_type | amount | iban | counterparty_iban. iban is the company's own bank "
+    "account the transaction is on; counterparty_iban is the other party's IBAN (get_transaction "
+    "shows it as counterpartyIban). Operators for text fields: contains | not_contains | "
     "equals | not_equals | starts_with | regex; for amount: gt | lt | gte | lte | equals. "
     'cashflow_type uses equals with value "INCOME" or "EXPENSE"; amount values are plain '
     'numbers passed as strings, e.g. "100".'
