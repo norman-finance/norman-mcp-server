@@ -1,7 +1,7 @@
 ---
 name: categorize-transactions
 description: Review and categorize uncategorized bank transactions, match them with invoices, and verify bookkeeping entries. Use when the user wants to review transactions, categorize expenses, do bookkeeping, or reconcile their bank account.
-version: 1.1.0
+version: 1.2.0
 metadata:
   openclaw:
     emoji: "\U0001F3F7"
@@ -35,14 +35,16 @@ Call `get_company_details` and check `isSme`, `country` and `usesCompanyChart`:
    - **Freelance**: Use `categorize_transaction` with the transaction details — it returns the AI-suggested freelance category.
    - **SME, or a JDG on its PL_KPIR chart**: Use `update_transaction` with `company_category_id` to assign the account. For a GmbH/UG, if the needed category isn't in `list_company_categories`, search the full SKR03/SKR04 catalog with `search_skr_by_code` (by number) or `suggest_skr_category` (by description, uses AI). Then `create_company_category` to add it.
 
-4. **Invoice matching**: When a transaction looks like an incoming payment:
+4. **Same counterparty**: When the user corrects the category of one booking, call `find_same_counterparty_transactions` with that booking before you save its new category. Offer to change the `suggested` bookings too, and say how many finalized ones stay as they are. Change the ones the user agrees to with `update_transaction`. If the new category asks for details (trip dates, VAT period, business share, asset lifetime), change only the one booking.
+
+5. **Invoice matching**: When a transaction looks like an incoming payment:
    - Call `list_invoices` to find matching unpaid invoices (by amount or client)
    - Use `link_transaction` to connect the payment to the invoice
 
-5. **Document attachment**: Remind the user to attach receipts for expenses:
+6. **Document attachment**: Remind the user to attach receipts for expenses:
    - Use `upload_bulk_attachments` for multiple receipts
    - Use `link_attachment_transaction` to connect receipts to transactions
 
-6. **Verification**: After categorizing, use `change_transaction_verification` to mark transactions as verified.
+7. **Verification**: After categorizing, use `change_transaction_verification` to mark transactions as verified.
 
 Present transactions in batches of 10-15 for manageable review. Show: Date, Amount, Description, Suggested Category.

@@ -682,6 +682,48 @@ def register_transaction_tools(mcp):
         return await api.arequest("POST", detect_url, json_data=request_data)
 
     @mcp.tool(
+        title="Find Same Counterparty Transactions",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def find_same_counterparty_transactions(
+        ctx: Context,
+        transaction_id: str = Field(
+            description="Public ID of the booking whose category is about to change"
+        ),
+    ) -> Dict[str, Any]:
+        """
+        Before one booking's category changes: the counterparty's other open bookings still in that category.
+
+        Call it with the booking you recategorize, before you save its new category. It lists the open bookings of
+        the same counterparty, direction and current category. `suggested` holds the ids that belong with it: all of
+        them, or for PayPal and other payment services only those with the same purpose text. Finalized, split and
+        tax-treated bookings and payments that pay a booking are left out; `finalizedCount` says how many finalized
+        ones stay as they are. Change the ones the user agrees to with update_transaction. If the new category asks
+        for details (trip dates, VAT period, business share, asset lifetime), change only the one booking: those
+        details belong to it alone.
+
+        Args:
+            transaction_id: Public ID of the booking to recategorize
+
+        Returns:
+            counterparty, results (the open bookings), suggested (ids) and finalizedCount
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+        url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/accounting/transactions/{transaction_id}/same-counterparty/",
+        )
+        return await api.arequest("GET", url)
+
+    @mcp.tool(
         title="Change Transaction Verification Status",
         annotations=ToolAnnotations(
             readOnlyHint=False,
