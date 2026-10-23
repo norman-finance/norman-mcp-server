@@ -74,6 +74,12 @@ The October 21 instant AfA change adds one optional argument: create_asset and
 update_asset take amortization_method (straightLine or instant). The category
 metadata description of create_transaction and update_transaction now names the
 amortization block; no argument changes there.
+
+The October 21 document bookings add two optional filters to search_transactions:
+payment_type (NOT_PAID lists open bookings) and source (document, invoice, bank,
+non_bank). No existing argument changes. The new find_booking_payments, pay_booking,
+record_booking_payment, unlink_payment and get_filed_report_changes tools need no
+oracle entry.
 """
 
 import asyncio

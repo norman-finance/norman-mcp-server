@@ -44,6 +44,7 @@ Once the user has the receipt files:
 - Use `upload_bulk_attachments` to upload multiple receipts at once
 - Use `create_attachment` for individual receipts with metadata (vendor, date, amount)
 - Use `link_attachment_transaction` to connect each receipt to its matching transaction
+- German companies: a receipt that matches no payment books itself as an open booking (payment type `NOT_PAID`, source document) on its own date; its bank payment takes the booking over when it arrives. Linking a receipt to a booking made by hand replaces the booking Norman made from it.
 
 ## Step 4: Verify
 - After attaching, use `change_transaction_verification` to mark transactions as verified
