@@ -80,6 +80,11 @@ payment_type (NOT_PAID lists open bookings) and source (document, invoice, bank,
 non_bank). No existing argument changes. The new find_booking_payments, pay_booking,
 record_booking_payment, unlink_payment and get_filed_report_changes tools need no
 oracle entry.
+
+The October 23 counterparty IBAN condition updates three descriptions: the
+conditions of preview_rule, create_rule and update_rule name counterparty_iban,
+the other party's IBAN, next to iban, the company's own account. No argument
+changes.
 """
 
 import asyncio
