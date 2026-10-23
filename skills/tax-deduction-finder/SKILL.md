@@ -73,7 +73,7 @@ Present a summary:
 Tips:
 - DE: Items up to 800 EUR net (GWG - Geringwertige Wirtschaftsgüter) can be fully deducted in the purchase year. Items over 800 EUR must be depreciated over their useful life (AfA).
 - DE: Computer hardware, peripherals and software at any price may be written off in full in the year of purchase (instant): suggest it for a computer whose depreciation runs into later years.
-- DE, GmbH/UG on SKR03/SKR04: book a purchase up to 800 EUR net on the GWG write-off account (SKR03 4855, SKR04 6260). "Equipment & office rental" (SKR03 4960, SKR04 6835) is rent.
+- DE, GmbH/UG on SKR03/SKR04: a movable fixed asset that works on its own (a monitor, an office chair) and costs up to 800 EUR net per item goes on the GWG write-off account (SKR03 4855, SKR04 6260). Consumables, services and goods for resale keep their own accounts. "Equipment & office rental" (SKR03 4960, SKR04 6835) is rent.
 - PL: Items under 10,000 PLN net can be fully deducted in the purchase year. Items over 10,000 PLN must be depreciated (amortyzacja).
 - Mixed-use items (e.g., phone) should only claim the business portion
 - Keep receipts for all deductions - suggest attaching any missing ones
