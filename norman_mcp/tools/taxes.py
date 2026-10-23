@@ -82,16 +82,35 @@ def register_tax_tools(mcp):
             openWorldHint=False,
         ),
     )
-    async def list_tax_reports(ctx: Context) -> Dict[str, Any]:
-        """List all available tax reports: a German company's UStVA, ZM, EÜR and annual returns, a Polish
-        company's JPK_V7M or JPK_V7K, VAT-UE, PIT or CIT advances, ZUS DRA, annual PIT and CIT-8."""
+    async def list_tax_reports(
+        ctx: Context,
+        date_from: Optional[str] = Field(default=None, description="Earliest report period start (YYYY-MM-DD)"),
+        date_to: Optional[str] = Field(default=None, description="Latest report period end (YYYY-MM-DD)"),
+        report_type: str | None = Field(
+            default=None,
+            description="Report type, e.g. ADVANCED_SALEX_TAX (German UStVA) or JPK_V7M / JPK_V7K (Polish VAT)",
+        ),
+        page: int = Field(default=1, ge=1, description="Page within these filters; follow next when needed"),
+    ) -> Dict[str, Any]:
+        """List existing tax reports, optionally scoped to a period and report type.
+
+        Date filters include reports wholly inside the given period. Check the returned
+        dates and type; if no exact period exists, inspect the company's filing frequency.
+        German companies: an existing draft can be passed to generate_finanzamt_preview without
+        creating a duplicate. Polish companies: pass a JPK_V7 report to get_polish_jpk_register.
+        """
         api = ctx.request_context.lifespan_context["api"]
         
         company_id = api.company_id
         if not company_id:
             return NO_COMPANY_ERROR
+        taxes_url = reports_url(company_id)
 
-        return await api.arequest("GET", reports_url(company_id))
+        params = {"page": page}
+        for key, value in (("date_from", date_from), ("date_to", date_to), ("type", report_type)):
+            if value is not None:
+                params[key] = value
+        return await api.arequest("GET", taxes_url, params=params)
 
     @mcp.tool(
         title="Get Tax Report",

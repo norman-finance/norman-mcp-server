@@ -58,6 +58,7 @@ SettingName = Literal[
     "reminders",
     "ksef_auto_sync",
     "ksef_sync",
+    "ryczalt_rate",
 ]
 
 # Each setting's tool arguments, by the name the API reads them under (camelCase, as every client sends them).
@@ -88,6 +89,7 @@ ARGUMENTS: dict[str, dict[str, str]] = {
     "reminders": {"deadline_reminders": "isToNotifyTaxDeadlines"},
     "ksef_auto_sync": {"ksef_auto_import": "ksefAutoSync"},
     "ksef_sync": {},
+    "ryczalt_rate": {"revenue_category": "category", "lump_sum_rate": "ryczaltRate"},
 }
 
 
@@ -256,7 +258,8 @@ def register_polish_settings_tools(mcp: Any) -> None:
             description="zus (JDG): pełny ZUS (none), ulga na start, preferencyjny ZUS or Mały ZUS Plus.",
         ),
         zus_scheme_start: str | None = Field(
-            default=None, description="zus: the first day of the scheme, YYYY-MM-DD; needed for a relief.",
+            default=None, description="zus: the insurance start of an explicit preferential or Mały ZUS Plus period, YYYY-MM-DD. "
+            "Ulga na start and full ZUS use activity_start; do not supply a duplicate start for them.",
         ),
         zus_sickness_insurance: bool | None = Field(default=None, description="zus: voluntary sickness insurance."),
         company_zus_scope: Literal["none", "employees", "board", "employees_and_board"] | None = Field(
@@ -305,6 +308,15 @@ def register_polish_settings_tools(mcp: Any) -> None:
         ksef_auto_import: bool | None = Field(
             default=None, description="ksef_auto_sync: import invoices from KSeF automatically, on or off.",
         ),
+        revenue_category: str | None = Field(
+            default=None,
+            description="ryczalt_rate (JDG): revenue category code, e.g. 700 services, 730 goods or 750 interest.",
+        ),
+        lump_sum_rate: Literal["2", "3", "5.5", "8.5", "10", "12", "12.5", "14", "15", "17"] | None = Field(
+            default=None,
+            description="ryczalt_rate: percent. Omit to propose Norman's default for the category, based on "
+            "the company's PKD, profession or description. The owner reviews its source and applies it in Norman.",
+        ),
     ) -> dict[str, Any]:
         """Poland only. Propose a change to a Polish company's tax settings; the owner applies it in Norman.
 
@@ -316,6 +328,8 @@ def register_polish_settings_tools(mcp: Any) -> None:
         Norman records the setting and notifies no office: the owner reports a tax form in CEIDG or at the tax
         office, VAT changes on VAT-R, ZUS changes in ePłatnik or CEIDG.
         Facts only: never recommend a tax form, a CIT rate or a ZUS scheme. Explain the rules; the owner decides.
+        For ryczalt_rate, supply the revenue category and optionally its rate; omit the rate to show
+        Norman's default and its source for the owner to review. Never infer a rate from a category alone.
         Never ask for a KSeF token or PESEL: the owner enters these directly in Norman's settings.
         """
         api = ctx.request_context.lifespan_context["api"]
@@ -335,6 +349,7 @@ def register_polish_settings_tools(mcp: Any) -> None:
             "fixed_asset_correction": fixed_asset_correction, "nip": nip, "eu_vat_number": eu_vat_number,
             "business_start_date": business_start_date, "tax_office_code": tax_office_code,
             "deadline_reminders": deadline_reminders, "ksef_auto_import": ksef_auto_import,
+            "revenue_category": revenue_category, "lump_sum_rate": lump_sum_rate,
         }
         try:
             values = proposal_values(setting, arguments)
