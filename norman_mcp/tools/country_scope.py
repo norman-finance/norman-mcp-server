@@ -54,12 +54,15 @@ GERMAN_ONLY_TOOLS = frozenset(
         "validate_ledger_datev_export",
         # ELSTER and the Finanzamt.
         "generate_finanzamt_preview",
+        "get_filed_report_changes",
         "submit_tax_report",
         "validate_tax_number",
         "list_tax_states",
         # SEPA bill payment.
         "list_payment_accounts",
         "pay_bill",
+        # A German open booking paid another way.
+        "record_booking_payment",
     }
 )
 
