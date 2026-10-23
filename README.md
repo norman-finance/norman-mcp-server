@@ -165,7 +165,13 @@ in each language.
 - **Tax estimates and status:** review PIT/ZUS or CIT estimates, existing JPK/PIT
   filing status and UPO availability.
 - **Invoices, receipts and assets:** use shared tools with Polish VAT codes,
-  document currencies and depreciation inputs.
+  document currencies and depreciation inputs; create proforma quotes and record
+  incoming bills in their original currency. Search receipts by supplier and date.
+- **Ryczałt settings:** propose a revenue category's rate for the owner to review
+  and apply in Norman. The assistant does not change tax settings directly.
+- **Import review and routines:** inspect CSV import batches, preview an exact
+  batch rollback, and confirm or dismiss detected routines. A rollback requires
+  the user's approval and the preview token; confirming a routine does not send invoices.
 - **Accountant handoff:** preview General, Optima or EPP compatibility and review blockers.
 
 Try asking:
@@ -180,6 +186,7 @@ Polish journal postings, or generate or close annual statements. They inspect
 existing filing state; an XML download is not an acceptance receipt or UPO.
 
 [Polish tool guide, arguments and examples](docs/polish-accounting.md) ·
+[Public/internal sync details](docs/pl-internal-sync-2026-10-23.md) ·
 [Start with a Polish company](https://app.norman.finance/sign-up?country=PL&lang=pl&utm_source=mcp_server)
 
 ## Interactive UI inside your AI assistant
