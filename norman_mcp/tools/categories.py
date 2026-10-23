@@ -101,8 +101,9 @@ def register_category_tools(mcp):
         DATEV chart of accounts (SKR03/SKR04). For freelance accounts use
         'categorize_transaction' which has its own AI-powered category detection.
 
-        Sends the query to OpenAI along with the full SKR catalog as context,
-        so it can semantically match even vague or partial descriptions.
+        Sends the query to Norman's AI model (processed in the EU) along with the
+        full SKR catalog as context, so it can semantically match even vague or
+        partial descriptions.
         Returns up to 5 best matching entries with accountNumber, nameDe, nameEn.
         Results are limited to Norman's fixed SKR03/SKR04 catalog; this does not
         search the web, contact arbitrary destinations or modify your books.

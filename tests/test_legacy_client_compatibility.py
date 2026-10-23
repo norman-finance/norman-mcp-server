@@ -80,6 +80,10 @@ payment_type (NOT_PAID lists open bookings) and source (document, invoice, bank,
 non_bank). No existing argument changes. The new find_booking_payments, pay_booking,
 record_booking_payment, unlink_payment and get_filed_report_changes tools need no
 oracle entry.
+
+The October 22 EU model change updates one description: suggest_skr_category
+says its query goes to Norman's AI model, processed in the EU. No argument
+changes.
 """
 
 import asyncio
