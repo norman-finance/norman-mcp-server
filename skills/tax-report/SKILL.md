@@ -17,7 +17,7 @@ Help the user with their tax obligations. Read the company's country first (`com
 
 1. **Overview**: Call `list_tax_reports` to see all tax reports and their statuses (draft, validated, submitted)
 
-2. **Next deadline**: Call `get_vat_next_report` for the next VAT return: the UStVA of a German company, the JPK_V7 of a Polish VAT payer (a Polish company exempt from VAT files none). A Polish company's PIT or CIT advance and ZUS DRA, due on the 20th, are in `list_tax_reports`.
+2. **Next deadline**: Call `get_vat_next_report` for the next VAT return: the UStVA of a German company (a Kleinunternehmer or a company with VAT-exempt sales under § 4 UStG files one only for a quarter with reverse-charge purchases), the JPK_V7 of a Polish VAT payer (a Polish company exempt from VAT files none). A Polish company's PIT or CIT advance and ZUS DRA, due on the 20th, are in `list_tax_reports`.
 
 3. **Specific report**: If the user asks about a specific period, call `get_tax_report` with the report ID to see details including:
    - Reporting period

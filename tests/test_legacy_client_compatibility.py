@@ -88,6 +88,10 @@ complete_workflow_step gains optional done=False while retaining skipped. Existi
 tool names and required arguments stay unchanged. Transaction searches now honor
 page_size, with a 20-result default and bounds of 1-100. Only those seven hashes
 change; new tools and the existing non-legacy Polish proposal tool need no entry.
+
+The October 24 § 4 UStG change updates one description: get_vat_next_report says a
+Kleinunternehmer or a company with VAT-exempt sales has a UStVA only for a quarter
+with reverse-charge purchases. No argument changes.
 """
 
 import asyncio

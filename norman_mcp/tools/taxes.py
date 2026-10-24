@@ -507,10 +507,12 @@ def register_tax_tools(mcp):
     )
     async def get_vat_next_report(ctx: Context) -> Dict[str, Any]:
         """
-        The next VAT return: its period, VAT amount and deadline. A German company's UStVA; a
-        Polish VAT payer's JPK_V7M or JPK_V7K, due the 25th (next working day); none for a Polish
-        company exempt from VAT. For "when is my next tax deadline?" also check list_tax_reports:
-        a Polish company's PIT or CIT advance and ZUS DRA fall due on the 20th.
+        The next VAT return: its period, VAT amount and deadline. A German company's UStVA (for a
+        Kleinunternehmer or a company with VAT-exempt sales under § 4 UStG, only a quarter with
+        reverse-charge purchases); a Polish VAT payer's JPK_V7M or JPK_V7K, due the 25th (next
+        working day); none for a Polish company exempt from VAT. For "when is my next tax
+        deadline?" also check list_tax_reports: a Polish company's PIT or CIT advance and ZUS DRA
+        fall due on the 20th.
         
         Returns:
             VAT next report amount data
