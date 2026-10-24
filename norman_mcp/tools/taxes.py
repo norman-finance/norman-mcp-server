@@ -474,7 +474,8 @@ def register_tax_tools(mcp):
             vat_percent: VAT percentage supported for the company country (Germany and Poland differ).
             start_tax_report_date: Start date for tax reporting (YYYY-MM-DD)
             reporting_frequency: Frequency of reporting (e.g. "monthly"), Options: "monthly", "quarterly", "yearly".
-                A German Kleinunternehmer files the UStVA of its § 13b periods "monthly" (the default) or "quarterly".
+                A German Kleinunternehmer or a company with VAT-exempt sales under § 4 UStG files the UStVA
+                of its § 13b periods "monthly" (the default) or "quarterly".
             
         Returns:
             Updated tax setting
@@ -551,10 +552,12 @@ def register_tax_tools(mcp):
     )
     async def get_vat_next_report(ctx: Context) -> Dict[str, Any]:
         """
-        The next VAT return: its period, VAT amount and deadline. A German company's UStVA; a
-        Polish VAT payer's JPK_V7M or JPK_V7K, due the 25th (next working day); none for a Polish
-        company exempt from VAT. For "when is my next tax deadline?" also check list_tax_reports:
-        a Polish company's PIT or CIT advance and ZUS DRA fall due on the 20th.
+        The next VAT return: its period, VAT amount and deadline. A German company's UStVA (for a
+        Kleinunternehmer or a company with VAT-exempt sales under § 4 UStG, only a month or quarter
+        with reverse-charge purchases, as its tax settings set); a Polish VAT payer's JPK_V7M or
+        JPK_V7K, due the 25th (next working day); none for a Polish company exempt from VAT. For "when
+        is my next tax deadline?" also check list_tax_reports: a Polish company's PIT or CIT advance
+        and ZUS DRA fall due on the 20th.
         
         Returns:
             VAT next report amount data
