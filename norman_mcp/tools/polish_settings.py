@@ -250,8 +250,12 @@ def register_polish_settings_tools(mcp: Any) -> None:
             description="tax_form: the tax year the new form applies from. Omitted: this year until 20 February, "
             "then the next one.",
         ),
-        cit_rate: Literal["cit_standard", "cit_small"] | None = Field(
-            default=None, description="cit_rate (sp. z o.o.): 19% (cit_standard) or 9% for a small taxpayer.",
+        cit_rate: Literal["cit_standard", "cit_small", "cit_estonian"] | None = Field(
+            default=None,
+            description="cit_rate (sp. z o.o.): 19% (cit_standard), 9% for a small taxpayer (cit_small) or Estonian "
+            "CIT (cit_estonian, ryczałt od dochodów spółek). On Estonian CIT Norman keeps the books and the JPK but "
+            "works out no CIT advances, CIT-8, ryczałt or CIT-8E; it is entered from the start of a tax year with "
+            "ZAW-RD, and a switch drops the open CIT advances and CIT-8.",
         ),
         zus_scheme: Literal["none", "start_relief", "preferential", "small_zus_plus"] | None = Field(
             default=None,
@@ -326,7 +330,7 @@ def register_polish_settings_tools(mcp: Any) -> None:
         settings directly. One setting per call; ksef_sync proposes an import from KSeF now.
         The API checks it as the settings screen does and states what it refuses.
         Norman records the setting and notifies no office: the owner reports a tax form in CEIDG or at the tax
-        office, VAT changes on VAT-R, ZUS changes in ePłatnik or CEIDG.
+        office, Estonian CIT on ZAW-RD, VAT changes on VAT-R, ZUS changes in ePłatnik or CEIDG.
         Facts only: never recommend a tax form, a CIT rate or a ZUS scheme. Explain the rules; the owner decides.
         For ryczalt_rate, supply the revenue category and optionally its rate; omit the rate to show
         Norman's default and its source for the owner to review. Never infer a rate from a category alone.

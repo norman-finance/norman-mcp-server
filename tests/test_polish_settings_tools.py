@@ -105,6 +105,14 @@ def test_personal_identifier_is_not_exposed_in_the_public_proposal_schema():
     assert {"nip", "eu_vat_number"} <= schema["properties"].keys()
 
 
+def test_the_cit_rate_offers_estonian_cit_next_to_9_and_19_percent():
+    listed = {tool.name: tool for tool in asyncio.run(shared_server.list_tools())}
+    cit_rate = listed["propose_tax_setting_change"].input_schema["properties"]["cit_rate"]
+    values = next(option["enum"] for option in cit_rate["anyOf"] if "enum" in option)
+    assert values == ["cit_standard", "cit_small", "cit_estonian"]
+    assert "ZAW-RD" in cit_rate["description"]
+
+
 def test_pesel_proposal_is_rejected_by_the_protocol_before_any_api_request():
     api = ProtocolApi()
     result = call_tool("propose_tax_setting_change", {"setting": "pesel", "pesel": "synthetic-id"}, api)
@@ -151,6 +159,7 @@ def test_a_proposal_returns_the_link_where_the_owner_applies_it():
         ({"setting": "vat_cash_method", "cash_method_off": True}, {"vatCashMethodFrom": None}),
         ({"setting": "tax_office", "tax_office_code": "1435"}, {"taxOfficeCode": "1435"}),
         ({"setting": "ksef_sync"}, {}),
+        ({"setting": "cit_rate", "cit_rate": "cit_estonian"}, {"taxRegime": "cit_estonian"}),
     ],
 )
 def test_each_setting_sends_its_own_values(arguments, values):
