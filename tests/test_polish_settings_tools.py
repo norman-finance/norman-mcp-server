@@ -282,3 +282,76 @@ def test_a_german_company_has_no_tax_office_to_propose():
 
     assert answer["code"] == "polish_company_required"
     assert api.posted() == [] and api.writes() == []
+
+
+REGISTRY = f"companies/{COMPANY}/polish-setup/registry/"
+
+
+def test_an_sp_zoo_is_looked_up_in_the_krs_and_each_detail_proposed_with_its_link():
+    found = {
+        "company": {"found": True, "nip": "9990001002", "krs": "0009990001", "sources": {"krs": "ok", "whiteList": "ok"}},
+        "proposals": [CARD],
+        "unchanged": [],
+        "refused": [],
+        "notes": [],
+    }
+    api = FakeApi(answers={REGISTRY: found})
+
+    answer = call(register_polish_settings_tools, "lookup_polish_company", api, identifier=" 9990001002 ")
+
+    assert [(method, body) for method, url, body in api.calls if url.endswith(REGISTRY)] == [
+        ("POST", {"identifier": "9990001002"}),
+    ]
+    assert answer["proposals"] == [CARD]
+    assert OPEN_URL in answer["message"]
+    assert answer["company"]["krs"] == "0009990001"
+    assert api.writes() == []
+
+
+def test_without_a_number_the_lookup_reads_the_one_norman_holds():
+    api = FakeApi(answers={REGISTRY: {"company": {"found": False}, "proposals": []}})
+
+    answer = call(register_polish_settings_tools, "lookup_polish_company", api)
+
+    assert [body for method, url, body in api.calls if url.endswith(REGISTRY)] == [{}]
+    assert "message" not in answer
+
+
+def test_a_german_company_is_not_looked_up_in_the_krs():
+    api = FakeApi(country="DE")
+
+    answer = call(register_polish_settings_tools, "lookup_polish_company", api, identifier="9990001002")
+
+    assert answer["code"] == "polish_company_required"
+    assert not [url for _, url, _ in api.calls if url.endswith(REGISTRY)]
+
+
+def test_the_krs_entry_and_the_seat_address_are_proposed_as_their_settings():
+    api = FakeApi()
+
+    call(
+        register_polish_settings_tools, "propose_tax_setting_change", api, setting="company_register",
+        krs_number="0009990001", register_court="Sąd Rejonowy dla m.st. Warszawy", share_capital="5000.00",
+    )
+    call(
+        register_polish_settings_tools, "propose_tax_setting_change", api, setting="business_details",
+        regon="999000118", business_street="ul. Próbna 12/3", business_postal_code="00-950", business_city="Warszawa",
+    )
+
+    assert api.posted() == [
+        {"setting": "company_register", "values": {
+            "krs": "0009990001", "registerCourt": "Sąd Rejonowy dla m.st. Warszawy", "shareCapital": "5000.00",
+        }},
+        {"setting": "business_details", "values": {
+            "regon": "999000118", "address": "ul. Próbna 12/3", "zipCode": "00-950", "city": "Warszawa",
+        }},
+    ]
+
+
+def test_the_lookup_is_listed_for_poland_as_a_proposing_write():
+    listed = {tool.name: tool for tool in asyncio.run(shared_server.list_tools())}
+    lookup = listed["lookup_polish_company"]
+
+    assert lookup.description.startswith("Poland only.")
+    assert lookup.annotations.read_only_hint is False
+    assert lookup.annotations.destructive_hint is False

@@ -11,6 +11,9 @@ For a Polish company the settings writes of the other modules come here too: upd
 update_company_details (NIP, EU VAT number, business start, reminders), update_vat_proportion and
 update_invoice_settings (the tax office) propose instead of writing. A German company is not concerned.
 
+lookup_polish_company reads an sp. z o.o. in the KRS and on the White list by its NIP or KRS number and proposes each
+detail Norman lacks the same way (POST companies/<id>/polish-setup/registry/).
+
 get_ksef_status reads the KSeF connection, never the token, and search_polish_tax_offices the Polish tax offices. A KSeF
 token and personal government identifiers such as PESEL never go through this tool: the owner enters them in Norman.
 
@@ -58,6 +61,9 @@ SettingName = Literal[
     "reminders",
     "ksef_auto_sync",
     "ksef_sync",
+    "ryczalt_rate",
+    "business_details",
+    "company_register",
 ]
 
 # Each setting's tool arguments, by the name the API reads them under (camelCase, as every client sends them).
@@ -88,6 +94,14 @@ ARGUMENTS: dict[str, dict[str, str]] = {
     "reminders": {"deadline_reminders": "isToNotifyTaxDeadlines"},
     "ksef_auto_sync": {"ksef_auto_import": "ksefAutoSync"},
     "ksef_sync": {},
+    "ryczalt_rate": {"revenue_category": "category", "lump_sum_rate": "ryczaltRate"},
+    "business_details": {
+        "regon": "regon", "business_street": "address", "business_postal_code": "zipCode", "business_city": "city",
+    },
+    "company_register": {
+        "krs_number": "krs", "register_court": "registerCourt", "share_capital": "shareCapital",
+        "registered_seat": "registeredSeat",
+    },
 }
 
 
@@ -233,6 +247,22 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     return answer
 
 
+async def propose_from_registry(api: Any, identifier: str | None) -> dict[str, Any]:
+    """The KRS and White list details as the API proposes them, with the links where the owner applies each."""
+    if not api.company_id:
+        return NO_COMPANY_ERROR
+    if await company_country(api) != "PL":
+        return POLISH_ONLY
+    body = {"identifier": identifier.strip()} if identifier and identifier.strip() else {}
+    result = await api.arequest("POST", _company_url(api, "polish-setup/registry/"), json_data=body)
+    if not isinstance(result, dict) or "proposals" not in result:
+        return as_object(result)
+    answer = {**result, **summarize([{"proposal": card} for card in result.get("proposals") or []])}
+    if not answer.get("message"):
+        answer.pop("message", None)
+    return answer
+
+
 def register_polish_settings_tools(mcp: Any) -> None:
     """The tools of a Polish company's tax settings: proposals, the KSeF connection, the tax offices."""
 
@@ -256,7 +286,8 @@ def register_polish_settings_tools(mcp: Any) -> None:
             description="zus (JDG): pełny ZUS (none), ulga na start, preferencyjny ZUS or Mały ZUS Plus.",
         ),
         zus_scheme_start: str | None = Field(
-            default=None, description="zus: the first day of the scheme, YYYY-MM-DD; needed for a relief.",
+            default=None, description="zus: the insurance start of an explicit preferential or Mały ZUS Plus period, YYYY-MM-DD. "
+            "Ulga na start and full ZUS use activity_start; do not supply a duplicate start for them.",
         ),
         zus_sickness_insurance: bool | None = Field(default=None, description="zus: voluntary sickness insurance."),
         company_zus_scope: Literal["none", "employees", "board", "employees_and_board"] | None = Field(
@@ -305,6 +336,38 @@ def register_polish_settings_tools(mcp: Any) -> None:
         ksef_auto_import: bool | None = Field(
             default=None, description="ksef_auto_sync: import invoices from KSeF automatically, on or off.",
         ),
+        revenue_category: str | None = Field(
+            default=None,
+            description="ryczalt_rate (JDG): revenue category code, e.g. 700 services, 730 goods or 750 interest.",
+        ),
+        lump_sum_rate: Literal["2", "3", "5.5", "8.5", "10", "12", "12.5", "14", "15", "17"] | None = Field(
+            default=None,
+            description="ryczalt_rate: percent. Omit to propose Norman's default for the category, based on "
+            "the company's PKD, profession or description. The owner reviews its source and applies it in Norman.",
+        ),
+        regon: str | None = Field(default=None, description="business_details: the 9-digit REGON."),
+        business_street: str | None = Field(
+            default=None,
+            description="business_details: the street and number of the JDG's business or the sp. z o.o.'s seat, "
+            "e.g. 'ul. Testowa 1/4'.",
+        ),
+        business_postal_code: str | None = Field(default=None, description="business_details: e.g. 00-001."),
+        business_city: str | None = Field(
+            default=None, description="business_details: the town; the street, postal code and town go together.",
+        ),
+        krs_number: str | None = Field(
+            default=None, description="company_register (sp. z o.o.): the KRS number, 10 digits, e.g. 0000123456.",
+        ),
+        register_court: str | None = Field(
+            default=None,
+            description="company_register: the register court and its department, as the KRS extract names it.",
+        ),
+        share_capital: str | None = Field(
+            default=None, description="company_register: the share capital (kapitał zakładowy) in PLN, e.g. 5000.00.",
+        ),
+        registered_seat: str | None = Field(
+            default=None, description="company_register: the seat (siedziba), the town, e.g. Warszawa.",
+        ),
     ) -> dict[str, Any]:
         """Poland only. Propose a change to a Polish company's tax settings; the owner applies it in Norman.
 
@@ -316,6 +379,8 @@ def register_polish_settings_tools(mcp: Any) -> None:
         Norman records the setting and notifies no office: the owner reports a tax form in CEIDG or at the tax
         office, VAT changes on VAT-R, ZUS changes in ePłatnik or CEIDG.
         Facts only: never recommend a tax form, a CIT rate or a ZUS scheme. Explain the rules; the owner decides.
+        For ryczalt_rate, supply the revenue category and optionally its rate; omit the rate to show
+        Norman's default and its source for the owner to review. Never infer a rate from a category alone.
         Never ask for a KSeF token or PESEL: the owner enters these directly in Norman's settings.
         """
         api = ctx.request_context.lifespan_context["api"]
@@ -335,6 +400,10 @@ def register_polish_settings_tools(mcp: Any) -> None:
             "fixed_asset_correction": fixed_asset_correction, "nip": nip, "eu_vat_number": eu_vat_number,
             "business_start_date": business_start_date, "tax_office_code": tax_office_code,
             "deadline_reminders": deadline_reminders, "ksef_auto_import": ksef_auto_import,
+            "revenue_category": revenue_category, "lump_sum_rate": lump_sum_rate, "regon": regon,
+            "business_street": business_street, "business_postal_code": business_postal_code,
+            "business_city": business_city, "krs_number": krs_number, "register_court": register_court,
+            "share_capital": share_capital, "registered_seat": registered_seat,
         }
         try:
             values = proposal_values(setting, arguments)
@@ -343,6 +412,28 @@ def register_polish_settings_tools(mcp: Any) -> None:
         if not values and setting != "ksef_sync":
             return {"error": NOTHING_PROPOSED}
         return await propose(api, setting, values)
+
+    @mcp.tool(title="Look Up Polish Company", annotations=PROPOSE)
+    async def lookup_polish_company(
+        ctx: Context,
+        identifier: str | None = Field(
+            default=None,
+            description="The company's NIP (10 digits) or KRS number, as the owner gives it. Omitted: the KRS number "
+            "Norman holds, else the NIP.",
+        ),
+    ) -> dict[str, Any]:
+        """Poland only. Look the selected sp. z o.o. up in the KRS and on the Ministry of Finance White list (Biała
+        lista) by its NIP or KRS number, and propose each detail Norman lacks; the owner applies them in Norman.
+
+        Creates a pending proposal per detail on each call that finds one: the NIP; the REGON and the seat's address
+        (business_details); the KRS number, register court, share capital and seat (company_register), which the
+        company's invoices must state (KSH art. 206); the VAT status when the White list lists an active VAT payer.
+        Give the owner each proposal's `openUrl` and never say a detail is changed. The answer has `company` (what
+        the registers say; `sources` per register, where unavailable or limit_reached means try later or fill it in
+        by hand), `unchanged`, `refused` and `notes` to pass on. For the selected company only: never for a client
+        or a vendor.
+        """
+        return await propose_from_registry(ctx.request_context.lifespan_context["api"], identifier)
 
     @mcp.tool(title="Get KSeF Status", annotations=READ)
     async def get_ksef_status(ctx: Context) -> dict[str, Any]:

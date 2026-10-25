@@ -121,6 +121,7 @@ def register_invoice_tools(mcp):
         company_data: CompanyData | None = None,
         online_payment_enabled: bool | None = None,
         document_type: Literal["invoice", "quote", "delivery_note", "cancel", "credit_note"] = "invoice",
+        quote_kind: Literal["offer", "proforma"] | None = None,
         status: Literal["draft", "saved"] | None = None,
         payment_status: str | None = None,
         payment_date: str | None = None,
@@ -161,6 +162,9 @@ def register_invoice_tools(mcp):
             client_data: Recipient details for this document.
             company_data: Sender details for this document.
             online_payment_enabled: Enable Stripe/PayPal payment links; omit to inherit, false to disable.
+            quote_kind: For document_type="quote" only. "proforma" creates a payment request with its own
+                number series, not a VAT invoice or a tax booking. Convert with convert_offer_to_invoice.
+                Omit or use "offer" for a normal quote.
             document_type: Document type: invoice, quote, delivery_note, cancel or credit_note. Use invoice unless another type is requested. To cancel or credit an EXISTING invoice, or to make a delivery note from one, use cancel_invoice, create_credit_note or create_delivery_note instead.
                 A cancel or credit_note takes positive amounts, like the invoice it corrects,
                 and prints them with a minus.
@@ -224,6 +228,9 @@ def register_invoice_tools(mcp):
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
         
+        if quote_kind is not None and document_type != "quote":
+            return {"error": "quote_kind is only valid when document_type is quote."}
+
         if not issued:
             issued = datetime.now().strftime("%Y-%m-%d")
         
@@ -237,7 +244,10 @@ def register_invoice_tools(mcp):
                 config.api_base_url, 
                 f"api/v1/companies/{company_id}/invoices/next-invoice-number/"
             )
-            next_invoice_data = await api.arequest("GET", next_invoice_url, params={"type": document_type})
+            sequence = "proforma" if document_type == "quote" and quote_kind == "proforma" else document_type
+            next_invoice_data = await api.arequest("GET", next_invoice_url, params={"type": sequence})
+            if "error" in next_invoice_data:
+                return next_invoice_data
             invoice_number = next_invoice_data.get("nextInvoiceNumber")
         
         invoice_data = {
@@ -302,6 +312,7 @@ def register_invoice_tools(mcp):
             bank_account_pk=bank_account_pk,
             is_to_create_transaction=is_to_create_transaction,
             paid_amount=paid_amount,
+            quote_kind=quote_kind,
         )
 
         if recurring is not None:
@@ -955,11 +966,13 @@ def register_invoice_tools(mcp):
         to_date: Optional[str] = None,
         limit: Optional[int] = 100,
         document_type: Optional[Literal["invoice", "quote", "delivery_note", "cancel", "credit_note"]] = None,
+        quote_kind: Literal["offer", "proforma"] | None = None,
     ) -> Dict[str, Any]:
         """
         List invoices with optional filtering.
         
         Args:
+            quote_kind: Filter quotes by offer or proforma.
             document_type: Only documents of this kind: invoice, quote, delivery_note, cancel or credit_note. Omit for all.
             status: Filter by status. "approved" and "invoiced" are quote states;
                 "invoiced" means converted to an invoice.
@@ -996,6 +1009,8 @@ def register_invoice_tools(mcp):
             params["name"] = name
         if document_type:
             params["type"] = document_type
+        if quote_kind:
+            params["quoteKind"] = quote_kind
         
         result = await api.arequest("GET", invoices_url, params=params)
         return _enrich_invoice_response(result)

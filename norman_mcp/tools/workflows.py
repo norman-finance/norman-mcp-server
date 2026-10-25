@@ -238,11 +238,14 @@ def register_workflow_tools(mcp):
         run_id: str = Field(description="Workflow run publicId"),
         step: str = Field(description="Key of the run's active manual step"),
         skipped: bool = Field(default=False, description="True skips the step instead of marking it done"),
+        done: bool = Field(default=True, description="False reopens the step without continuing the run; cannot be combined with skipped"),
     ) -> Dict[str, Any]:
         """
         Mark a manual step (blockedReason manual_step) done — or skipped —
         after the user says they did it or want to skip it, and let the run
         continue. Not for questions: those take answer_workflow_question.
+        If the user asks to reopen a completed step, use done=False. This changes
+        checklist progress only; it does not undo the underlying accounting work.
 
         Returns:
             The run.
@@ -251,17 +254,120 @@ def register_workflow_tools(mcp):
         if not api.company_id:
             return NO_COMPANY
 
+        if not done and skipped:
+            return {"error": "A reopened step cannot also be skipped. Set skipped=False."}
         run = api._make_request(
             "POST",
             _runs_url(f"{run_id}/step/"),
-            json_data={"step": step, "done": True, "skipped": skipped},
+            json_data={"step": step, "done": done, "skipped": skipped},
         )
-        if "error" in run or run.get("state") != "active":
+        if not done or "error" in run or run.get("state") != "active":
             return run
         advanced = _explained(api._make_request("POST", _runs_url(f"{run_id}/advance/")))
         if "error" in advanced:
             return advanced
         return advanced.get("run", run)
+
+    @mcp.tool(
+        title="Request Workflow Input",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def request_workflow_input(
+        ctx: Context,
+        run_id: str = Field(min_length=1, description="Workflow run publicId"),
+        step: str = Field(min_length=1, description="Current step key from get_workflow_run"),
+        question: str = Field(min_length=1, description="One concrete question the user must answer"),
+    ) -> Dict[str, Any]:
+        """Pause a workflow step when a required fact, choice or approval is missing.
+
+        Relay the question to the user too, then send their actual answer with
+        answer_workflow_question. Never infer their approval. Do not pause for
+        optional context or information Norman can retrieve with its tools.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return NO_COMPANY
+        return await api.arequest(
+            "POST", _runs_url(f"{run_id}/step/"),
+            json_data={"step": step, "awaitInput": True, "question": question},
+        )
+
+    @mcp.tool(
+        title="List Routines",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def list_routines(ctx: Context) -> Dict[str, Any]:
+        """Read detected and confirmed routines for the selected company.
+
+        These are recurring habits found in the company's data, such as a
+        monthly invoice to the same client. A detected routine is a proposal:
+        present it and let the user confirm or dismiss it before taking action.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return NO_COMPANY
+        return await api.arequest("GET", _routines_url())
+
+    @mcp.tool(
+        title="Confirm Routine",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def confirm_routine(
+        ctx: Context,
+        routine_id: str = Field(min_length=1, description="Routine publicId from list_routines"),
+    ) -> Dict[str, Any]:
+        """Confirm a detected routine only after the user explicitly agrees.
+
+        Confirmation records the user's choice. For a monthly_invoice routine
+        it does not create or send an invoice; offer create_recurring_invoice
+        separately. Use schedule_workflow for a standing workflow schedule.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return NO_COMPANY
+        return await api.arequest(
+            "POST", _routines_url(), json_data={"action": "confirm", "routineId": routine_id},
+        )
+
+    @mcp.tool(
+        title="Dismiss Routine",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def dismiss_routine(
+        ctx: Context,
+        routine_id: str = Field(min_length=1, description="Routine publicId from list_routines"),
+    ) -> Dict[str, Any]:
+        """Dismiss a detected routine when the user says it is not useful.
+
+        It stops being proposed; existing invoices and accounting entries are
+        unchanged. Use unschedule_workflow to stop a workflow schedule instead.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return NO_COMPANY
+        return await api.arequest(
+            "POST", _routines_url(), json_data={"action": "dismiss", "routineId": routine_id},
+        )
 
     @mcp.tool(
         title="Continue Workflow",

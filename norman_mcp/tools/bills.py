@@ -1,8 +1,9 @@
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Literal, Optional
 from urllib.parse import urljoin
 
 from mcp.types import ToolAnnotations
+from pydantic import Field
 from norman_mcp.context import Context
 from norman_mcp import config
 
@@ -13,12 +14,11 @@ def register_bill_tools(mcp):
     """Register bill (PayBill / Eingangsrechnung) tools with the MCP server.
 
     Bills are incoming supplier invoices. Backend routes live under the accounting
-    namespace: ``api/v1/accounting/bills/``. The API client adds the active
-    ``companyId`` as a query param automatically.
+    namespace: ``api/v1/accounting/bills/``. The API client sends the active
+    company in the ``X-Company-Id`` header.
 
-    Note: bills are normally created by Norman's email-import inbox
-    (``<handle>@payments.norman.finance``), so this module exposes read / update /
-    pay tools rather than a create tool.
+    Bills can be recorded directly or imported through Norman's email inbox.
+    Recording or scanning a bill does not initiate a payment.
     """
 
     @mcp.tool(
@@ -32,13 +32,17 @@ def register_bill_tools(mcp):
     )
     async def list_bills(
         ctx: Context,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        limit: Optional[int] = Field(default=None, ge=1, le=100, description="Page size; omit for the API default"),
+        page: int = Field(default=1, ge=1, description="Page number, starting at 1"),
     ) -> Dict[str, Any]:
         """
         Get a list of bills (incoming supplier invoices / Eingangsrechnungen).
 
         Args:
-            status: Optional status filter (e.g. "PAID", "OPEN")
+            status: Optional status filter: DRAFT, PENDING, SCHEDULED, PAID, OVERDUE, CANCELLED
+            limit: Maximum number of bills per page
+            page: Page to retrieve
 
         Returns:
             List of bills with their details
@@ -48,8 +52,82 @@ def register_bill_tools(mcp):
             return {"error": "No company available. Please authenticate first."}
 
         bills_url = urljoin(config.api_base_url, "api/v1/accounting/bills/")
-        params = {"status": status} if status else None
-        return api._make_request("GET", bills_url, params=params)
+        params = {"page": page}
+        if status:
+            params["status"] = status
+        if limit is not None:
+            params["page_size"] = limit
+        return await api.arequest("GET", bills_url, params=params)
+
+    @mcp.tool(
+        title="Create Bill",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
+    async def create_bill(
+        ctx: Context,
+        vendor_name: str = Field(min_length=1, description="Name of the supplier on the bill"),
+        amount: float = Field(allow_inf_nan=False, description="Total bill amount in its original currency"),
+        currency: str = Field(pattern="^[A-Z]{3}$", description="Currency from the bill, e.g. PLN or EUR; never infer it from the company country"),
+        vendor_iban: Optional[str] = None,
+        vendor_bic: Optional[str] = None,
+        due_date: Optional[str] = Field(default=None, description="Payment due date, YYYY-MM-DD"),
+        issue_date: Optional[str] = Field(default=None, description="Invoice issue date, YYYY-MM-DD"),
+        reference: Optional[str] = Field(default=None, description="Supplier invoice number"),
+        description: Optional[str] = None,
+        status: Literal["DRAFT", "PENDING", "SCHEDULED", "PAID", "OVERDUE", "CANCELLED"] = "PENDING",
+        vendor_id: Optional[str] = Field(default=None, description="Existing vendor ID in the selected company"),
+    ) -> Dict[str, Any]:
+        """Record an incoming invoice/payable when the user asks to add a bill.
+
+        Review extracted fields before creating it. This does not send money,
+        schedule a bank payment, or file a tax return. A vendor IBAN is optional;
+        SEPA payment from Norman is available only for German companies.
+        Use list_bills first to avoid recording the same invoice twice.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        payload = {"vendor_name": vendor_name, "amount": str(amount), "currency": currency, "status": status}
+        for key, value in {
+            "vendor_iban": vendor_iban, "vendor_bic": vendor_bic,
+            "due_date": due_date, "issue_date": issue_date,
+            "reference": reference, "description": description, "vendor_id": vendor_id,
+        }.items():
+            if value is not None:
+                payload[key] = value
+        url = urljoin(config.api_base_url, "api/v1/accounting/bills/")
+        return await api.arequest("POST", url, json_data=payload)
+
+    @mcp.tool(
+        title="Scan Bill Document",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+    )
+    async def scan_bill_document(
+        ctx: Context,
+        attachment_id: str = Field(min_length=1, description="Uploaded attachment public ID from list_attachments or the upload response"),
+    ) -> Dict[str, Any]:
+        """Extract supplier, amount, currency, dates and bank details from a document.
+
+        The document must belong to the selected company. Norman uses its OCR
+        provider to read it. Returns suggested fields for review; does not create
+        a bill or initiate a payment. Use create_bill only after reviewing them.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        if not api.company_id:
+            return {"error": "No company available. Please authenticate first."}
+        url = urljoin(config.api_base_url, "api/v1/accounting/bills/scan/")
+        return await api.arequest("POST", url, json_data={"attachment_id": attachment_id})
 
     @mcp.tool(
         title="Get Bill Details",

@@ -122,6 +122,16 @@ and EU VAT-number proposals remain available. `get_ksef_status` reports the
 connection state, not the token. `search_polish_tax_offices` reads the available
 offices so the owner can choose the correct one.
 
+`lookup_polish_company` reads the selected sp. z o.o. in the KRS and on the
+Ministry of Finance White list by its NIP or KRS number (none: the one Norman
+holds) and persists one pending proposal per detail Norman lacks: the NIP,
+`business_details` (REGON and seat address), `company_register` (KRS number,
+register court, share capital and seat, which invoices must state under KSH
+art. 206) and, for an active VAT payer, `vat_status`. It is the same additive,
+non-idempotent write as `propose_tax_setting_change`; each proposal carries its
+`openUrl`. A register that is down or out of its daily budget is named in
+`company.sources`; the other one still answers.
+
 ### Invoices, assets and books
 
 - Invoice items and operations preserve `vat_code`: `23`, `8`, `5`, `0`, `zw`,

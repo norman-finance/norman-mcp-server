@@ -106,50 +106,29 @@ def register_transaction_tools(mcp):
     )
     async def search_transactions(
         ctx: Context,
-        description: Optional[str] = Field(
-            default=None, description="Text to search for in transaction descriptions"
-        ),
-        from_date: Optional[str] = Field(
-            default=None, description="Start date in YYYY-MM-DD format"
-        ),
-        to_date: Optional[str] = Field(
-            default=None, description="End date in YYYY-MM-DD format"
-        ),
-        min_amount: Optional[float] = Field(
-            default=None, description="Minimum transaction amount"
-        ),
-        max_amount: Optional[float] = Field(
-            default=None, description="Maximum transaction amount"
-        ),
-        category: Optional[str] = Field(
-            default=None, description="Transaction category"
-        ),
-        no_invoice: Optional[bool] = Field(
-            default=None, description="Whether to exclude invoices"
-        ),
-        no_receipt: Optional[bool] = Field(
-            default=None, description="Whether to exclude receipts"
-        ),
-        status: Optional[str] = Field(
-            default=None, description="Status of the transaction (UNVERIFIED, VERIFIED)"
-        ),
+        description: Optional[str] = Field(default=None, description="Text to search for in transaction descriptions"),
+        from_date: Optional[str] = Field(default=None, description="Start date in YYYY-MM-DD format"),
+        to_date: Optional[str] = Field(default=None, description="End date in YYYY-MM-DD format"),
+        min_amount: Optional[float] = Field(default=None, description="Minimum transaction amount"),
+        max_amount: Optional[float] = Field(default=None, description="Maximum transaction amount"),
+        category: Optional[str] = Field(default=None, description="Transaction category name"),
+        no_invoice: Optional[bool] = Field(default=None, description="Whether to exclude invoices"),
+        no_receipt: Optional[bool] = Field(default=None, description="True filters transactions with no primary receipt attached in the database. Use for missing-receipt discovery; no attachment archive scan is needed to establish this state."),
+        status: Optional[str] = Field(default=None, description="Status of the transaction (UNVERIFIED, VERIFIED)"),
         cashflow_type: Optional[str] = Field(
-            default=None,
-            description="Cashflow type of the transaction (INCOME, EXPENSE)",
+            default=None, description="Cashflow type of the transaction (INCOME, EXPENSE)"
         ),
-        payment_type: Optional[str] = Field(
+        payment_type: str | None = Field(
             default=None,
             description="Payment type (BANK, CASH, CREDIT_CARD, PAYPAL, NOT_PAID). NOT_PAID lists open bookings.",
         ),
-        source: Optional[str] = Field(
+        source: str | None = Field(
             default=None,
             description="Origin: document (booked by Norman from a document), invoice (a Norman invoice's booking), "
             "bank, non_bank",
         ),
-        limit: Optional[int] = Field(
-            default=None,
-            description="Maximum number of results to return (default 100)",
-        ),
+        limit: Optional[int] = Field(default=None, ge=1, le=100, description="Results per page (default 20). Use 10 for a targeted lookup."),
+        page: int = Field(default=1, ge=1, description="Page number. Follow next pages when the requested scope needs them."),
     ) -> Dict[str, Any]:
         """
         Search for transactions matching specified criteria.
@@ -164,8 +143,9 @@ def register_transaction_tools(mcp):
             to_date: End date in YYYY-MM-DD format
             min_amount: Minimum transaction amount
             max_amount: Maximum transaction amount
-            category: Transaction category
-            limit: Maximum number of results to return (default 100)
+            category: Transaction category name
+            limit: Results per page (default 20)
+            page: Page number; keep filters and limit unchanged while paging
             no_invoice: Whether to exclude invoices
             no_receipt: Whether to exclude receipts
             status: Status of the transaction (UNVERIFIED, VERIFIED)
@@ -180,39 +160,18 @@ def register_transaction_tools(mcp):
         if not company_id:
             return {"error": "No company available. Please authenticate first."}
 
-        transactions_url = urljoin(
-            config.api_base_url,
-            f"api/v1/companies/{company_id}/accounting/transactions/",
-        )
+        transactions_url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/accounting/transactions/")
 
-        # Build query parameters
-        params = {}
-        if description:
-            params["description"] = description
-        if from_date:
-            params["dateFrom"] = from_date
-        if to_date:
-            params["dateTo"] = to_date
-        if min_amount:
-            params["minAmount"] = min_amount
-        if max_amount:
-            params["maxAmount"] = max_amount
-        if category:
-            params["category_name"] = category
-        if no_invoice:
-            params["noInvoice"] = no_invoice
-        if no_receipt:
-            params["noAttachment"] = no_receipt
-        if status:
-            params["status"] = status
-        if cashflow_type:
-            params["cashflowType"] = cashflow_type
-        if payment_type:
-            params["paymentType"] = payment_type
-        if source:
-            params["source"] = source
-        if limit:
-            params["limit"] = limit
+        amounts = {"minAmount": min_amount, "maxAmount": max_amount}
+        filters = {
+            "description": description, "dateFrom": from_date, "dateTo": to_date, "categoryName": category,
+            "noInvoice": no_invoice, "noAttachment": no_receipt, "status": status, "cashflowType": cashflow_type,
+            "paymentType": payment_type, "source": source,
+        }
+        params = {name: value for name, value in amounts.items() if value is not None}
+        params.update({name: value for name, value in filters.items() if value})
+        params["page_size"] = limit or 20
+        params["page"] = page
 
         return await api.arequest("GET", transactions_url, params=params)
 
@@ -723,6 +682,48 @@ def register_transaction_tools(mcp):
         return await api.arequest("POST", detect_url, json_data=request_data)
 
     @mcp.tool(
+        title="Find Same Counterparty Transactions",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def find_same_counterparty_transactions(
+        ctx: Context,
+        transaction_id: str = Field(
+            description="Public ID of the booking whose category is about to change"
+        ),
+    ) -> Dict[str, Any]:
+        """
+        Before one booking's category changes: the counterparty's other open bookings still in that category.
+
+        Call it with the booking you recategorize, before you save its new category. It lists the open bookings of
+        the same counterparty, direction and current category. `suggested` holds the ids that belong with it: all of
+        them, or for PayPal and other payment services only those with the same purpose text. Finalized, split and
+        tax-treated bookings and payments that pay a booking are left out; `finalizedCount` says how many finalized
+        ones stay as they are. Change the ones the user agrees to with update_transaction. If the new category asks
+        for details (trip dates, VAT period, business share, asset lifetime), change only the one booking: those
+        details belong to it alone.
+
+        Args:
+            transaction_id: Public ID of the booking to recategorize
+
+        Returns:
+            counterparty, results (the open bookings), suggested (ids) and finalizedCount
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+        url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/accounting/transactions/{transaction_id}/same-counterparty/",
+        )
+        return await api.arequest("GET", url)
+
+    @mcp.tool(
         title="Change Transaction Verification Status",
         annotations=ToolAnnotations(
             readOnlyHint=False,
@@ -931,3 +932,99 @@ def register_transaction_tools(mcp):
             f"api/v1/companies/{company_id}/accounting/transactions/{transaction_id}/unlink/",
         )
         return await api.arequest("POST", url)
+
+    @mcp.tool(
+        title="List CSV Import Jobs",
+        annotations=ToolAnnotations(
+            readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False,
+        ),
+    )
+    async def list_csv_import_jobs(
+        ctx: Context,
+        limit: int = Field(default=20, ge=1, le=50, description="Number of recent CSV imports to return"),
+    ) -> Dict[str, Any]:
+        """List recent CSV transaction imports for the active company.
+
+        Use this before a bulk correction when the user identifies a batch by
+        filename, import time or detected provider. Pass the returned job id to
+        rollback_csv_import_transactions; do not approximate an import batch
+        by description or by all transactions
+        in a calendar year.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        url = urljoin(
+            config.api_base_url,
+            f"api/v1/companies/{company_id}/accounting/transactions/csv-imports/",
+        )
+        return await api.arequest("GET", url, params={"limit": limit})
+
+    @mcp.tool(
+        title="Roll Back CSV Import Transactions",
+        annotations=ToolAnnotations(
+            readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False,
+        ),
+    )
+    async def rollback_csv_import_transactions(
+        ctx: Context,
+        csv_import_job_id: str = Field(
+            pattern="^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            description="Exact CSV import job id returned by list_csv_import_jobs",
+        ),
+        dry_run: bool = Field(  # noqa: FBT001 - MCP schema exposes an explicit boolean
+            default=True,
+            description="Preview deletion and immutable-row counts without changing anything",
+        ),
+        confirmed: bool = Field(  # noqa: FBT001 - explicit confirmation gate
+            default=False,
+            description="Must be true only after the user explicitly approves this exact preview",
+        ),
+        preview_token: str | None = Field(
+            default=None,
+            description="Signed previewToken returned by the immediately preceding preview",
+        ),
+    ) -> dict[str, Any]:
+        """Preview or roll back transactions from one exact CSV import.
+
+        First identify the batch with list_csv_import_jobs. Call this tool with
+        dry_run=true, show the filename, import time, counts and transaction
+        sample to the user, and ask for explicit confirmation. Only then call
+        again with dry_run=false, confirmed=true and the previewToken returned
+        by that preview.
+
+        The API soft-deletes only mutable transactions recorded by that import
+        job. Finalized and GoBD-locked rows are reported and never deleted. If
+        the import or any transaction changed after preview, the token is
+        rejected and a fresh preview is required.
+        """
+        if not dry_run and (not confirmed or not preview_token):
+            return {
+                "confirmationRequired": True,
+                "warning": (
+                    "Preview this exact CSV import, show the result to the user, and obtain "
+                    "explicit confirmation before applying with its previewToken."
+                ),
+            }
+
+        api = ctx.request_context.lifespan_context["api"]
+        company_id = api.company_id
+        if not company_id:
+            return {"error": "No company available. Please authenticate first."}
+
+        url = urljoin(
+            config.api_base_url,
+            (
+                f"api/v1/companies/{company_id}/accounting/transactions/"
+                f"csv-imports/{csv_import_job_id}/rollback/"
+            ),
+        )
+        body: dict[str, Any] = {
+            "dryRun": dry_run,
+            "confirmed": confirmed,
+        }
+        if isinstance(preview_token, str) and preview_token:
+            body["previewToken"] = preview_token
+        return await api.arequest("POST", url, json_data=body)
