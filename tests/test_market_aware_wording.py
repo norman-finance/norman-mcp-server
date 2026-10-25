@@ -17,7 +17,13 @@ import yaml
 from tests.mcp_harness import FakeApi, call_tool, structured
 from norman_mcp.prompts.templates import _load_skills
 from norman_mcp.server import mcp
-from norman_mcp.tools.country_scope import GERMAN_ONLY_MODULES, GERMAN_ONLY_TOOLS, GERMANY_ONLY_NOTE
+from norman_mcp.tools.country_scope import (
+    ALSO_POLISH,
+    GERMAN_ONLY_MODULES,
+    GERMAN_ONLY_TOOLS,
+    GERMANY_AND_POLAND_NOTE,
+    GERMANY_ONLY_NOTE,
+)
 
 PLUGIN_SKILLS = Path(__file__).resolve().parents[1] / "openai-plugin" / "skills"
 
@@ -120,7 +126,13 @@ def test_every_german_only_tool_says_so():
     tools = [tool for tool in mcp._tool_manager._tools.values() if _is_german_only(tool)]
 
     assert tools
-    assert [tool.name for tool in tools if not (tool.description or "").startswith(GERMANY_ONLY_NOTE)] == []
+    assert [
+        tool.name
+        for tool in tools
+        if not (tool.description or "").startswith(
+            GERMANY_AND_POLAND_NOTE if tool.name in ALSO_POLISH else GERMANY_ONLY_NOTE
+        )
+    ] == []
     # The note opens the description; the tool's own text follows it unchanged.
     assert mcp._tool_manager._tools["submit_tax_report"].description.startswith(
         "Germany only. Submit a tax report to the Finanzamt."

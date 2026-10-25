@@ -292,3 +292,17 @@ def test_vat_proportion_preserves_zero_and_explicit_clear():
         call_tool("update_vat_proportion", {"year": 2026, "clear_estimate": True}, api)
     )
     assert api.requests[-1][2]["json_data"]["values"] == {"year": 2026, "estimatedPercent": None}
+
+
+def test_a_polish_company_previews_its_opening_balance_through_the_migration_tools():
+    """The accounting migration serves a PL_FULL sp. z o.o. too (the API's polish_opening)."""
+    api = FakeApi(responder("PL_FULL"))
+    args = {"manual_balances": [{"account_code": "130", "debit": "100"}], "account_mapping": {"130": "130"}}
+    call_tool("preview_accounting_cutover", args, api)
+    method, url, kwargs = api.requests[-1]
+    assert (method, url.rsplit("/api/v1/", 1)[1]) == ("POST", "companies/company-1/accounting/cutover/preview/")
+    assert kwargs["json_data"] == {
+        "manual_balances": [{"account_code": "130", "debit": "100"}],
+        "account_mapping": {"130": "130"},
+    }
+    assert "confirmationRequired" in structured(call_tool("apply_accounting_cutover", args, api))
