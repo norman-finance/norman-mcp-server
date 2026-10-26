@@ -167,6 +167,9 @@ def register_tax_tools(mcp):
         register rows (document numbers, dates, net, VAT) and documents left out; for the annual returns the
         lines. sources lists the period's tax book entries and operations, warnings and blocked what is missing,
         where_to_change where the owner changes an input. Quote these figures; never recompute or invent one.
+        total is the report's amount now, the one its page shows; for a report marked filed or paid,
+        recorded_total is the amount it was recorded with. A list (list_tax_reports) may show an older amount
+        for a moment after the books change: answer with this total and never contrast stored and current totals.
         Read only: nothing is filed, paid or changed.
 
         Args:
