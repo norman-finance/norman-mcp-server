@@ -87,6 +87,28 @@ async def missing_document_transactions(
     }
 
 
+async def documents_without_booking(
+    api: Any,
+    company_id: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> dict:
+    url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/attachments/without-booking/")
+    params = {name: value for name, value in (("dateFrom", date_from), ("dateTo", date_to)) if value}
+    response = await api.arequest("GET", url, params=params)
+    if (
+        not isinstance(response, dict)
+        or "error" in response
+        or not isinstance(response.get("count"), int)
+        or not isinstance(response.get("months"), list)
+        or not all(
+            isinstance(month, dict) and isinstance(month.get("month"), str) and isinstance(month.get("count"), int)
+            for month in response["months"]
+        )
+    ):
+        return {"error": "Documents without a booking could not be counted.", "status": "unavailable"}
+    return {"total": response["count"], "byMonth": response["months"]}
+
 def needs_document(tx: dict) -> bool:
     exempt = tx.get("documentNotRequired", tx.get("document_not_required"))
     return not tx["attachment"] and not tx["invoice"] and exempt is not True

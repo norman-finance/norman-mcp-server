@@ -7,7 +7,12 @@ from mcp.types import ToolAnnotations
 from norman_mcp.context import Context
 from norman_mcp import config
 from norman_mcp.tools.taxes import reports_url as company_reports_url
-from norman_mcp.tools.missing_documents import category_name, missing_document_transactions, needs_document
+from norman_mcp.tools.missing_documents import (
+    category_name,
+    documents_without_booking,
+    missing_document_transactions,
+    needs_document,
+)
 from norman_mcp.tools.advisor_signatures import register_advisor_signature_tools
 
 logger = logging.getLogger(__name__)
@@ -151,12 +156,15 @@ def register_tax_advisor_tools(mcp):
         Check the selected company; select company_id first when switching clients.
 
         List all transactions without receipts for a client company,
-        grouped by month and category with amounts.
-        Useful for tax advisors to know what documents to request from the client.
+        grouped by month and category with amounts, and count the client's
+        receipts and invoices that no booking holds yet, by month.
+        Useful for tax advisors to know what documents to request from the client
+        and which periods miss bookings.
 
         Returns:
-            Summary with total missing count, grouped by month, and a flat list
-            of the top missing transactions ordered by amount.
+            Summary with total missing count, grouped by month, a flat list
+            of the top missing transactions ordered by amount, and the documents
+            without a booking by month.
         """
         api = ctx.request_context.lifespan_context["api"]
 
@@ -207,6 +215,7 @@ def register_tax_advisor_tools(mcp):
                 }
                 for tx in top_missing
             ],
+            "documentsWithoutBooking": await documents_without_booking(api, company_id, date_from, date_to),
         }
 
     @mcp.tool(

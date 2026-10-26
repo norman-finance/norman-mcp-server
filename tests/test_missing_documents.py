@@ -35,13 +35,18 @@ def test_all_pages_use_company_scoped_route_and_receipt_semantics():
     api = SimpleNamespace(company_id=COMPANY, arequest=AsyncMock(side_effect=[
         {"count": 5, "next": "https://untrusted.invalid/?page=2", "results": [tx("1"), tx("2", invoice="invoice-id")]},
         {"count": 5, "next": None, "results": [tx("3", documentNotRequired=True), tx("4", attachment="receipt-id"), tx("5")]},
+        {"count": 2, "months": [{"month": "2025-11", "count": 2}]},
     ]))
     result = run(api, "2025-01-01", "2025-12-31")
     assert result["totalTransactions"] == 5
     assert result["totalMissing"] == 2
     assert result["byMonth"][0]["totalAmount"] == 25
     assert result["topMissingByAmount"][0]["category"] == "Office"
-    for i, call in enumerate(api.arequest.call_args_list, 1):
+    assert result["documentsWithoutBooking"] == {"total": 2, "byMonth": [{"month": "2025-11", "count": 2}]}
+    *pages, documents = api.arequest.call_args_list
+    assert documents.args[1].endswith(f"/companies/{COMPANY}/attachments/without-booking/")
+    assert documents.kwargs["params"] == {"dateFrom": "2025-01-01", "dateTo": "2025-12-31"}
+    for i, call in enumerate(pages, 1):
         assert call.args[0] == "GET"
         assert call.args[1].endswith(f"/companies/{COMPANY}/accounting/transactions/")
         assert call.kwargs["params"]["page"] == i
@@ -94,3 +99,13 @@ def test_mismatched_active_company_does_not_read_or_relabel_another_company():
     api = SimpleNamespace(company_id="different", arequest=AsyncMock())
     assert run(api)["status"] == "unavailable"
     api.arequest.assert_not_called()
+
+
+@pytest.mark.parametrize("counts", [{"error": "Resource not found", "status_code": 404}, {"count": 2}, {"months": []}])
+def test_documents_without_booking_never_report_a_zero_when_unknown(counts):
+    page = {"count": 1, "next": None, "results": [tx("1")]}
+    api = SimpleNamespace(company_id=COMPANY, arequest=AsyncMock(side_effect=[page, counts]))
+    result = run(api)
+    assert result["totalMissing"] == 1
+    assert result["documentsWithoutBooking"]["status"] == "unavailable"
+    assert "total" not in result["documentsWithoutBooking"]
