@@ -157,16 +157,17 @@ def register_tax_tools(mcp):
         report_id: str = Field(description="Public ID of the tax report whose figure to explain"),
     ) -> Dict[str, Any]:
         """
-        What a tax report's figure is made of: use it to answer "why this amount" or "where does it come from".
+        Polish companies only: what a Polish tax report's figure is made of. Use it to answer "why this amount"
+        or "where does it come from"; a German company's report is refused (read it with get_tax_report).
 
         Returns the report's lines and total as its page shows them, the formula, and the steps the calculation
-        went through: a Polish PIT advance month by month (revenue, by ryczałt rate, costs, social and health
-        paid and deducted, base, tax, earlier advances deducted, the advance, recorded amounts), a ZUS DRA's
-        scheme, bases, rates and health tier, the CIT advance schedule of the year, a JPK_V7's register rows
-        (document numbers, dates, net, VAT) and documents left out; for other reports the lines and how many
-        operations each counts. sources lists the period's tax book entries and operations, warnings and blocked
-        what is missing, where_to_change where the owner changes an input. Quote these figures; never recompute
-        or invent one. Read only: nothing is filed, paid or changed.
+        went through: a PIT advance month by month (revenue, by ryczałt rate, costs, social and health paid and
+        deducted, base, tax, earlier advances deducted, the advance, recorded amounts), a ZUS DRA's scheme, bases,
+        rates and health tier, the CIT advance schedule of the year with the period's postings, a JPK_V7's
+        register rows (document numbers, dates, net, VAT) and documents left out; for the annual returns the
+        lines. sources lists the period's tax book entries and operations, warnings and blocked what is missing,
+        where_to_change where the owner changes an input. Quote these figures; never recompute or invent one.
+        Read only: nothing is filed, paid or changed.
 
         Args:
             report_id: Public ID of the tax report

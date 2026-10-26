@@ -1,7 +1,7 @@
 ---
 name: tax-report
 description: "Review and manage tax reports. German companies: VAT (UStVA, ZM, Umsatzsteuer), income tax prepayments and Finanzamt submissions via ELSTER. Polish companies: the JPK_V7 and VAT-UE, PIT or CIT advances, ZUS DRA, the annual PIT and the CIT-8, which Norman prepares and the owner files in the Norman app or outside it. Use when the user asks about taxes, Steuern, podatki, VAT, USt, JPK, Finanzamt, urząd skarbowy, or tax filing."
-version: 1.2.0
+version: 1.2.1
 disable-model-invocation: true
 argument-hint: "[period or tax type]"
 metadata:
@@ -25,7 +25,7 @@ Help the user with their tax obligations. Read the company's country first (`com
    - Status (draft, ready, submitted)
    - Submission status (the Finanzamt for a German report; the Ministry of Finance and its UPO for a Polish JPK_V7)
 
-4. **Why this number**: When the user asks why a report shows its amount or where a figure comes from, call `explain_tax_report` with the report ID and answer from it, never from memory:
+4. **Why this number** (Polish companies; a German company has no explanation, read its report with `get_tax_report`): When the user asks why a report shows its amount or where a figure comes from, call `explain_tax_report` with the report ID and answer from it, never from memory:
    - Lead with the answer in two or three sentences, then the formula with the report's own figures as a short list.
    - Name the source rows behind the base (document numbers, dates, counterparties, amounts), split by rate where rates differ, and the deductions and carry-overs: contributions paid and the part deducted, earlier advances deducted, the excess carried from the previous return, losses, rounding.
    - A Polish PIT or CIT advance is year-to-date: compare this period's step with the previous one to say what changed. A Polish ZUS DRA: the scheme, the social base and the health base and tier.
