@@ -1,7 +1,7 @@
 ---
 name: find-receipts
 description: Find and attach missing receipts for business transactions. Search Gmail, email, or other sources for invoices and receipts, then upload them to Norman. Use when the user asks about missing receipts, Belege, attaching documents, or finding invoices from emails.
-version: 1.0.4
+version: 1.0.5
 argument-hint: "[transaction description or vendor name]"
 metadata:
   openclaw:
@@ -48,7 +48,7 @@ Once the user has the receipt files:
 - Use `upload_bulk_attachments` to upload multiple receipts at once
 - Use `create_attachment` for individual receipts with metadata (vendor, date, amount)
 - Use `link_attachment_transaction` to connect each receipt to its matching transaction
-- Pay a fitting open booking from `find_booking_payments` with `pay_booking` (booking id, payment id): the payment takes the booking over, with its document if it has one. A booking made by hand may have none: read the payment back and keep searching while it has no document
+- Pay a fitting open booking from `find_booking_payments` with `pay_booking` (booking id, payment id): the payment takes the booking over, with its document if it has one. A booking made by hand may have none: read back the row `pay_booking` returns (its `publicId`: the payment in German companies, the booking in Polish ones, whose payment then retires) and use that id from then on; keep searching while it has no document
 - German companies: a receipt that matches no payment books itself as an open booking (payment type `NOT_PAID`, source document) on its own date; its bank payment takes the booking over when it arrives. Linking a receipt to a booking made by hand replaces the booking Norman made from it.
 
 ## Step 4: Verify
