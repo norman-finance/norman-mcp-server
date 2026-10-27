@@ -84,6 +84,14 @@ oracle entry.
 The October 22 EU model change updates one description: suggest_skr_category
 says its query goes to Norman's AI model, processed in the EU. No argument
 changes.
+
+The October 23 Polish parity sync updates seven reviewed tool signatures:
+list_attachments, search_transactions, list_tax_reports and list_bills gain bounded
+filters/pagination; create_invoice and list_invoices gain quote_kind for proforma;
+complete_workflow_step gains optional done=False while retaining skipped. Existing
+tool names and required arguments stay unchanged. Transaction searches now honor
+page_size, with a 20-result default and bounds of 1-100. Only those seven hashes
+change; new tools and the existing non-legacy Polish proposal tool need no entry.
 """
 
 import asyncio

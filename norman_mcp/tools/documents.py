@@ -511,20 +511,37 @@ def register_document_tools(mcp):
     async def list_attachments(
         ctx: Context,
         file_name: Optional[str] = Field(default=None, description="Filter by file name (case insensitive partial match)"),
-        linked: Optional[bool] = Field(default=None, description="Filter by whether attachment is linked to transactions"),
+        linked: Optional[bool] = Field(default=None, description="Legacy API semantics: true returns UNLINKED documents; false returns linked documents. Omit to search all documents."),
         attachment_type: Optional[str] = Field(default=None, description="Filter by attachment type (invoice, receipt, contract, other)"),
         description: Optional[str] = Field(default=None, description="Filter by description (case insensitive partial match)"),
-        brand_name: Optional[str] = Field(default=None, description="Filter by brand name (case insensitive partial match)")
+        brand_name: Optional[str] = Field(default=None, description="Filter by brand name (case insensitive partial match)"),
+        search: Optional[str] = Field(default=None, description="Preferred supplier/document search across brand, description, filename and invoice number. Meta/Facebook/FACEBK aliases are included. Do not also fill individual text filters unless intentionally narrowing results."),
+        date_from: Optional[str] = Field(default=None, description="Earliest document date, YYYY-MM-DD; falls back to upload date if missing. Use a bounded range for receipt discovery, allowing for invoice/payment lag."),
+        date_to: Optional[str] = Field(default=None, description="Latest document date, YYYY-MM-DD; falls back to upload date if missing."),
+        page: int = Field(default=1, ge=1, description="Result page; continue while the response has next"),
+        page_size: int = Field(default=50, ge=1, le=100, description="Documents per page"),
+        include_download_urls: bool = Field(default=True, description="Set false for receipt discovery/matching using metadata. True generates a temporary download link for every result; use only when file contents or download links are needed."),
     ) -> Dict[str, Any]:
         """
-        Get list of attachments with optional filters.
+        Search saved purchase invoices and receipts (not outgoing sales invoices).
+        Prefer search for supplier discovery. Individual filters are combined with AND.
+        For receipt matching, use search with page_size=10 and include_download_urls=false.
+        Empty filtered results do not prove that uploaded documents are absent: try known
+        aliases or a date-bounded fallback. Paginate within the requested search scope;
+        do not enumerate the entire archive merely because an unfiltered page has next.
         
         Args:
             file_name: Filter by file name (case insensitive partial match)
-            linked: Filter by whether attachment is linked to transactions
+            linked: Legacy API semantics: true returns UNLINKED documents; false returns linked documents. Omit to search all documents.
             attachment_type: Filter by attachment type (invoice, receipt, contract, other)
             description: Filter by description (case insensitive partial match)
             brand_name: Filter by brand name (case insensitive partial match)
+            search: Search supplier or reference across all document text fields
+            date_from: Earliest effective document date (inclusive)
+            date_to: Latest effective document date (inclusive)
+            page: Result page, starting at 1
+            page_size: Number of documents per page
+            include_download_urls: Generate temporary file links (not needed for metadata searches)
             
         Returns:
             List of attachments matching the filters. Use downloadUrl for direct temporary file download links.
@@ -540,7 +557,13 @@ def register_document_tools(mcp):
             f"api/v1/companies/{company_id}/attachments/"
         )
         
-        params = {}
+        params = {"page": page, "page_size": page_size}
+        if date_from:
+            params["date_from"] = date_from
+        if date_to:
+            params["date_to"] = date_to
+        if search:
+            params["search"] = search
         if file_name:
             params["file_name"] = file_name
         if linked is not None:
@@ -552,8 +575,10 @@ def register_document_tools(mcp):
         if brand_name:
             params["brand_name"] = brand_name
             
-        result = api._make_request("GET", attachments_url, params=params)
-        return _enrich_attachment_download_urls(result, api=api, company_id=company_id)
+        result = await api.arequest("GET", attachments_url, params=params)
+        if include_download_urls:
+            return await asyncio.to_thread(_enrich_attachment_download_urls, result, api=api, company_id=company_id)
+        return result
 
     @mcp.tool(
         title="Create Attachment",

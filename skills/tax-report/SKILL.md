@@ -1,7 +1,7 @@
 ---
 name: tax-report
 description: "Review and manage tax reports. German companies: VAT (UStVA, ZM, Umsatzsteuer), income tax prepayments and Finanzamt submissions via ELSTER. Polish companies: the JPK_V7 and VAT-UE, PIT or CIT advances, ZUS DRA, the annual PIT and the CIT-8, which Norman prepares and the owner files in the Norman app or outside it. Use when the user asks about taxes, Steuern, podatki, VAT, USt, JPK, Finanzamt, urząd skarbowy, or tax filing."
-version: 1.1.0
+version: 1.2.2
 disable-model-invocation: true
 argument-hint: "[period or tax type]"
 metadata:
@@ -25,16 +25,23 @@ Help the user with their tax obligations. Read the company's country first (`com
    - Status (draft, ready, submitted)
    - Submission status (the Finanzamt for a German report; the Ministry of Finance and its UPO for a Polish JPK_V7)
 
-4. **German companies, preview and submit**:
+4. **Why this number** (Polish companies; a German company has no explanation, read its report with `get_tax_report`): When the user asks why a report shows its amount or where a figure comes from, call `explain_tax_report` with the report ID and answer from it, never from memory:
+   - Lead with the answer in two or three sentences, then the formula with the report's own figures as a short list.
+   - Name the source rows behind the base (document numbers, dates, counterparties, amounts), split by rate where rates differ, and the deductions and carry-overs: contributions paid and the part deducted, earlier advances deducted, the excess carried from the previous return, losses, rounding.
+   - A Polish PIT or CIT advance is year-to-date: compare this period's step with the previous one to say what changed. A Polish ZUS DRA: the scheme, the social base and the health base and tier.
+   - Say what is missing or blocking and what the owner can change and where. Quote only figures the tool returned; if it cannot work the report out, explain why instead of giving a number.
+   - The tool's `total` is the report's amount now, the one its page shows. If the user or a list names another amount, the books changed since: explain the tool's total and never talk about stored, saved or recalculated totals.
+
+5. **German companies, preview and submit**:
    - Call `generate_finanzamt_preview` to show the user exactly what will be sent to the Finanzamt. Let them review all figures.
    - Only when the user explicitly confirms, call `submit_tax_report` to file with the Finanzamt via ELSTER. If it answers `Email not confirmed`, call `resend_email_confirmation` and ask the user to open the link in that email; a paid plan confirms the address without it.
 
-5. **Polish companies, check and then file in the app**:
+6. **Polish companies, check and then file in the app**:
    - Read a JPK_V7's sales, purchases, totals and exclusions with `get_polish_jpk_register`, and its filing state (methods, MF status, UPO) with `get_polish_jpk_filing_status`; a PIT return's with `get_polish_pit_filing_status`. `get_polish_tax_estimates` gives PIT/ZUS or CIT estimates, which are not filed returns.
    - There is no Polish signing or submission tool here. Norman files the JPK_V7 (the monthly JPK_V7M, or each monthly file of a quarterly JPK_V7K) from the Norman app only after the owner approves and signs it, on the JDG Pro and Sp. z o.o. Max plans. Norman prepares the PIT returns, the CIT-8 draft and the VAT-UE and calculates ZUS; the user or their accountant files them.
    - Give facts and next steps, never an individual tax opinion.
 
-6. **Tax settings**: Call `list_tax_settings` to review VAT registration, filing frequency, and other tax configuration.
+7. **Tax settings**: Call `list_tax_settings` to review VAT registration, filing frequency, and other tax configuration.
 
 Important warnings:
 - German companies: ALWAYS show the Finanzamt preview before submitting

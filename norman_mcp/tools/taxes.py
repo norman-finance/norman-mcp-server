@@ -82,16 +82,35 @@ def register_tax_tools(mcp):
             openWorldHint=False,
         ),
     )
-    async def list_tax_reports(ctx: Context) -> Dict[str, Any]:
-        """List all available tax reports: a German company's UStVA, ZM, EÜR and annual returns, a Polish
-        company's JPK_V7M or JPK_V7K, VAT-UE, PIT or CIT advances, ZUS DRA, annual PIT and CIT-8."""
+    async def list_tax_reports(
+        ctx: Context,
+        date_from: Optional[str] = Field(default=None, description="Earliest report period start (YYYY-MM-DD)"),
+        date_to: Optional[str] = Field(default=None, description="Latest report period end (YYYY-MM-DD)"),
+        report_type: str | None = Field(
+            default=None,
+            description="Report type, e.g. ADVANCED_SALEX_TAX (German UStVA) or JPK_V7M / JPK_V7K (Polish VAT)",
+        ),
+        page: int = Field(default=1, ge=1, description="Page within these filters; follow next when needed"),
+    ) -> Dict[str, Any]:
+        """List existing tax reports, optionally scoped to a period and report type.
+
+        Date filters include reports wholly inside the given period. Check the returned
+        dates and type; if no exact period exists, inspect the company's filing frequency.
+        German companies: an existing draft can be passed to generate_finanzamt_preview without
+        creating a duplicate. Polish companies: pass a JPK_V7 report to get_polish_jpk_register.
+        """
         api = ctx.request_context.lifespan_context["api"]
         
         company_id = api.company_id
         if not company_id:
             return NO_COMPANY_ERROR
+        taxes_url = reports_url(company_id)
 
-        return await api.arequest("GET", reports_url(company_id))
+        params = {"page": page}
+        for key, value in (("date_from", date_from), ("date_to", date_to), ("type", report_type)):
+            if value is not None:
+                params[key] = value
+        return await api.arequest("GET", taxes_url, params=params)
 
     @mcp.tool(
         title="Get Tax Report",
@@ -123,6 +142,49 @@ def register_tax_tools(mcp):
 
         result = await api.arequest("GET", reports_url(company_id, f"{report_id}/"))
         return _enrich_report_download_url(result, api=api, report_id=report_id, company_id=company_id)
+
+    @mcp.tool(
+        title="Explain Tax Report",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def explain_tax_report(
+        ctx: Context,
+        report_id: str = Field(description="Public ID of the tax report whose figure to explain"),
+    ) -> Dict[str, Any]:
+        """
+        Polish companies only: what a Polish tax report's figure is made of. Use it to answer "why this amount"
+        or "where does it come from"; a German company's report is refused (read it with get_tax_report).
+
+        Returns the report's lines and total as its page shows them, the formula, and the steps the calculation
+        went through: a PIT advance month by month (revenue, by ryczałt rate, costs, social and health paid and
+        deducted, base, tax, earlier advances deducted, the advance, recorded amounts), a ZUS DRA's scheme, bases,
+        rates and health tier, the CIT advance schedule of the year with the period's postings, a JPK_V7's
+        register rows (document numbers, dates, net, VAT) and documents left out; for the annual returns the
+        lines. sources lists the period's tax book entries and operations, warnings and blocked what is missing,
+        where_to_change where the owner changes an input. Quote these figures; never recompute or invent one.
+        total is the report's amount now, the one its page shows; for a report marked filed or paid,
+        recorded_total is the amount it was recorded with. A list (list_tax_reports) may show an older amount
+        for a moment after the books change: answer with this total and never contrast stored and current totals.
+        Read only: nothing is filed, paid or changed.
+
+        Args:
+            report_id: Public ID of the tax report
+
+        Returns:
+            report, formula, total, lines, breakdown, sources, warnings, payment, blocked, where_to_change
+        """
+        api = ctx.request_context.lifespan_context["api"]
+
+        company_id = api.company_id
+        if not company_id:
+            return NO_COMPANY_ERROR
+
+        return await api.arequest("GET", reports_url(company_id, f"{report_id}/explanation/"))
 
     @mcp.tool(
         title="Get Filed Report Changes",

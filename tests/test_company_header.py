@@ -139,6 +139,39 @@ def test_the_active_company_travels_as_a_header(api, fake_norman) -> None:  # no
     assert "companyId" not in call["query"], "the inert query parameter is still being sent"
 
 
+@pytest.mark.parametrize("tool,args,path", [
+    ("create_bill", {"vendor_name": "Fixture", "amount": 10, "currency": "PLN"}, "/api/v1/accounting/bills/"),
+    ("scan_bill_document", {"attachment_id": "doc-fixture"}, "/api/v1/accounting/bills/scan/"),
+    ("list_routines", {}, "/api/v1/assistant/routines/"),
+    ("confirm_routine", {"routine_id": "routine-fixture"}, "/api/v1/assistant/routines/"),
+    ("dismiss_routine", {"routine_id": "routine-fixture"}, "/api/v1/assistant/routines/"),
+    ("request_workflow_input", {"run_id": "run-fixture", "step": "review", "question": "Ready?"},
+     "/api/v1/assistant/workflow-runs/run-fixture/step/"),
+])
+def test_new_unscoped_tools_send_selected_company_through_real_http(
+    api, fake_norman, monkeypatch, tool, args, path,
+):
+    from norman_mcp import config
+    from tests.mcp_harness import call_tool, structured
+
+    client, base = api
+    monkeypatch.setattr(config, "api_base_url", base)
+    previous = context.get_api_client()
+
+    def run():
+        client.set_company("co-pl-selected")
+        return call_tool(tool, args, client)
+
+    try:
+        assert structured(_in_request(run)) == {"ok": True}
+    finally:
+        context.set_api_client(previous)
+    calls = [call for call in fake_norman.seen if call["path"] == path]
+    assert len(calls) == 1
+    assert calls[0]["company_header"] == "co-pl-selected"
+    assert "companyId" not in calls[0]["query"]
+
+
 def test_the_companies_list_is_not_scoped(api, fake_norman) -> None:  # noqa: ANN001
     """Listing companies is how a caller discovers them; scoping it would hide the others."""
     client, base = api
