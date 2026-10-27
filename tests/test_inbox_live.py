@@ -44,6 +44,7 @@ class API:
         self.status = None
         self.calls = []
         self.company_details = {
+            "country": "DE",
             "isSme": True,
             "chartOfAccounts": {"code": "skr04"},
             "taxNumber": "private-company-metadata",
@@ -207,7 +208,13 @@ async def test_capability_evidence_changes_invalidate_without_exposing_company_d
     await service.tick()
     assert len(received) == 2 and vars(received[1]) == {"uri": uri}
     result = await service.read(uri, api)
-    assert json.loads(result)["capabilities"] == {"ledger": False, "taxPreview": True}
+    assert json.loads(result)["capabilities"] == {
+        "ledger": False,
+        "taxPreview": True,
+        "polishTax": False,
+        "polishTaxBook": False,
+        "polishLedger": False,
+    }
     assert "private" not in result and "taxNumber" not in result
 
 
@@ -496,7 +503,9 @@ async def test_one_token_cannot_hold_every_snapshot_read(setup, monkeypatch):
         return await original(observed, page)
 
     monkeypatch.setattr(inbox_live, "load_inbox", slow)
-    held = [asyncio.create_task(service.read(uri, api)) for _ in range(inbox_live.MAX_READS_PER_TOKEN)]
+    held = [
+        asyncio.create_task(service.read(uri, api)) for _ in range(inbox_live.MAX_READS_PER_TOKEN)
+    ]
     await asyncio.sleep(0.05)
     with pytest.raises(MCPError, match="busy"):
         await service.read(uri, api)
@@ -553,7 +562,9 @@ async def test_refreshed_tokens_of_one_grant_share_the_lease_limit(setup, monkey
     )
     provider.mapping["alice-refreshed"] = "norman-alice-2"
     provider.companies["alice-refreshed"] = "company-a"
-    provider.grant_for_token = lambda token: {"alice": "g1", "alice-refreshed": "g1"}.get(token, token)
+    provider.grant_for_token = lambda token: {"alice": "g1", "alice-refreshed": "g1"}.get(
+        token, token
+    )
     monkeypatch.setattr(inbox_live, "MAX_PER_GRANT", 1)
 
     await service.open(api, 1)

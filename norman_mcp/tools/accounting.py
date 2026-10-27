@@ -188,13 +188,15 @@ def _compact(data: Dict[str, Any]) -> Dict[str, Any]:
 
 def _cutover_payload(
     *,
-    mode: str,
-    fiscal_year_begin: str,
-    fiscal_year_end: str,
-    cutover_date: str,
-    opening_method: str,
+    mode: Optional[str],
+    fiscal_year_begin: Optional[str],
+    fiscal_year_end: Optional[str],
+    cutover_date: Optional[str],
+    opening_method: Optional[str],
     manual_balance_date: Optional[str],
     manual_balances: Optional[list[Dict[str, Any]]],
+    account_mapping: Optional[Dict[str, str]] = None,
+    takeover_assets: Optional[list[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     return _compact(
         {
@@ -205,8 +207,23 @@ def _cutover_payload(
             "cutover_date": cutover_date,
             "manual_balance_date": manual_balance_date,
             "manual_balances": manual_balances,
+            # A direct call leaves the Field defaults in place: only real values are sent.
+            "account_mapping": account_mapping if isinstance(account_mapping, dict) else None,
+            "assets": takeover_assets if isinstance(takeover_assets, list) else None,
         }
     )
+
+
+# A Polish sp. z o.o. on PL_FULL uses the same tools for its opening balance (bilans otwarcia) from the previous
+# books' trial balance (zestawienie obrotów i sald); the API takes the dates from the books' start in Norman.
+ACCOUNT_MAPPING_HELP = (
+    "Poland only: source account -> PL_FULL account code, '-' to leave out clearing accounts that cancel out "
+    "(490 with zespół 5). Pass the preview's whole mapping on apply."
+)
+TAKEOVER_ASSETS_HELP = (
+    "Poland only: fixed assets the previous books depreciated, taken over with their umorzenie so depreciation "
+    "goes on: name, account (010 or 020), kind, entry_date, initial_value, written_off, annual_rate."
+)
 
 
 def _cutover_file_fields(
@@ -253,8 +270,11 @@ async def _post_cutover(
         resolved.append((field_name, file_ref, Path(path)))
 
     request_payload = dict(payload)
-    if resolved and isinstance(request_payload.get("manual_balances"), list):
-        request_payload["manual_balances"] = json.dumps(request_payload["manual_balances"])
+    if resolved:
+        # A multipart form carries nested values as JSON text.
+        for name in ("manual_balances", "account_mapping", "assets"):
+            if isinstance(request_payload.get(name), (list, dict)):
+                request_payload[name] = json.dumps(request_payload[name])
 
     with ExitStack() as stack:
         files: list[tuple[str, tuple[str, Any, str]]] = []
@@ -278,14 +298,20 @@ def register_accounting_tools(mcp: Any) -> None:
     @mcp.tool(title="Get Accounting Setup", annotations=READ_ONLY)
     async def get_accounting_setup(
         ctx: Context,
-        fiscal_year_begin: str = Field(
-            description="Fiscal-year start in YYYY-MM-DD format"
+        fiscal_year_begin: Optional[str] = Field(
+            default=None,
+            description="Fiscal-year start in YYYY-MM-DD format (Germany; Poland leaves it out)",
         ),
-        fiscal_year_end: str = Field(
-            description="Fiscal-year end in YYYY-MM-DD format"
+        fiscal_year_end: Optional[str] = Field(
+            default=None,
+            description="Fiscal-year end in YYYY-MM-DD format (Germany; Poland leaves it out)",
         ),
     ) -> Dict[str, Any]:
-        """Get opening/cutover status for a fiscal year without changing the books."""
+        """Get opening/cutover status for a fiscal year without changing the books.
+
+        For a Polish sp. z o.o.: whether its opening balance from the previous books is in, for which start of its
+        books in Norman, and the revenue and costs before that start the CIT takes from it.
+        """
         api, company_id, error = _api_and_company(ctx)
         if error:
             return error
@@ -294,10 +320,13 @@ def register_accounting_tools(mcp: Any) -> None:
             api,
             "GET",
             url,
-            params={
-                "fiscalYearBegin": fiscal_year_begin,
-                "fiscalYearEnd": fiscal_year_end,
-            },
+            params=_compact(
+                {
+                    "fiscalYearBegin": fiscal_year_begin,
+                    "fiscalYearEnd": fiscal_year_end,
+                }
+            )
+            or None,
         )
 
     @mcp.tool(title="Analyze Accounting Migration Files", annotations=READ_ONLY)
@@ -306,7 +335,9 @@ def register_accounting_tools(mcp: Any) -> None:
         file_refs: list[str] = Field(
             description=(
                 "One to 20 uploaded DATEV, CSV or supporting document references. "
-                "Analysis detects file roles, fiscal periods and the likely SKR framework."
+                "Analysis detects file roles, fiscal periods and the likely SKR framework. "
+                "For a Polish sp. z o.o. it reads trial balances (zestawienie obrotów i sald, "
+                "CSV/XLSX) and suggests the PL_FULL mapping."
             )
         ),
     ) -> Dict[str, Any]:
@@ -326,15 +357,24 @@ def register_accounting_tools(mcp: Any) -> None:
     @mcp.tool(title="Preview Accounting Migration", annotations=READ_ONLY)
     async def preview_accounting_cutover(
         ctx: Context,
-        mode: str = Field(description="formation, year_start or mid_year"),
-        fiscal_year_begin: str = Field(description="YYYY-MM-DD"),
-        fiscal_year_end: str = Field(description="YYYY-MM-DD"),
-        cutover_date: str = Field(
-            description="Last date covered by the imported books, in YYYY-MM-DD format"
+        mode: Optional[str] = Field(
+            default=None, description="Germany: formation, year_start or mid_year"
         ),
-        opening_method: str = Field(default="datev", description="datev or manual"),
+        fiscal_year_begin: Optional[str] = Field(default=None, description="Germany: YYYY-MM-DD"),
+        fiscal_year_end: Optional[str] = Field(default=None, description="Germany: YYYY-MM-DD"),
+        cutover_date: Optional[str] = Field(
+            default=None,
+            description="Germany: last date covered by the imported books, in YYYY-MM-DD format",
+        ),
+        opening_method: Optional[str] = Field(
+            default=None, description="Germany: datev (default) or manual"
+        ),
         opening_file_ref: Optional[str] = Field(
-            default=None, description="Uploaded DATEV opening-balance file reference"
+            default=None,
+            description=(
+                "Uploaded DATEV opening-balance file reference; for a Polish sp. z o.o. the "
+                "trial balance (CSV/XLSX)"
+            ),
         ),
         booking_file_refs: Optional[list[str]] = Field(
             default=None,
@@ -357,6 +397,10 @@ def register_accounting_tools(mcp: Any) -> None:
                 "amount and optional memo"
             ),
         ),
+        account_mapping: Optional[Dict[str, str]] = Field(default=None, description=ACCOUNT_MAPPING_HELP),
+        takeover_assets: Optional[list[Dict[str, Any]]] = Field(
+            default=None, description=TAKEOVER_ASSETS_HELP
+        ),
     ) -> Dict[str, Any]:
         """Preview findings and reconciliation without changing the books.
 
@@ -367,6 +411,13 @@ def register_accounting_tools(mcp: Any) -> None:
         with prepare_accounting_cutover_accounts, or by setting ebilanz_assignment on
         the account (create/update_chart_of_accounts_account), then preview again.
         CONFLICT and HIDDEN rows need a manual fix in the chart of accounts first.
+
+        Poland (sp. z o.o., PL_FULL): pass the trial balance as opening_file_ref, or typed
+        balances as manual_balances (account_code, name, debit, credit; optionally
+        opening_debit, opening_credit), and leave mode and the dates out. The preview lists
+        each source account with the PL_FULL account it maps to and how (rule, ai, owner,
+        previous); show the mapping, the totals and the warnings to the owner and pass their
+        corrections as account_mapping.
         """
         api, company_id, error = _api_and_company(ctx)
         if error:
@@ -382,6 +433,8 @@ def register_accounting_tools(mcp: Any) -> None:
                 opening_method=opening_method,
                 manual_balance_date=manual_balance_date,
                 manual_balances=manual_balances,
+                account_mapping=account_mapping,
+                takeover_assets=takeover_assets,
             ),
             file_fields=_cutover_file_fields(
                 opening_file_ref=opening_file_ref,
@@ -394,11 +447,14 @@ def register_accounting_tools(mcp: Any) -> None:
     @mcp.tool(title="Apply Accounting Migration", annotations=DESTRUCTIVE)
     async def apply_accounting_cutover(
         ctx: Context,
-        mode: str = Field(description="formation, year_start or mid_year"),
-        fiscal_year_begin: str = Field(description="YYYY-MM-DD"),
-        fiscal_year_end: str = Field(description="YYYY-MM-DD"),
-        cutover_date: str = Field(
-            description="Last date covered by the imported books, in YYYY-MM-DD format"
+        mode: Optional[str] = Field(
+            default=None, description="Germany: formation, year_start or mid_year"
+        ),
+        fiscal_year_begin: Optional[str] = Field(default=None, description="Germany: YYYY-MM-DD"),
+        fiscal_year_end: Optional[str] = Field(default=None, description="Germany: YYYY-MM-DD"),
+        cutover_date: Optional[str] = Field(
+            default=None,
+            description="Germany: last date covered by the imported books, in YYYY-MM-DD format",
         ),
         confirmed: bool = Field(
             default=False,
@@ -406,9 +462,15 @@ def register_accounting_tools(mcp: Any) -> None:
                 "Must be true only after the user reviewed a preview made with the exact same inputs"
             ),
         ),
-        opening_method: str = Field(default="datev", description="datev or manual"),
+        opening_method: Optional[str] = Field(
+            default=None, description="Germany: datev (default) or manual"
+        ),
         opening_file_ref: Optional[str] = Field(
-            default=None, description="Uploaded DATEV opening-balance file reference"
+            default=None,
+            description=(
+                "Uploaded DATEV opening-balance file reference; for a Polish sp. z o.o. the "
+                "trial balance (CSV/XLSX)"
+            ),
         ),
         booking_file_refs: Optional[list[str]] = Field(
             default=None,
@@ -431,8 +493,16 @@ def register_accounting_tools(mcp: Any) -> None:
                 "amount and optional memo"
             ),
         ),
+        account_mapping: Optional[Dict[str, str]] = Field(default=None, description=ACCOUNT_MAPPING_HELP),
+        takeover_assets: Optional[list[Dict[str, Any]]] = Field(
+            default=None, description=TAKEOVER_ASSETS_HELP
+        ),
     ) -> Dict[str, Any]:
-        """Write previewed opening/cutover data only after explicit confirmation."""
+        """Write previewed opening/cutover data only after explicit confirmation.
+
+        Poland (sp. z o.o., PL_FULL): the same inputs as the preview, with the preview's whole
+        account_mapping. It replaces an earlier import of the year.
+        """
         if not confirmed:
             return {
                 "confirmationRequired": True,
@@ -456,6 +526,8 @@ def register_accounting_tools(mcp: Any) -> None:
                 opening_method=opening_method,
                 manual_balance_date=manual_balance_date,
                 manual_balances=manual_balances,
+                account_mapping=account_mapping,
+                takeover_assets=takeover_assets,
             ),
             file_fields=_cutover_file_fields(
                 opening_file_ref=opening_file_ref,

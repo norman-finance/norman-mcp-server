@@ -19,6 +19,7 @@ SCOPED = "/api/v1/companies/company-1/taxes/reports/"
     [
         ("list_tax_reports", {}, "GET", ""),
         ("get_tax_report", {"report_id": "report-1"}, "GET", "report-1/"),
+        ("explain_tax_report", {"report_id": "report-1"}, "GET", "report-1/explanation/"),
         ("submit_tax_report", {"report_id": "report-1"}, "POST", "report-1/submit-report/"),
     ],
 )
@@ -53,10 +54,11 @@ def test_a_filed_report_links_its_pdf_through_the_scoped_route():
     assert api.requests[-1][1].endswith(SCOPED + "report-1/download/")
 
 
-def test_report_tools_need_a_company():
+@pytest.mark.parametrize(("tool", "arguments"), [("list_tax_reports", {}), ("explain_tax_report", {"report_id": "r"})])
+def test_report_tools_need_a_company(tool, arguments):  # noqa: ANN001
     api = FakeApi({}, company_id=None)
 
-    data = structured(call_tool("list_tax_reports", {}, api))
+    data = structured(call_tool(tool, arguments, api))
 
     assert data == {"error": "No company available. Please authenticate first."}
     assert api.requests == []
