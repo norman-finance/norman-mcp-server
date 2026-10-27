@@ -399,8 +399,8 @@ def test_non_ui_clients_receive_bookkeeping_counts_and_bank_balances():
     text = result.content[0].text
     assert "83 overdue unpaid invoices" in text
     assert "26 unattached invoice/receipt documents" in text
-    assert "4 unfinalized transactions (UNVERIFIED, all history)" in text
-    assert "213 transactions." in text
+    assert "4 unfinalized operations (UNVERIFIED, all history)" in text
+    assert "213 operations." in text
     assert "120.50 EUR" in text
     assert "do not claim that a screen opened" in text
 

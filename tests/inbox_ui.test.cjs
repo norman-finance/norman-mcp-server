@@ -583,7 +583,7 @@ test("failed approval stays unconfirmed; missing current values cannot be approv
     await ui.getByRole("button", { name: "Review changes" }).click();
     await ui
       .getByText(
-        "Current transaction values are unavailable. Discuss this in chat before deciding.",
+        "Current operation values are unavailable. Discuss this in chat before deciding.",
       )
       .waitFor();
     assert.equal(await ui.locator("#approve").count(), 0);
@@ -1896,7 +1896,7 @@ test("overview shows balances separately by currency and honest action scopes", 
     for (const [key, count, scope] of [
       ["overdueInvoices", 3, "Overdue unpaid invoices · all dates"],
       ["unmatchedDocuments", 5, "All unattached invoices and receipts"],
-      ["unreviewedTransactions", 9, "All unfinalized transactions · all dates"],
+      ["unreviewedTransactions", 9, "All unfinalized operations · all dates"],
     ]) {
       const row = ui.locator(`[data-suggestion="${key}"]`);
       assert.match(await row.innerText(), new RegExp(`^${count} `));
@@ -1961,7 +1961,7 @@ test("overview distinguishes unavailable, no bank data, partial snapshots and ge
       await ui
         .locator('[data-suggestion="unreviewedTransactions"]')
         .innerText(),
-      /^No unfinalized transactions/,
+      /^No unfinalized operations/,
     );
     await page.evaluate(() => {
       window.inbox.overview.bankBalances = { status: "no_data", values: [] };
@@ -2263,7 +2263,7 @@ test("AI tasks have one clear chat action, discovery expansion survives refresh 
     for (const label of [
       "Prepare follow-ups",
       "Match my documents",
-      "Finalize my transactions",
+      "Finalize my operations",
       "Explain my finances",
     ])
       assert.equal(
@@ -2351,7 +2351,7 @@ test("zero bookkeeping counts show neutral outcomes and unavailable counts never
     for (const label of [
       "No overdue invoices",
       "No documents to match",
-      "No unfinalized transactions",
+      "No unfinalized operations",
     ])
       await ui.getByText(label, { exact: true }).waitFor();
     assert.equal(await ui.locator(".suggestions button").count(), 0);
@@ -2486,7 +2486,7 @@ test("discovery sends scoped chat tasks without granting analytical requests boo
       assert.match(messages[i], /Use actual read-only tool results for this task; do not change records/);
     assert.match(messages[1], /Explicitly pass status="draft"/);
     assert.match(messages[1], /do not infer invoice dates from the overview period/);
-    assert.match(messages[1], /Do not issue, send, mark paid, match a payment or create a linked accounting transaction/);
+    assert.match(messages[1], /Do not issue, send, mark paid, match a payment or create a linked accounting operation/);
     assert.match(messages[4], /Use the report period, not the overview period/);
     assert.match(messages[4], /including refreshing that report's draft/);
     assert.match(messages[4], /Do not change bookkeeping or tax inputs, submit a filing, approve a report or open a submission confirmation flow/);
@@ -2768,8 +2768,8 @@ test("mobile zero-task rows are compact while outstanding work remains actionabl
       .evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().height));
     assert.equal(doneHeights.length, 2);
     assert.ok(doneHeights.every((height) => height <= 64), JSON.stringify(doneHeights));
-    assert.equal(await ui.getByRole("button", { name: "Finalize my transactions", exact: true }).isVisible(), true);
-    assert.match(await ui.locator('[data-suggestion="unreviewedTransactions"]').innerText(), /1 transaction to finalize/);
+    assert.equal(await ui.getByRole("button", { name: "Finalize my operations", exact: true }).isVisible(), true);
+    assert.match(await ui.locator('[data-suggestion="unreviewedTransactions"]').innerText(), /1 operation to finalize/);
     assert.equal(await page.frames()[1].evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.deepEqual(errors, []);
   } finally {

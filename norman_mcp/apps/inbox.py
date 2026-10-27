@@ -233,10 +233,10 @@ async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
     )
     overview_names = {
         "bankBalances": "bank balances",
-        "transactionsCount": "transactions",
+        "transactionsCount": "operations",
         "overdueInvoices": "overdue invoices",
         "unmatchedDocuments": "unattached documents",
-        "unreviewedTransactions": "transactions awaiting review",
+        "unreviewedTransactions": "operations awaiting review",
     }
     availability = {
         "workflows": not bool(runs.get("error")),
@@ -293,9 +293,9 @@ def overview_text(overview: dict[str, Any]) -> str:
     text = (
         f" {count(actions['overdueInvoices'])} overdue unpaid invoices; "
         f"{count(actions['unmatchedDocuments'])} unattached invoice/receipt documents; "
-        f"{count(actions['unreviewedTransactions'])} unfinalized transactions (UNVERIFIED, all history). "
+        f"{count(actions['unreviewedTransactions'])} unfinalized operations (UNVERIFIED, all history). "
         f"For {period['from']} to {period['to']}: "
-        f"{count(overview['transactionsCount'])} transactions."
+        f"{count(overview['transactionsCount'])} operations."
     )
     balances = overview["bankBalances"]
     if balances["status"] == "available":
@@ -385,8 +385,8 @@ def register_inbox(mcp: Any) -> None:
     ) -> dict[str, Any]:
         """Read current bank balances, bookkeeping counts, workflow questions and approvals.
         Bookkeeping tasks include overdue invoices, unattached invoice/receipt documents,
-        transactions with status UNVERIFIED awaiting finalization across all history.
-        Transaction totals cover the previous and current calendar months.
+        operations with status UNVERIFIED awaiting finalization across all history.
+        Operation totals cover the previous and current calendar months.
         Balances are latest synced bank snapshots grouped by currency.
         Approval count comes from the paginated source, not visible rows. Tax reviews are the
         company's recent Tax Autopilot runs waiting on the user. Missing sections are

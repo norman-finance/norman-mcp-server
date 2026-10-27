@@ -1762,7 +1762,7 @@
             description: "Find documents in Norman and link clear matches.",
             mode: "bookkeeping",
             request:
-              "Find missing receipts for transactions in the overview period using Norman documents first. Use other connected sources only after checking that they are available and permitted. Upload and link reliable matches when supported and permitted, then verify the links. Ask only about ambiguous matches or unavailable sources.",
+              "Find missing receipts for operations in the overview period using Norman documents first. Use other connected sources only after checking that they are available and permitted. Upload and link reliable matches when supported and permitted, then verify the links. Ask only about ambiguous matches or unavailable sources.",
           },
           monthlyReconciliation: {
             label: "Finish my monthly bookkeeping",
@@ -1782,13 +1782,13 @@
             label: "Unmatched documents",
             mode: "bookkeeping",
             request:
-              "Match all currently unattached invoices and receipts across all dates to actual transactions. Use vendor, amount, currency, date and invoice identifiers as evidence. Link clear matches where supported and permitted; ask only about ambiguities or missing facts.",
+              "Match all currently unattached invoices and receipts across all dates to actual operations. Use vendor, amount, currency, date and invoice identifiers as evidence. Link clear matches where supported and permitted; ask only about ambiguities or missing facts.",
           },
           unreviewedTransactions: {
-            label: "Unfinalized transactions",
+            label: "Unfinalized operations",
             mode: "bookkeeping",
             request:
-              "Finalize transactions with status UNVERIFIED across all history, independently of the overview period. Check documents, categories and payment information; assign supported categories and finalize clear cases where permitted. Leave transactions with missing required evidence or uncertain treatment unresolved.",
+              "Finalize operations with status UNVERIFIED across all history, independently of the overview period. Check documents, categories and payment information; assign supported categories and finalize clear cases where permitted. Leave operations with missing required evidence or uncertain treatment unresolved.",
           },
           spending: {
             label: "Understand my spending",
@@ -1817,7 +1817,7 @@
             description: "Check the books and list gaps before the handover.",
             mode: "readOnly",
             request:
-              "Review bookkeeping readiness for an accountant handover for the overview period. Identify missing documents, unfinalized transactions and unresolved accounting questions from actual data. Check the company setup before discussing applicable exports such as DATEV. Provide a prioritized checklist; do not create an export or change settings or records.",
+              "Review bookkeeping readiness for an accountant handover for the overview period. Identify missing documents, unfinalized operations and unresolved accounting questions from actual data. Check the company setup before discussing applicable exports such as DATEV. Provide a prioritized checklist; do not create an export or change settings or records.",
           },
           taxPreview: {
             label: "Review a tax return",
@@ -1845,7 +1845,7 @@
             capability: "polishTaxBook",
             country: "PL",
             request:
-              "Confirm this Polish company uses KPiR and review its tax book for the overview period with get_polish_tax_book and, when needed, get_polish_tax_book_operation. Explain included operations, totals and exclusions. These reads synchronize derived books; do not edit source transactions, confirm entries or change tax settings.",
+              "Confirm this Polish company uses KPiR and review its tax book for the overview period with get_polish_tax_book and, when needed, get_polish_tax_book_operation. Explain included operations, totals and exclusions. These reads synchronize derived books; do not edit source operations, confirm entries or change tax settings.",
           },
           polishLedger: {
             label: "Accounts and journals",
@@ -1899,7 +1899,7 @@
           bookkeeping:
             "I am delegating this task to you. Perform only the routine internal changes necessary for this specific task where the evidence is clear and the tools and permissions support them.",
           invoiceDraft:
-            "Create only an unsent invoice draft with explicit draft status. Do not issue, send, mark paid, match a payment or create a linked accounting transaction. Do not create or edit other records; ask about missing required facts.",
+            "Create only an unsent invoice draft with explicit draft status. Do not issue, send, mark paid, match a payment or create a linked accounting operation. Do not create or edit other records; ask about missing required facts.",
           taxPreview:
             "You may generate only the selected report's preview and its temporary preview documents, including refreshing that report's draft where required by the preview tool. Do not change bookkeeping or tax inputs, submit a filing, approve a report or open a submission confirmation flow.",
         });
@@ -2059,7 +2059,7 @@
                       )
                       .join("<br>")
                   : "Unavailable";
-          return `<section class="panel financial" aria-label="Financial overview"><h2 class="section-title">${icon("chart")}Financial snapshot</h2><div class="overview-stats"><div class="overview-stat"><div class="overview-value" data-balance>${balanceText}</div><p class="notice">Bank balances · latest synced by currency${bank?.partial ? "<br>Some bank snapshots are missing" : ""}</p></div><div class="overview-stat"><div class="overview-value" data-transaction-count>${count(o.transactionsCount)}</div><p class="notice">Transactions<br>${period}</p></div></div><button id="intent-financialStatus" data-intent="financialStatus">${INTENTS.financialStatus.label}</button><p class="notice">Understand your balances, income, expenses and what needs attention.</p></section>`;
+          return `<section class="panel financial" aria-label="Financial overview"><h2 class="section-title">${icon("chart")}Financial snapshot</h2><div class="overview-stats"><div class="overview-stat"><div class="overview-value" data-balance>${balanceText}</div><p class="notice">Bank balances · latest synced by currency${bank?.partial ? "<br>Some bank snapshots are missing" : ""}</p></div><div class="overview-stat"><div class="overview-value" data-transaction-count>${count(o.transactionsCount)}</div><p class="notice">Operations<br>${period}</p></div></div><button id="intent-financialStatus" data-intent="financialStatus">${INTENTS.financialStatus.label}</button><p class="notice">Understand your balances, income, expenses and what needs attention.</p></section>`;
         }
         function overview(d) {
           const o = d.overview;
@@ -2086,13 +2086,13 @@
             },
             {
               key: "unreviewedTransactions",
-              noun: "transactions to finalize",
-              title: "Transactions to finalize",
-              zero: "No unfinalized transactions",
+              noun: "operations to finalize",
+              title: "Operations to finalize",
+              zero: "No unfinalized operations",
               outcome:
                 "AI checks documents and categories, then finalizes clear cases",
-              scope: "All unfinalized transactions · all dates",
-              button: "Finalize my transactions",
+              scope: "All unfinalized operations · all dates",
+              button: "Finalize my operations",
             },
           ];
           return `<section class="overview" aria-label="Bookkeeping next steps"><div class="next-step"><div><div class="eyebrow">Your next step</div><h2>Bring your bookkeeping up to date.</h2><p>Match documents, review categories and finish clear cases. Norman asks when something needs your input.</p></div><button id="start-bookkeeping" data-intent="monthlyReconciliation">Start in chat →</button></div><div class="suggestions">${suggestions
@@ -2103,7 +2103,7 @@
                   known && n === 0
                     ? task.zero
                     : known
-                      ? `${n} ${n === 1 ? task.noun.replace("invoices", "invoice").replace("documents", "document").replace("transactions", "transaction") : task.noun}`
+                      ? `${n} ${n === 1 ? task.noun.replace("invoices", "invoice").replace("documents", "document").replace("operations", "operation") : task.noun}`
                       : task.title;
               return `<article class="card suggestion${known && n === 0 ? " is-clear" : ""}" data-suggestion="${task.key}"><div><div class="task-heading">${icon(TASK_ICONS[task.key])}<strong>${title}</strong></div>${!known ? '<p class="muted">Count unavailable</p>' : ""}${known && n === 0 ? "" : `<p class="muted outcome">${task.outcome}</p>`}<p class="muted scope">${task.scope}</p></div>${known && n === 0 ? "" : `<button id="intent-${task.key}" data-intent="${task.key}">${task.button}</button>`}</article>`;
             })
@@ -2173,7 +2173,7 @@
             set_payment_type: ["paymentType"],
             mark_verified: ["userStatus"],
           };
-          return `<h2 id="review-heading" tabindex="-1">${esc(e.ruleName || e.rule?.name || "Automation approval")}</h2><p>${described(e.transaction?.description || "", facts(e.transaction, true))}</p><div class="tag">${esc(human(e.status))}</div>${d.currentUnavailable ? '<p class="error">Current transaction values are unavailable. Discuss this in chat before deciding.</p>' : ""}${state.reviewStale ? '<p class="error">Latest review unavailable. Refresh before confirming.</p>' : ""}<table><thead><tr><th>Action</th><th>Current</th><th>Proposed</th></tr></thead><tbody>${actions.map((a) => `<tr><td>${esc(labels[a.type] || a.type.replaceAll("_", " "))}</td><td>${keys[a.type] && before ? keys[a.type].map((k) => label(before[`${k}Label`]) ?? value(before[k])).join("<br>") : "—"}</td><td>${proposed(a)}</td></tr>`).join("")}</tbody></table>${!actions.length ? '<p class="muted">No planned actions returned.</p>' : ""}<p class="notice">Approval executes the full action list. Actions may send messages or affect payments when listed above.</p><div class="row"><button id="approval-ask">Explain in chat</button></div>${d.canApprove && actions.length && !d.currentUnavailable ? '<label class="confirm"><input type="checkbox" id="confirm"> <span>I reviewed every listed action and approve this execution.</span></label><div class="row"><button class="primary" id="approve" disabled>Approve execution</button></div>' : ""}${d.canApprove ? '<button id="dismiss">Dismiss</button>' : ""}${["success", "partial"].includes(e.status) && !e.revertedAt ? '<button id="undo">Undo execution</button>' : ""}${e.error ? `<p class="error">${esc(stripUrls(e.error))}</p>` : ""}${e.actionsResult?.length ? `<h3>Actual result</h3><table><tbody>${e.actionsResult.map((a) => `<tr><td>${esc(labels[a.type] || a.type || "Action")}</td><td>${esc(human(a.status) || "Result returned")}${a.detail ? `<br>${esc(stripUrls(a.detail))}` : ""}</td></tr>`).join("")}</tbody></table>` : ""}`;
+          return `<h2 id="review-heading" tabindex="-1">${esc(e.ruleName || e.rule?.name || "Automation approval")}</h2><p>${described(e.transaction?.description || "", facts(e.transaction, true))}</p><div class="tag">${esc(human(e.status))}</div>${d.currentUnavailable ? '<p class="error">Current operation values are unavailable. Discuss this in chat before deciding.</p>' : ""}${state.reviewStale ? '<p class="error">Latest review unavailable. Refresh before confirming.</p>' : ""}<table><thead><tr><th>Action</th><th>Current</th><th>Proposed</th></tr></thead><tbody>${actions.map((a) => `<tr><td>${esc(labels[a.type] || a.type.replaceAll("_", " "))}</td><td>${keys[a.type] && before ? keys[a.type].map((k) => label(before[`${k}Label`]) ?? value(before[k])).join("<br>") : "—"}</td><td>${proposed(a)}</td></tr>`).join("")}</tbody></table>${!actions.length ? '<p class="muted">No planned actions returned.</p>' : ""}<p class="notice">Approval executes the full action list. Actions may send messages or affect payments when listed above.</p><div class="row"><button id="approval-ask">Explain in chat</button></div>${d.canApprove && actions.length && !d.currentUnavailable ? '<label class="confirm"><input type="checkbox" id="confirm"> <span>I reviewed every listed action and approve this execution.</span></label><div class="row"><button class="primary" id="approve" disabled>Approve execution</button></div>' : ""}${d.canApprove ? '<button id="dismiss">Dismiss</button>' : ""}${["success", "partial"].includes(e.status) && !e.revertedAt ? '<button id="undo">Undo execution</button>' : ""}${e.error ? `<p class="error">${esc(stripUrls(e.error))}</p>` : ""}${e.actionsResult?.length ? `<h3>Actual result</h3><table><tbody>${e.actionsResult.map((a) => `<tr><td>${esc(labels[a.type] || a.type || "Action")}</td><td>${esc(human(a.status) || "Result returned")}${a.detail ? `<br>${esc(stripUrls(a.detail))}` : ""}</td></tr>`).join("")}</tbody></table>` : ""}`;
         }
         function render() {
           const d = state.data;

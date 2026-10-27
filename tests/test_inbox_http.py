@@ -127,7 +127,7 @@ def test_shared_startup_client_resolves_oauth_identity_per_http_request(monkeypa
                 assert "1 workflows awaiting your answer" in text
                 assert "0 pending automation approvals" in text
                 assert "0 tax reviews." in text
-                assert "unfinalized transactions (UNVERIFIED, all history)" in text
+                assert "unfinalized operations (UNVERIFIED, all history)" in text
                 assert "do not claim that a screen opened" in text
 
         with ThreadPoolExecutor(max_workers=4) as pool:
