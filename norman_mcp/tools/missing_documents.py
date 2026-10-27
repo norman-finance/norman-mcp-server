@@ -95,7 +95,10 @@ async def documents_without_booking(
 ) -> dict:
     url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/attachments/without-booking/")
     params = {name: value for name, value in (("dateFrom", date_from), ("dateTo", date_to)) if value}
-    response = await api.arequest("GET", url, params=params)
+    try:
+        response = await api.arequest("GET", url, params=params)
+    except Exception:  # noqa: BLE001 - API/transport failure means unavailable, never a zero count.
+        return {"error": "Documents without a booking could not be counted.", "status": "unavailable"}
     if (
         not isinstance(response, dict)
         or "error" in response
@@ -108,6 +111,7 @@ async def documents_without_booking(
     ):
         return {"error": "Documents without a booking could not be counted.", "status": "unavailable"}
     return {"total": response["count"], "byMonth": response["months"]}
+
 
 def needs_document(tx: dict) -> bool:
     exempt = tx.get("documentNotRequired", tx.get("document_not_required"))

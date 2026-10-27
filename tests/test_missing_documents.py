@@ -101,7 +101,10 @@ def test_mismatched_active_company_does_not_read_or_relabel_another_company():
     api.arequest.assert_not_called()
 
 
-@pytest.mark.parametrize("counts", [{"error": "Resource not found", "status_code": 404}, {"count": 2}, {"months": []}])
+@pytest.mark.parametrize(
+    "counts",
+    [{"error": "Resource not found", "status_code": 404}, {"count": 2}, {"months": []}, RuntimeError("token refresh")],
+)
 def test_documents_without_booking_never_report_a_zero_when_unknown(counts):
     page = {"count": 1, "next": None, "results": [tx("1")]}
     api = SimpleNamespace(company_id=COMPANY, arequest=AsyncMock(side_effect=[page, counts]))
