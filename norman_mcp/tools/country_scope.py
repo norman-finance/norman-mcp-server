@@ -67,6 +67,18 @@ GERMAN_ONLY_TOOLS = frozenset(
 )
 
 
+# German-only tools a Polish company may call too: the accounting migration serves a PL_FULL sp. z o.o. for its
+# opening balance from the previous books' trial balance (the API's polish_opening).
+ALSO_POLISH = frozenset(
+    {
+        "get_accounting_setup",
+        "analyze_accounting_cutover_documents",
+        "preview_accounting_cutover",
+        "apply_accounting_cutover",
+    }
+)
+GERMANY_AND_POLAND_NOTE = "Germany (DATEV) and Poland (sp. z o.o., PL_FULL opening balance)."
+
 # Opens every German-only tool's description. The shared server lists them for a Polish company as
 # well, so the model reads plainly that they are not its tools before a call is refused.
 GERMANY_ONLY_NOTE = "Germany only."
@@ -97,7 +109,8 @@ class CountryScopedTools:
                     raise ToolError(
                         json.dumps(company if isinstance(company, dict) else {"error": "Company unavailable."})
                     )
-                if company.get("country") != "DE":
+                countries = ("DE", "PL") if fn.__name__ in ALSO_POLISH else ("DE",)
+                if company.get("country") not in countries:
                     raise ToolError(
                         json.dumps(
                             {
@@ -112,7 +125,8 @@ class CountryScopedTools:
             guarded.__annotations__ = {k: v.annotation for k, v in call_signature.parameters.items()}
             guarded.__annotations__["return"] = call_signature.return_annotation
             description = kwargs.get("description") or cleandoc(fn.__doc__ or "")
-            labelled = {**kwargs, "description": f"{GERMANY_ONLY_NOTE} {description}".strip()}
+            note = GERMANY_AND_POLAND_NOTE if fn.__name__ in ALSO_POLISH else GERMANY_ONLY_NOTE
+            labelled = {**kwargs, "description": f"{note} {description}".strip()}
             return self.server.tool(*args, **labelled)(guarded)
 
         return register

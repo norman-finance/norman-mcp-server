@@ -122,6 +122,16 @@ and EU VAT-number proposals remain available. `get_ksef_status` reports the
 connection state, not the token. `search_polish_tax_offices` reads the available
 offices so the owner can choose the correct one.
 
+`lookup_polish_company` reads the selected sp. z o.o. in the KRS and on the
+Ministry of Finance White list by its NIP or KRS number (none: the one Norman
+holds) and persists one pending proposal per detail Norman lacks: the NIP,
+`business_details` (REGON and seat address), `company_register` (KRS number,
+register court, share capital and seat, which invoices must state under KSH
+art. 206) and, for an active VAT payer, `vat_status`. It is the same additive,
+non-idempotent write as `propose_tax_setting_change`; each proposal carries its
+`openUrl`. A register that is down or out of its daily budget is named in
+`company.sources`; the other one still answers.
+
 ### Invoices, assets and books
 
 - Invoice items and operations preserve `vat_code`: `23`, `8`, `5`, `0`, `zw`,
@@ -131,6 +141,14 @@ offices so the owner can choose the correct one.
   `opening_book_value` and `bill_id`. The nested object follows API validation,
   including use date, method, annual rate, VAT recovery, KST/car classification,
   one-off amounts and confirmations. Confirmations are never set automatically.
+- The opening balance of an sp. z o.o. on PL_FULL (bilans otwarcia from the previous
+  books) goes through `get_accounting_setup`, `analyze_accounting_cutover_documents`,
+  `preview_accounting_cutover` and `apply_accounting_cutover` with the trial balance
+  (zestawienie obrotów i sald, CSV/XLSX) as `opening_file_ref`, or typed balances as
+  `manual_balances`; no mode or dates. The preview maps each source account to
+  PL_FULL and shows how; corrections go in `account_mapping`, assets taken over with
+  their umorzenie in `takeover_assets`. Apply needs `confirmed=true` after the owner
+  reviewed the preview. See the `pl-opening-balance` skill.
 - `get_vat_proportion` and `update_vat_proportion` expose the API's Polish VAT
   proportion settings. Use figures confirmed by the user; explicit clearing is
   different from omitting an input.
@@ -140,7 +158,8 @@ offices so the owner can choose the correct one.
   Pass the document currency when known; otherwise allow OCR to determine it.
 
 German public tool names remain discoverable for existing clients. German
-procedures reject Polish companies at invocation, while the internal MCP filters
+procedures reject Polish companies at invocation (the accounting migration tools
+above excepted), while the internal MCP filters
 German procedures when constructing a Polish company's tool inventory. Polish
 resources and prompts do not advertise DATEV/SKR as Polish bookkeeping.
 

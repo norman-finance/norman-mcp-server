@@ -89,9 +89,10 @@ tool names and required arguments stay unchanged. Transaction searches now honor
 page_size, with a 20-result default and bounds of 1-100. Only those seven hashes
 change; new tools and the existing non-legacy Polish proposal tool need no entry.
 
-The October 26 documents-without-booking change updates one description:
-get_missing_documents_summary also counts the client's receipts and invoices that
-no booking holds yet, by month. No name, argument, title or annotation changes.
+The October 26 "no document needed" change updates two signatures: create_rule gains
+optional mark_document_not_required, and search_transactions' no_receipt now lists
+bookings that still need a document (no receipt or invoice, not marked as needing
+none). No existing argument is removed or renamed.
 """
 
 import asyncio

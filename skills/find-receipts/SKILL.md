@@ -1,7 +1,7 @@
 ---
 name: find-receipts
 description: Find and attach missing receipts for business transactions. Search Gmail, email, or other sources for invoices and receipts, then upload them to Norman. Use when the user asks about missing receipts, Belege, attaching documents, or finding invoices from emails.
-version: 1.0.1
+version: 1.0.2
 argument-hint: "[transaction description or vendor name]"
 metadata:
   openclaw:
@@ -15,8 +15,8 @@ metadata:
 Help the user find and attach receipts to their transactions:
 
 ## Step 1: Identify transactions missing receipts
-- Call `search_transactions` to find recent transactions
-- Call `list_attachments` to check which transactions already have receipts attached
+- Call `search_transactions` with `no_receipt=true` to find recent bookings that still need a document
+- A booking marked as needing no document is not missing one. Transfers between own accounts, private withdrawals and deposits, capital contributions and VAT payments to the tax office start that way in German companies. When the user says bookings need no document (payment-provider or bank fees), set `document_not_required=true` with `update_transaction`; for every future match, offer an automation rule with the `mark_document_not_required` action.
 - Present a list of transactions that are missing receipts, sorted by amount (largest first)
 
 ## Step 2: Search for receipts
