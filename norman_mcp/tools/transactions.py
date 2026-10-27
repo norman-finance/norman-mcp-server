@@ -826,8 +826,10 @@ def register_transaction_tools(mcp):
         A payment pays an open booking made from a document or by hand.
 
         German companies: a payment that pays all of it takes the booking over: one row with the booking's lines,
-        document and date, and the bank's day as payment date. A booking in another currency is paid in full by a
-        payment within 3 % of it, at the bank's amount. A smaller amount pays part; the rest stays open.
+        document and date, and the bank's day as payment date. A booking in another currency that nothing has paid
+        yet is paid in full by a payment that pays no other booking and is within 3 % of it, at the bank's amount; a
+        company that keeps a ledger books the difference as an exchange gain or loss. A smaller amount pays part; the
+        rest stays open.
         Finalized or locked payments and payments that already book another document are refused. A Norman
         invoice's booking is paid with link_transaction.
 
