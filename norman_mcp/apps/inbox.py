@@ -17,8 +17,8 @@ from norman_mcp.apps.inbox_overview import load_overview
 from norman_mcp.context import Context, set_api_company_id
 
 # Bump when the HTML changes: hosts cache widget templates by URI.
-INBOX_URI = "ui://norman/inbox-v10.html"
-PREVIOUS_INBOX_URI = "ui://norman/inbox-v9.html"
+INBOX_URI = "ui://norman/inbox-v11.html"
+PREVIOUS_INBOX_URI = "ui://norman/inbox-v10.html"
 READ = ToolAnnotations(
     read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False
 )
@@ -98,14 +98,16 @@ def tax_review(run: dict[str, Any]) -> dict[str, Any]:
         "key": f"autofiling:{run.get('publicId')}",
         "kind": "autofiling",
         "title": (
-            "Tax Autopilot needs your input" if needs_input else "UStVA prepared — waiting for you"
+            "Tax Autopilot needs your input"
+            if needs_input
+            else "Tax return prepared — waiting for you"
         ),
         "detail": f"{start} - {end}" if start and end else "",
         "planned": "",
         "createdAt": run.get("created"),
         "executionId": None,
         "link": "/taxes",
-        "prompt": "Show me the prepared UStVA and what I am approving.",
+        "prompt": "Show me the prepared tax return and what I am approving.",
     }
 
 
@@ -117,14 +119,15 @@ def discovery_capabilities(company: dict[str, Any], tax_runs: Any) -> dict[str, 
     preview; absence does not assert that the company has no tax reports.
     """
     chart = company.get("chartOfAccounts")
+    country = None if company.get("error") else company.get("country")
     ledger = (
-        not company.get("error")
+        country == "DE"
         and company.get("isSme") is True
         and isinstance(chart, dict)
         and chart.get("code") in ("skr03", "skr04")
     )
     tax_preview = False
-    for run in tax_runs if isinstance(tax_runs, list) else []:
+    for run in tax_runs if country == "DE" and isinstance(tax_runs, list) else []:
         if not isinstance(run, dict) or run.get("status") != "ready_for_approval":
             continue
         report = run.get("report")
@@ -136,7 +139,16 @@ def discovery_capabilities(company: dict[str, Any], tax_runs: Any) -> dict[str, 
             continue
         tax_preview = True
         break
-    return {"ledger": ledger, "taxPreview": tax_preview}
+    chart_code = chart.get("code") if isinstance(chart, dict) else None
+    return {
+        "ledger": ledger,
+        "taxPreview": tax_preview,
+        "polishTax": country == "PL",
+        "polishTaxBook": country == "PL"
+        and company.get("isSme") is False
+        and chart_code == "PL_KPIR",
+        "polishLedger": country == "PL" and chart_code == "PL_FULL",
+    }
 
 
 def company_profile(company_id: str, details: dict[str, Any]) -> dict[str, Any]:
@@ -239,7 +251,10 @@ async def load_inbox(api: Any, page: int = 1) -> dict[str, Any]:
         "view": "inbox",
         "companyId": str(company),
         "company": company_profile(str(company), company_details),
-        "capabilities": discovery_capabilities(company_details, tax_runs),
+        "capabilities": discovery_capabilities(
+            company_details if company_details.get("publicId") in (None, str(company)) else {},
+            tax_runs,
+        ),
         "asOf": datetime.now(timezone.utc).isoformat(),
         "questions": questions,
         "runs": active,
@@ -347,6 +362,7 @@ def register_inbox(mcp: Any) -> None:
     # Previously opened clients can still resolve their cached resource URI.
     for previous in (
         PREVIOUS_INBOX_URI,
+        "ui://norman/inbox-v9.html",
         "ui://norman/inbox-v8.html",
         "ui://norman/inbox-v7.html",
         "ui://norman/inbox-v6.html",

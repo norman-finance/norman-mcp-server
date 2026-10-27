@@ -99,7 +99,13 @@ def test_shared_startup_client_resolves_oauth_identity_per_http_request(monkeypa
                 assert "structuredContent" in result, response.text
             data = result.get("structuredContent") or json.loads(result["content"][0]["text"])
             assert data["companyId"] == "company-" + caller
-            assert data["capabilities"] == {"ledger": caller == "alice", "taxPreview": False}
+            assert data["capabilities"] == {
+                "ledger": caller == "alice",
+                "taxPreview": False,
+                "polishTax": False,
+                "polishTaxBook": False,
+                "polishLedger": False,
+            }
             assert data["company"] == {
                 "id": "company-" + caller,
                 "name": "Business company-" + caller,

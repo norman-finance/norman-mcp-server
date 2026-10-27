@@ -57,7 +57,7 @@
           U+2212, U+2215, U+FEFF, U+FFFD;
       }
       /* Norman product tokens: frontend src/main/styles/{tokens,fonts,elements}.css.
-   Flat list and summary treatment follows ApprovalsInbox and RulesSummaryCard. */
+   Square buttons, flat surfaces and monochrome emphasis follow the Norman product. */
       :root {
         color-scheme: light dark;
         --n-surface-page: #fff;
@@ -138,15 +138,17 @@
         max-height: var(--host-height);
       }
       #company {
-        margin: 16px 0 24px;
-        padding-bottom: 16px;
-        border-bottom: 1px solid var(--n-border-default);
+        position: relative;
+        min-width: 0;
+        max-width: 55%;
+        text-align: right;
       }
       #company-toggle {
         display: flex;
         align-items: center;
         gap: 16px;
-        padding: 4px 12px;
+        padding: 4px 0 4px 12px;
+        margin-left: auto;
         border: 0;
         text-align: left;
         max-width: 100%;
@@ -159,7 +161,14 @@
         font-size: 12px;
       }
       #company-options {
-        margin-top: 12px;
+        position: absolute;
+        right: 0;
+        top: 100%;
+        z-index: 2;
+        width: min(360px, calc(100vw - 40px));
+        padding: 8px;
+        background: var(--n-surface-page);
+        border: 1px solid var(--n-border-default);
       }
       #company-options button {
         display: flex;
@@ -182,13 +191,92 @@
       header {
         display: flex;
         gap: 20px;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--n-border-default);
+      }
+      .brand-caption {
+        font-size: 12px;
+        color: var(--n-text-secondary);
+      }
+      .welcome {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        margin: 28px 0 24px;
+      }
+      .eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+      }
+      .welcome .eyebrow {
+        color: var(--n-text-secondary);
+      }
+      .welcome-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+      .next-step {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 32px;
+        padding: 28px;
+        margin-bottom: 16px;
+        background: #080809;
+        color: #fff;
+      }
+      .next-step h2 {
+        font-size: 24px;
+        letter-spacing: -0.02em;
+        margin-bottom: 8px;
+      }
+      .next-step p {
+        max-width: 610px;
+        color: #d4d4d4;
+        margin: 0;
+        font-size: 13px;
+      }
+      .next-step button {
+        flex-shrink: 0;
+        background: #fff;
+        color: #080809;
+        border-color: #fff;
+      }
+      .next-step button:focus-visible {
+        outline-color: #fff;
+      }
+      .workspace-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+        gap: 20px;
+        align-items: start;
+      }
+      .workspace-grid.has-selection {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .panel {
+        min-width: 0;
+        padding: 24px;
+        border: 1px solid var(--n-border-default);
+      }
+      .panel h2 {
+        font-size: 18px;
+      }
+      .in-progress {
+        margin-top: 24px;
       }
       h1 {
-        font-size: 24px;
+        font-size: 28px;
         font-weight: 600;
-        line-height: 1.5;
+        line-height: 1.35;
         margin: 0 0 4px;
         letter-spacing: -0.02em;
       }
@@ -212,7 +300,7 @@
         height: 20px;
         max-width: 100%;
         color: var(--n-text-primary);
-        margin-bottom: 16px;
+        margin-bottom: 8px;
       }
       .muted {
         color: var(--n-text-secondary);
@@ -228,8 +316,8 @@
         background: var(--n-button-surface);
         color: var(--n-button-text);
         border: 1px solid var(--n-border-default);
-        padding: 4px 16px;
-        min-height: 36px;
+        padding: 8px 16px;
+        min-height: 40px;
         font-size: 12px;
         font-weight: 600;
         line-height: 24px;
@@ -264,7 +352,7 @@
         flex-wrap: wrap;
         gap: 8px 20px;
         padding: 12px 0;
-        margin: 24px 0;
+        margin: 0 0 8px;
         border-bottom: 1px solid var(--n-border-default);
       }
       .metric {
@@ -407,8 +495,8 @@
       }
       .overview-stats {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0 24px;
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+        gap: 20px;
       }
       .overview-stats {
         padding: 16px 0;
@@ -418,10 +506,13 @@
       }
       .overview-stat + .overview-stat {
         border-left: 1px solid var(--n-border-default);
-        padding-left: 24px;
+        padding-left: 20px;
+      }
+      .period-date {
+        white-space: nowrap;
       }
       .overview-value {
-        font-size: 24px;
+        font-size: 20px;
         font-weight: 600;
         overflow-wrap: anywhere;
       }
@@ -429,14 +520,22 @@
         margin: 4px 0 0;
       }
       .suggestions {
-        margin-bottom: 32px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
       }
       .suggestion {
         display: flex;
         gap: 16px;
-        align-items: center;
+        flex-direction: column;
+        align-items: stretch;
         justify-content: space-between;
-        padding: 20px 0;
+        padding: 20px;
+        border: 1px solid var(--n-border-default);
+      }
+      .suggestion strong {
+        font-size: 16px;
       }
       .suggestion p {
         margin-bottom: 0;
@@ -450,28 +549,88 @@
       #capability-discovery {
         margin: 24px 0 32px;
       }
-      .discovery-task {
+      .discovery-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .market-tasks {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin: 16px 0 24px;
+      }
+      .icon {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+        vertical-align: middle;
+      }
+      .section-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .task-heading {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .task-heading .icon {
+        width: 36px;
+        height: 36px;
+        padding: 8px;
+        background: var(--n-surface-subtle);
+      }
+      .market-task .icon {
+        display: block;
+        margin-bottom: 12px;
+      }
+      .discovery-task .icon {
+        color: var(--n-text-secondary);
+      }
+      .discovery-task > span:first-of-type {
+        flex: 1;
+      }
+      .empty-optional {
+        display: none;
+      }
+      .market-label {
+        font-size: 12px;
+        color: var(--n-text-secondary);
+      }
+      .discovery-task,
+      .market-task {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 20px;
         width: 100%;
         padding: 14px 16px;
-        border: 0;
-        border-bottom: 1px solid var(--n-border-default);
+        border: 1px solid var(--n-border-default);
         text-align: left;
         line-height: 20px;
       }
-      .discovery-task:hover:not(:disabled) {
+      .market-task {
+        align-items: flex-start;
+      }
+      .market-task .discovery-arrow {
+        align-self: center;
+      }
+      .discovery-task:hover:not(:disabled),
+      .market-task:hover:not(:disabled) {
         background: var(--n-button-hover);
         border-color: var(--n-border-default);
       }
-      .discovery-task strong {
+      .discovery-task strong,
+      .market-task strong {
         display: block;
         font-size: 13px;
         font-weight: 600;
       }
-      .discovery-task .muted {
+      .discovery-task .muted,
+      .market-task .muted {
         display: block;
         margin-top: 3px;
         font-size: 12px;
@@ -504,10 +663,16 @@
         margin-bottom: 16px;
       }
       #status {
-        min-height: 24px;
-        margin-top: 12px;
+        margin: 12px 0;
         color: var(--n-text-secondary);
         font-size: 12px;
+      }
+      #status:empty {
+        margin: 0;
+      }
+      #freshness {
+        margin: 24px 0 0;
+        font-size: 11px;
       }
       #status.error {
         color: var(--n-status-error);
@@ -551,11 +716,8 @@
           height: min(var(--host-height, 100dvh), 100dvh);
         }
         .desktop-only,
-        #freshness,
         .primary-intro,
-        .suggestion .outcome,
-        .empty-on-mobile,
-        .metrics.all-clear {
+        .empty-optional {
           display: none;
         }
         .mobile-only {
@@ -566,11 +728,68 @@
         }
         .brand {
           height: 18px;
-          margin-bottom: 12px;
+          margin-bottom: 8px;
         }
-        #company {
-          margin: 12px 0 16px;
-          padding-bottom: 12px;
+        header {
+          gap: 12px;
+          padding-bottom: 20px;
+        }
+        .brand-caption {
+          display: none;
+        }
+        #company-toggle {
+          font-size: 13px;
+          gap: 8px;
+        }
+        .welcome {
+          flex-direction: column;
+          align-items: stretch;
+          margin: 24px 0 20px;
+          gap: 16px;
+        }
+        .welcome-actions {
+          justify-content: space-between;
+        }
+        .next-step {
+          padding: 24px;
+          gap: 20px;
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .next-step h2 {
+          font-size: 22px;
+        }
+        .suggestions,
+        .workspace-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .panel {
+          padding: 20px;
+        }
+        .market-tasks {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .discovery-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .suggestion .outcome {
+          display: none;
+        }
+        .market-task,
+        .discovery-task {
+          padding: 14px 12px;
+          gap: 8px;
+        }
+        .discovery-arrow {
+          font-size: 16px;
+        }
+        .overview-stats {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .overview-stat + .overview-stat {
+          border-top: 0;
+          padding-top: 0;
+          border-left: 1px solid var(--n-border-default);
         }
         #status {
           margin-top: 0;
@@ -579,10 +798,16 @@
           min-height: 44px;
         }
         .suggestion {
-          padding: 16px 0;
+          padding: 20px;
         }
         .suggestion.is-clear {
-          padding: 10px 0;
+          padding: 16px 20px;
+        }
+        .suggestion.is-clear .icon {
+          width: 20px;
+          height: 20px;
+          padding: 0;
+          background: none;
         }
         .suggestion.is-clear .scope {
           display: none;
@@ -626,6 +851,11 @@
           padding-left: 12px;
         }
       }
+      @media (max-width: 380px) {
+        .market-tasks {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
     </style>
   </head>
   <body>
@@ -648,29 +878,36 @@
               fill="currentColor"
             />
           </svg>
-          <h1>
-            <span class="desktop-only">Let AI handle your bookkeeping</span
-            ><span class="mobile-only">Norman Inbox</span>
-          </h1>
-          <div class="muted">Choose a task. AI takes it from here in chat.</div>
+          <div class="brand-caption">Your accounting workspace</div>
         </div>
-        <button id="refresh">Refresh</button>
+        <section id="company" aria-label="Current company">
+          <button
+            id="company-toggle"
+            aria-expanded="false"
+            aria-controls="company-options"
+            aria-label="Change company"
+          >
+            <span id="company-name">Selected company</span
+            ><span aria-hidden="true">⌄</span>
+          </button>
+          <div id="company-meta" class="muted"></div>
+          <div id="company-options" hidden></div>
+        </section>
       </header>
-      <section id="company" aria-label="Current company">
-        <button
-          id="company-toggle"
-          aria-expanded="false"
-          aria-controls="company-options"
-          aria-label="Change company"
-        >
-          <span id="company-name">Selected company</span
-          ><span aria-hidden="true">⌄</span>
-        </button>
-        <div id="company-meta" class="muted"></div>
-        <div id="company-options" hidden></div>
-      </section>
+      <div class="welcome">
+        <div>
+          <div class="eyebrow">Bookkeeping · Invoices · Taxes</div>
+          <h1>Let’s get your books in order.</h1>
+          <div class="muted">
+            A clear next step for your business. Work with Norman in chat.
+          </div>
+        </div>
+        <div class="welcome-actions">
+          <button id="quick-invoice" hidden>Create an invoice</button
+          ><button id="refresh">Refresh</button>
+        </div>
+      </div>
       <div id="status" role="status" aria-live="polite"></div>
-      <div id="freshness" class="muted notice"></div>
       <section id="chat-request" hidden>
         <label for="chat-request-text">Copy this request into chat</label>
         <textarea id="chat-request-text" readonly></textarea>
@@ -678,6 +915,7 @@
       <section id="content">
         <div class="empty">Connecting to Norman…</div>
       </section>
+      <div id="freshness" class="muted notice"></div>
     </main>
     <script>
       (() => {
@@ -811,6 +1049,8 @@
           return Number.isFinite(a) && Number.isFinite(b) && a < b;
         };
         function syncControls() {
+          document.getElementById("quick-invoice").hidden =
+            !state.data?.overview || state.companyUncertain;
           document
             .querySelectorAll("button")
             .forEach(
@@ -1467,6 +1707,47 @@
             .join(" · ");
         const described = (description, line) =>
           `${esc(description)}${description && line ? "<br>" : ""}${line ? `<span class="facts">${line}</span>` : ""}`;
+        const ICON_PATHS = Object.freeze({
+          invoice:
+            '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6M9 12h6"/>',
+          documents:
+            '<path d="M8 3h8l4 4v13H8V3Z"/><path d="M16 3v5h4M4 7v16h12M11 12h6M11 16h4"/>',
+          check:
+            '<rect x="4" y="4" width="16" height="16"/><path d="m8 12 3 3 5-6"/>',
+          ledger: '<path d="M5 3h14v18H5zM9 3v18M12 8h4M12 12h4M12 16h4"/>',
+          calculator:
+            '<rect x="5" y="2" width="14" height="20"/><path d="M8 6h8M8 11h1m6 0h1m-8 4h1m6 0h1m-8 4h1m6 0h1"/>',
+          chart: '<path d="M3 3v18h18M7 16v-4m5 4V7m5 9v-6"/>',
+          calendar:
+            '<path d="M4 5h16v16H4zM8 2v6m8-6v6M4 10h16m-12 5 3 3 5-5"/>',
+          folder:
+            '<path d="M3 6h7l2 3h9v11H3V6Z"/><path d="M3 6V3h6l3 3h8v3"/>',
+          search:
+            '<circle cx="10" cy="10" r="6"/><path d="m15 15 6 6M7 10h6"/>',
+          arrows: '<path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/>',
+        });
+        function icon(name, className = "icon") {
+          return `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICON_PATHS[name] || ICON_PATHS.documents}</svg>`;
+        }
+        const TASK_ICONS = Object.freeze({
+          overdueInvoices: "invoice",
+          unmatchedDocuments: "documents",
+          unreviewedTransactions: "check",
+          spending: "chart",
+          findReceipts: "search",
+          draftInvoice: "invoice",
+          monthlyReconciliation: "arrows",
+          taxReadiness: "calendar",
+          accountantReadiness: "folder",
+          taxPreview: "calculator",
+          ledger: "ledger",
+          polishTaxBook: "ledger",
+          polishLedger: "ledger",
+          polishJpk: "check",
+          polishEstimates: "calculator",
+          polishStatements: "documents",
+          yearEnd: "calendar",
+        });
         // UI actions select a fixed intent; returned tool/document text never
         // supplies a prompt or a tool name to execute.
         const INTENTS = Object.freeze({
@@ -1543,6 +1824,7 @@
             description: "Open a prepared return for review before filing.",
             mode: "taxPreview",
             capability: "taxPreview",
+            country: "DE",
             request:
               "Find the actual prepared tax reports for this company, confirm the report and its reporting period, and open its tax preview for review. If several reports are possible, ask which one to review. Use the report period, not the overview period. Explain the reported figures and any missing information.",
           },
@@ -1552,11 +1834,66 @@
               "Explain account balances and the entries behind them.",
             mode: "readOnly",
             capability: "ledger",
+            country: "DE",
             request:
               "Inspect the accounting ledger for the overview period. Confirm the company's chart of accounts, explain balances and their underlying entries, keep currencies separate and report incomplete coverage. Do not create or change entries, mappings, account settings or reconciliation state.",
           },
+          polishTaxBook: {
+            label: "KPiR bookkeeping",
+            description: "Review your tax book and included operations.",
+            mode: "polishDerived",
+            capability: "polishTaxBook",
+            country: "PL",
+            request:
+              "Confirm this Polish company uses KPiR and review its tax book for the overview period with get_polish_tax_book and, when needed, get_polish_tax_book_operation. Explain included operations, totals and exclusions. These reads synchronize derived books; do not edit source transactions, confirm entries or change tax settings.",
+          },
+          polishLedger: {
+            label: "Accounts and journals",
+            description: "Explore account balances and journal entries.",
+            mode: "readOnly",
+            capability: "polishLedger",
+            country: "PL",
+            request:
+              "Confirm this Polish company uses PL_FULL, then inspect its journal, trial balance and account sheets for the overview period with the Polish ledger tools. Read all pages required, distinguish bank balances from ledger balances and trace entries to source documents. Do not change any records.",
+          },
+          polishJpk: {
+            label: "JPK_V7 and UPO",
+            description: "Check VAT registers and filing status.",
+            mode: "readOnly",
+            capability: "polishTax",
+            country: "PL",
+            request:
+              "Find the existing JPK_V7 report for this Polish company and the requested reporting period. Ask which report if ambiguous. Read its VAT register and JPK filing status with get_polish_jpk_register and get_polish_jpk_filing_status. Explain figures, missing information, acceptance status and UPO availability from actual results. A prepared XML or downloaded file does not prove acceptance. Do not create, sign or submit a report.",
+          },
+          polishEstimates: {
+            label: "PIT/ZUS or CIT estimates",
+            description: "Understand the estimates for your company.",
+            mode: "polishDerived",
+            capability: "polishTax",
+            country: "PL",
+            request:
+              "Confirm the selected Polish company's legal form and tax settings. Use get_polish_tax_estimates for the actual reporting month, asking which month if needed, to explain applicable PIT/ZUS or CIT figures. The tool may synchronize derived books. Estimates are not filed returns; distinguish missing amounts from zero. Do not change tax inputs or settings or submit anything.",
+          },
+          polishStatements: {
+            label: "Financial statements",
+            description: "Review prepared statements and year-end gaps.",
+            mode: "readOnly",
+            capability: "polishLedger",
+            country: "PL",
+            request:
+              "Confirm this Polish company uses PL_FULL, list its prepared financial statements and ask which year if needed. Read the selected statement, workbook, statutory lines and reported issues with the Polish statement tools. Explain gaps and source coverage. A draft statement or closed year is not evidence of KRS filing. Do not modify records, close a year or file anything.",
+          },
+          yearEnd: {
+            label: "Year-end preparation",
+            description: "Review your books and the work still to do.",
+            mode: "readOnly",
+            request:
+              "Review year-end readiness for this company. Confirm its country, legal form, books and accounting year; ask which year if ambiguous. Read available balances, documents, tax statuses and prepared workbooks applicable to its actual setup. Explain missing evidence and closing work. Do not post closing adjustments, change records, close a year or submit a filing.",
+          },
         });
         const INTENT_MODES = Object.freeze({
+          polishDerived:
+            "You may call only the specified Polish reporting tools and other necessary read-only tools. The specified tools may synchronize derived accounting data; this does not authorize changing source records, settings, confirming entries, approving actions or submitting filings.",
           readOnly:
             "Use actual read-only tool results for this task; do not change records.",
           bookkeeping:
@@ -1576,12 +1913,79 @@
           "taxPreview",
           "ledger",
         ]);
+        function selectedCountry() {
+          const d = state.data;
+          return d?.company?.id === d?.companyId ? d.company.country : null;
+        }
         function intentAvailable(key) {
           return (
             Object.hasOwn(INTENTS, key) &&
+            (!INTENTS[key].country ||
+              INTENTS[key].country === selectedCountry()) &&
             (!INTENTS[key].capability ||
               state.data?.capabilities?.[INTENTS[key].capability] === true)
           );
+        }
+        function marketTasks() {
+          const country = selectedCountry();
+          let tasks = [];
+          if (country === "PL") {
+            tasks = [
+              "polishTaxBook",
+              "polishLedger",
+              "polishJpk",
+              "polishEstimates",
+              intentAvailable("polishLedger") ? "polishStatements" : "yearEnd",
+            ];
+          } else if (country === "DE") {
+            tasks = [
+              "ledger",
+              "taxReadiness",
+              "accountantReadiness",
+              "yearEnd",
+            ];
+          }
+          tasks = tasks.filter(intentAvailable);
+          if (!tasks.length) return "";
+          const labels =
+            country === "DE"
+              ? {
+                  ledger: [
+                    "SKR03/SKR04 accounts",
+                    "Explore your balances and entries.",
+                  ],
+                  taxReadiness: [
+                    "VAT and tax returns",
+                    "Review obligations and report statuses.",
+                  ],
+                  accountantReadiness: [
+                    "DATEV handover",
+                    "Check export readiness and missing records.",
+                  ],
+                }
+              : {};
+          if (country === "PL") {
+            if (intentAvailable("polishTaxBook"))
+              labels.polishEstimates = [
+                "PIT and ZUS estimates",
+                "Understand your income tax and contributions.",
+              ];
+            else if (intentAvailable("polishLedger"))
+              labels.polishEstimates = [
+                "CIT estimates",
+                "Review your company's corporate tax estimate.",
+              ];
+          }
+          return `<div class="market-label">For your company in ${country === "DE" ? "Germany" : "Poland"}</div><div class="market-tasks">${tasks
+            .map((key) => {
+              const task = INTENTS[key],
+                [label, description] = labels[key] || [
+                  task.label,
+                  task.description,
+                ];
+              return `<button class="market-task" id="market-${key}" data-intent="${key}" aria-labelledby="market-${key}-label" aria-describedby="market-${key}-description"><span>${icon(TASK_ICONS[key])}<strong id="market-${key}-label">${label}</strong><span class="muted" id="market-${key}-description">${description}</span></span><span class="discovery-arrow" aria-hidden="true">→</span></button>`;
+            })
+            .join("")}</div>`;
         }
         function discovery(d) {
           // Choose once per company so polling never shuffles a task mid-click.
@@ -1602,9 +2006,9 @@
           const tasks = state.discoveryOrder.filter(intentAvailable),
             row = (key) => {
               const task = INTENTS[key];
-              return `<button class="discovery-task" id="intent-${key}" data-intent="${key}" aria-labelledby="intent-${key}-label" aria-describedby="intent-${key}-description"><span><strong id="intent-${key}-label">${task.label}</strong><span class="muted" id="intent-${key}-description">${task.description}</span></span><span class="discovery-arrow" aria-hidden="true">→</span></button>`;
+              return `<button class="discovery-task" id="intent-${key}" data-intent="${key}" aria-labelledby="intent-${key}-label" aria-describedby="intent-${key}-description">${icon(TASK_ICONS[key])}<span><strong id="intent-${key}-label">${task.label}</strong><span class="muted" id="intent-${key}-description">${task.description}</span></span><span class="discovery-arrow" aria-hidden="true">→</span></button>`;
             };
-          return `<section id="capability-discovery" aria-labelledby="discovery-heading"><h2 id="discovery-heading">You can also ask Norman</h2><p class="notice">Choose a task to start it in this chat.</p><div data-discovery-featured>${tasks.slice(0, 3).map(row).join("")}</div><details id="bookkeeping-help"${state.helpOpen ? " open" : ""}><summary id="bookkeeping-help-toggle">Explore more tasks</summary>${tasks.slice(3).map(row).join("")}</details></section>`;
+          return `<section id="capability-discovery" aria-labelledby="discovery-heading"><h2 id="discovery-heading" class="section-title">${icon("folder")}More ways Norman can help</h2><p class="notice">Choose a task to start it in this chat.</p>${marketTasks()}<div class="discovery-grid" data-discovery-featured>${tasks.slice(0, 3).map(row).join("")}</div><details id="bookkeeping-help"${state.helpOpen ? " open" : ""}><summary id="bookkeeping-help-toggle">Explore more tasks</summary><div class="discovery-grid">${tasks.slice(3).map(row).join("")}</div></details></section>`;
         }
         function intentPrompt(key) {
           if (!intentAvailable(key))
@@ -1626,13 +2030,13 @@
         }
         const count = (value) =>
           Number.isInteger(value) && value >= 0 ? String(value) : "Unavailable";
-        function overview(d) {
+        function financialOverview(d) {
           const o = d.overview;
           // Older hosts may still return the previous Inbox contract.
           if (!o) return "";
           const period =
               o.period?.from && o.period?.to
-                ? `${esc(o.period.from)} — ${esc(o.period.to)}`
+                ? `<span class="period-date">${esc(o.period.from)}</span> — <span class="period-date">${esc(o.period.to)}</span>`
                 : "Period unavailable",
             bank = o.bankBalances,
             balances = Array.isArray(bank?.values) ? bank.values : [],
@@ -1654,40 +2058,44 @@
                           `${esc(entry.amount)} ${esc(entry.currency)}`,
                       )
                       .join("<br>")
-                  : "Unavailable",
-            suggestions = [
-              {
-                key: "overdueInvoices",
-                noun: "overdue invoices",
-                title: "Overdue invoices",
-                zero: "No overdue invoices",
-                outcome:
-                  "AI checks payments and prepares complete reminder drafts",
-                scope: "Overdue unpaid invoices · all dates",
-                button: "Prepare follow-ups",
-              },
-              {
-                key: "unmatchedDocuments",
-                noun: "documents to match",
-                title: "Documents to match",
-                zero: "No documents to match",
-                outcome:
-                  "AI links clear document matches and flags ambiguities",
-                scope: "All unattached invoices and receipts",
-                button: "Match my documents",
-              },
-              {
-                key: "unreviewedTransactions",
-                noun: "transactions to finalize",
-                title: "Transactions to finalize",
-                zero: "No unfinalized transactions",
-                outcome:
-                  "AI checks documents and categories, then finalizes clear cases",
-                scope: "All unfinalized transactions · all dates",
-                button: "Finalize my transactions",
-              },
-            ];
-          return `<section class="overview" aria-label="Bookkeeping next steps"><p class="notice primary-intro">Sends the task to this chat. AI handles clear cases and asks when facts are missing.</p><div class="suggestions">${suggestions
+                  : "Unavailable";
+          return `<section class="panel financial" aria-label="Financial overview"><h2 class="section-title">${icon("chart")}Financial snapshot</h2><div class="overview-stats"><div class="overview-stat"><div class="overview-value" data-balance>${balanceText}</div><p class="notice">Bank balances · latest synced by currency${bank?.partial ? "<br>Some bank snapshots are missing" : ""}</p></div><div class="overview-stat"><div class="overview-value" data-transaction-count>${count(o.transactionsCount)}</div><p class="notice">Transactions<br>${period}</p></div></div><button id="intent-financialStatus" data-intent="financialStatus">${INTENTS.financialStatus.label}</button><p class="notice">Understand your balances, income, expenses and what needs attention.</p></section>`;
+        }
+        function overview(d) {
+          const o = d.overview;
+          if (!o) return "";
+          const suggestions = [
+            {
+              key: "overdueInvoices",
+              noun: "overdue invoices",
+              title: "Overdue invoices",
+              zero: "No overdue invoices",
+              outcome:
+                "AI checks payments and prepares complete reminder drafts",
+              scope: "Overdue unpaid invoices · all dates",
+              button: "Prepare follow-ups",
+            },
+            {
+              key: "unmatchedDocuments",
+              noun: "documents to match",
+              title: "Documents to match",
+              zero: "No documents to match",
+              outcome: "AI links clear document matches and flags ambiguities",
+              scope: "All unattached invoices and receipts",
+              button: "Match my documents",
+            },
+            {
+              key: "unreviewedTransactions",
+              noun: "transactions to finalize",
+              title: "Transactions to finalize",
+              zero: "No unfinalized transactions",
+              outcome:
+                "AI checks documents and categories, then finalizes clear cases",
+              scope: "All unfinalized transactions · all dates",
+              button: "Finalize my transactions",
+            },
+          ];
+          return `<section class="overview" aria-label="Bookkeeping next steps"><div class="next-step"><div><div class="eyebrow">Your next step</div><h2>Bring your bookkeeping up to date.</h2><p>Match documents, review categories and finish clear cases. Norman asks when something needs your input.</p></div><button id="start-bookkeeping" data-intent="monthlyReconciliation">Start in chat →</button></div><div class="suggestions">${suggestions
             .map((task) => {
               const n = o.actions?.[task.key],
                 known = Number.isInteger(n) && n >= 0,
@@ -1697,11 +2105,9 @@
                     : known
                       ? `${n} ${n === 1 ? task.noun.replace("invoices", "invoice").replace("documents", "document").replace("transactions", "transaction") : task.noun}`
                       : task.title;
-              return `<article class="card suggestion${known && n === 0 ? " is-clear" : ""}" data-suggestion="${task.key}"><div><strong>${title}</strong>${!known ? '<p class="muted">Count unavailable</p>' : ""}${known && n === 0 ? "" : `<p class="muted outcome">${task.outcome}</p>`}<p class="muted scope">${task.scope}</p></div>${known && n === 0 ? "" : `<button id="intent-${task.key}" data-intent="${task.key}">${task.button}</button>`}</article>`;
+              return `<article class="card suggestion${known && n === 0 ? " is-clear" : ""}" data-suggestion="${task.key}"><div><div class="task-heading">${icon(TASK_ICONS[task.key])}<strong>${title}</strong></div>${!known ? '<p class="muted">Count unavailable</p>' : ""}${known && n === 0 ? "" : `<p class="muted outcome">${task.outcome}</p>`}<p class="muted scope">${task.scope}</p></div>${known && n === 0 ? "" : `<button id="intent-${task.key}" data-intent="${task.key}">${task.button}</button>`}</article>`;
             })
-            .join(
-              "",
-            )}</div><section aria-label="Financial overview"><h2>Financial overview</h2><div class="overview-stats"><div class="overview-stat"><div class="overview-value" data-balance>${balanceText}</div><p class="notice">Bank balances · latest synced by currency${bank?.partial ? "<br>Some bank snapshots are missing" : ""}</p></div><div class="overview-stat"><div class="overview-value" data-transaction-count>${count(o.transactionsCount)}</div><p class="notice">Transactions<br>${period}</p></div></div><button id="intent-financialStatus" data-intent="financialStatus">${INTENTS.financialStatus.label}</button><p class="notice">AI explains your balances, income, expenses and what needs attention.</p></section>${discovery(d)}</section>`;
+            .join("")}</div></section>`;
         }
         function review() {
           const d = state.detail;
@@ -1782,7 +2188,7 @@
                 ? [focused.selectionStart, focused.selectionEnd]
                 : null;
           // What is on screen; polls back off while it stays the same.
-          state.markup = `${overview(d)}<div class="metrics${Object.values(d.summary).every((n) => n === 0) ? " all-clear" : ""}" aria-label="Decision summary"><div class="metric"><strong>${display(d.summary.questions)}</strong><span>Workflows need you</span></div><div class="metric"><strong>${display(d.summary.approvals)}</strong><span>Pending approvals</span></div><div class="metric"><strong>${display(d.summary.taxReviewsShown)}</strong><span>Tax reviews shown</span></div></div>${d.unavailable.length ? `<p class="error">Unavailable: ${esc(d.unavailable.join(", "))}. Refresh to retry.</p>` : ""}<div class="layout${state.detail ? "" : " no-selection"}"><div>${d.questions.length || d.approvals.length || d.taxReviews.length ? "<h2>Decisions to review</h2>" : ""}${d.questions.map((r) => `<article class="card"><div class="tag">Workflow · ${esc(human(r.blockedReason))}</div><strong>${esc(r.title)}</strong><p>${esc(r.blockedDetail || r.steps?.find((s) => s.active)?.title || "Review the current step.")}</p><button data-run="${esc(r.publicId)}">Review question</button></article>`).join("")}${d.approvals.map((e) => `<article class="card"><div class="tag">Automation approval</div><strong>${esc(e.ruleName || e.rule?.name || "Automation")}</strong><p>${described(e.transaction?.description || "Review planned actions", facts(e.transaction))}</p><button data-execution="${esc(e.publicId)}">Review changes</button></article>`).join("")}${d.taxReviews.map((t) => `<article class="card"><div class="tag">Tax review</div><strong>${esc(t.title)}</strong><p>${esc(t.detail)}</p><button data-tax="${esc(t.key)}">Discuss in chat</button></article>`).join("")}${!d.questions.length && !d.approvals.length && !d.taxReviews.length ? '<div class="empty empty-on-mobile">No workflow questions, approvals or tax reviews returned.</div>' : ""}<div class="row">${d.pagination.page > 1 ? '<button id="previous">Previous approvals</button>' : ""}${d.pagination.hasNext ? '<button id="next">More approvals</button>' : ""}</div><p class="muted notice${d.taxReviews.length || d.approvals.length ? "" : " empty-on-mobile"}">Tax reviews are a bounded list. Approval totals include all pages.</p><h2${d.runs.some((r) => !r.blockedReason) ? "" : ' class="empty-on-mobile"'}>In progress</h2>${
+          state.markup = `${overview(d)}<div class="workspace-grid${state.detail ? " has-selection" : ""}"><section class="panel decisions" aria-label="Decisions to review"><h2 class="section-title">${icon("check")}Ready for your review</h2><div class="metrics${Object.values(d.summary).every((n) => n === 0) ? " all-clear" : ""}" aria-label="Decision summary"><div class="metric"><strong>${display(d.summary.questions)}</strong><span>${d.summary.questions === 1 ? "Question" : "Questions"}</span></div><div class="metric"><strong>${display(d.summary.approvals)}</strong><span>${d.summary.approvals === 1 ? "Approval" : "Approvals"}</span></div><div class="metric"><strong>${display(d.summary.taxReviewsShown)}</strong><span>Tax reviews shown</span></div></div>${d.unavailable.length ? `<p class="error">Unavailable: ${esc(d.unavailable.join(", "))}. Refresh to retry.</p>` : ""}<div class="layout${state.detail ? "" : " no-selection"}"><div>${d.questions.map((r) => `<article class="card"><div class="tag">Workflow · ${esc(human(r.blockedReason))}</div><strong>${esc(r.title)}</strong><p>${esc(r.blockedDetail || r.steps?.find((s) => s.active)?.title || "Review the current step.")}</p><button data-run="${esc(r.publicId)}">Review question</button></article>`).join("")}${d.approvals.map((e) => `<article class="card"><div class="tag">Automation approval</div><strong>${esc(e.ruleName || e.rule?.name || "Automation")}</strong><p>${described(e.transaction?.description || "Review planned actions", facts(e.transaction))}</p><button data-execution="${esc(e.publicId)}">Review changes</button></article>`).join("")}${d.taxReviews.map((t) => `<article class="card"><div class="tag">Tax review</div><strong>${esc(t.title)}</strong><p>${esc(t.detail)}</p><button data-tax="${esc(t.key)}">Discuss in chat</button></article>`).join("")}${!d.questions.length && !d.approvals.length && !d.taxReviews.length ? '<div class="empty">No workflow questions, approvals or tax reviews returned.</div>' : ""}<div class="row">${d.pagination.page > 1 ? '<button id="previous">Previous approvals</button>' : ""}${d.pagination.hasNext ? '<button id="next">More approvals</button>' : ""}</div><p class="muted notice${d.taxReviews.length || d.approvals.length ? "" : " empty-optional"}">Showing available tax reviews. Approval totals include all pages.</p><h2 class="in-progress${d.runs.some((r) => !r.blockedReason) ? "" : " empty-optional"}">In progress</h2>${
             d.runs
               .filter((r) => !r.blockedReason)
               .map(
@@ -1790,25 +2196,28 @@
                   `<article class="card"><strong>${esc(r.title)}</strong><p class="muted">${esc(r.steps?.find((s) => s.active)?.title || r.state)}</p></article>`,
               )
               .join("") ||
-            '<div class="empty empty-on-mobile">No other active workflows.</div>'
-          }</div>${state.detail ? `<aside class="detail" aria-labelledby="review-heading">${review()}</aside>` : ""}</div>`;
+            '<div class="empty empty-optional">No other active workflows.</div>'
+          }</div>${state.detail ? `<aside class="detail" aria-labelledby="review-heading">${review()}</aside>` : ""}</div></section>${financialOverview(d)}</div>${d.overview ? discovery(d) : ""}`;
           content.innerHTML = state.markup;
           const help = document.getElementById("bookkeeping-help");
           if (help)
             help.ontoggle = () => {
               if (help.isConnected) state.helpOpen = help.open;
             };
+          const sendIntent = (key) =>
+            action(
+              async (revision) => {
+                const prompt = intentPrompt(key);
+                guard(revision);
+                await ask(prompt);
+                return "Task sent to chat.";
+              },
+              { kind: "ask" },
+            );
+          document.getElementById("quick-invoice").onclick = () =>
+            sendIntent("draftInvoice");
           content.querySelectorAll("[data-intent]").forEach((button) => {
-            button.onclick = () =>
-              action(
-                async (revision) => {
-                  const prompt = intentPrompt(button.dataset.intent);
-                  guard(revision);
-                  await ask(prompt);
-                  return "Task sent to chat.";
-                },
-                { kind: "ask" },
-              );
+            button.onclick = () => sendIntent(button.dataset.intent);
           });
           content.querySelectorAll("[data-execution]").forEach(
             (b) =>

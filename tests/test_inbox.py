@@ -110,7 +110,13 @@ def test_inbox_counts_all_approvals_and_only_actual_blocked_workflows():
     }
     assert all(data["sourceAvailability"].values())
     assert "private" not in str(data)
-    assert data["capabilities"] == {"ledger": True, "taxPreview": True}
+    assert data["capabilities"] == {
+        "ledger": True,
+        "taxPreview": True,
+        "polishTax": False,
+        "polishTaxBook": False,
+        "polishLedger": False,
+    }
     assert data["company"] == {
         "id": COMPANY,
         "name": "Musterfirma GmbH",
@@ -203,9 +209,19 @@ def test_company_profile_accepts_only_display_field_types():
 )
 def test_discovery_ledger_requires_supported_company_metadata(company_details, ledger):
     api = Api()
-    api.company_details = company_details
+    api.company_details = (
+        {"country": "DE", **company_details}
+        if isinstance(company_details, dict)
+        else company_details
+    )
     data = asyncio.run(load_inbox(api))
-    assert data["capabilities"] == {"ledger": ledger, "taxPreview": True}
+    assert data["capabilities"] == {
+        "ledger": ledger,
+        "taxPreview": isinstance(company_details, dict) and not company_details.get("error"),
+        "polishTax": False,
+        "polishTaxBook": False,
+        "polishLedger": False,
+    }
     assert data["summary"]["approvals"] == 51
     assert data["overview"]["actions"]["unreviewedTransactions"] == 4
     assert data["unavailable"] == []
@@ -232,7 +248,13 @@ def test_discovery_tax_preview_requires_an_actual_prepared_report(tax_runs, tax_
     api = Api()
     api.tax_runs = tax_runs
     data = asyncio.run(load_inbox(api))
-    assert data["capabilities"] == {"ledger": True, "taxPreview": tax_preview}
+    assert data["capabilities"] == {
+        "ledger": True,
+        "taxPreview": tax_preview,
+        "polishTax": False,
+        "polishTaxBook": False,
+        "polishLedger": False,
+    }
     assert data["overview"]["actions"]["unreviewedTransactions"] == 4
     assert "private" not in str(data)
     assert not [call for call in api.calls if "/taxes/reports/" in call[1]]
@@ -294,6 +316,7 @@ def test_previously_opened_inbox_resource_uri_still_resolves():
     async def read_templates():
         current = list(await mcp.read_resource(INBOX_URI))[0].content
         previous = list(await mcp.read_resource(PREVIOUS_INBOX_URI))[0].content
+        v9 = list(await mcp.read_resource("ui://norman/inbox-v9.html"))[0].content
         v8 = list(await mcp.read_resource("ui://norman/inbox-v8.html"))[0].content
         v7 = list(await mcp.read_resource("ui://norman/inbox-v7.html"))[0].content
         v6 = list(await mcp.read_resource("ui://norman/inbox-v6.html"))[0].content
@@ -301,12 +324,12 @@ def test_previously_opened_inbox_resource_uri_still_resolves():
         v4 = list(await mcp.read_resource("ui://norman/inbox-v4.html"))[0].content
         v3 = list(await mcp.read_resource("ui://norman/inbox-v3.html"))[0].content
         v2 = list(await mcp.read_resource("ui://norman/inbox-v2.html"))[0].content
-        return current, previous, v8, v7, v6, v5, v4, v3, v2
+        return current, previous, v9, v8, v7, v6, v5, v4, v3, v2
 
-    current, previous, v8, v7, v6, v5, v4, v3, v2 = asyncio.run(read_templates())
-    assert INBOX_URI == "ui://norman/inbox-v10.html"
-    assert PREVIOUS_INBOX_URI == "ui://norman/inbox-v9.html"
-    assert current == previous == v8 == v7 == v6 == v5 == v4 == v3 == v2
+    current, previous, v9, v8, v7, v6, v5, v4, v3, v2 = asyncio.run(read_templates())
+    assert INBOX_URI == "ui://norman/inbox-v11.html"
+    assert PREVIOUS_INBOX_URI == "ui://norman/inbox-v10.html"
+    assert current == previous == v9 == v8 == v7 == v6 == v5 == v4 == v3 == v2
     assert "financialStatus" in previous
 
 
@@ -447,3 +470,39 @@ def test_approval_review_shows_names_not_ids():
     ]
     assert result["before"]["vendorLabel"] == "Old Vendor GmbH"
     assert all(c[0] == "GET" for c in api.calls)
+
+
+@pytest.mark.parametrize(
+    ("country", "sme", "chart", "enabled"),
+    [
+        ("DE", True, "skr03", {"ledger", "taxPreview"}),
+        ("DE", False, "skr04", {"taxPreview"}),
+        ("PL", False, "PL_KPIR", {"polishTax", "polishTaxBook"}),
+        ("PL", True, "PL_FULL", {"polishTax", "polishLedger"}),
+        ("PL", True, "PL_KPIR", {"polishTax"}),
+        ("PL", "false", "PL_KPIR", {"polishTax"}),
+        ("PL", None, None, {"polishTax"}),
+        ("PL", True, "skr03", {"polishTax"}),
+        ("DE", True, "PL_FULL", {"taxPreview"}),
+        (None, True, "skr03", set()),
+        ("FR", True, "skr03", set()),
+    ],
+)
+def test_discovery_matches_actual_country_and_books(country, sme, chart, enabled):
+    api = Api()
+    api.company_details.update(country=country, isSme=sme, chartOfAccounts={"code": chart})
+    data = asyncio.run(load_inbox(api))
+    assert {key for key, value in data["capabilities"].items() if value} == enabled
+    assert all(isinstance(value, bool) for value in data["capabilities"].values())
+    assert len(api.calls) == 10 and all(call[0] == "GET" for call in api.calls)
+    # An actual review remains a review without inventing a country-specific report type.
+    assert "UStVA" not in str(data["taxReviews"])
+    assert "JPK" not in str(data["taxReviews"])
+
+
+def test_discovery_rejects_metadata_from_another_company():
+    api = Api()
+    api.company_details.update(publicId=REPORT, country="PL", chartOfAccounts={"code": "PL_FULL"})
+    data = asyncio.run(load_inbox(api))
+    assert not any(data["capabilities"].values())
+    assert data["company"]["country"] is None

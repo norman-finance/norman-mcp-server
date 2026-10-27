@@ -2008,7 +2008,7 @@ test("every task delegates a fixed scoped request while the iframe makes no muta
         await ui
           .locator("#bookkeeping-help")
           .evaluate((details) => (details.open = true));
-      await ui.locator(`[data-intent="${key}"]`).click();
+      await ui.locator(`#intent-${key}`).click();
       await idle(page);
     }
     const messages = await chatMessages(page);
@@ -2241,7 +2241,7 @@ test("AI tasks have one clear chat action, discovery expansion survives refresh 
   try {
     assert.equal(
       await ui.getByRole("heading", { level: 1 }).innerText(),
-      "Let AI handle your bookkeeping",
+      "Let’s get your books in order.",
     );
     assert.equal(await ui.locator("aside").count(), 0);
     assert.equal(
@@ -2256,10 +2256,10 @@ test("AI tasks have one clear chat action, discovery expansion survives refresh 
     );
     assert.equal(boxes.length, 3);
     for (const box of boxes) {
-      assert.equal(box.x, boxes[0].x);
-      assert.equal(box.width, boxes[0].width);
+      assert.equal(box.y, boxes[0].y);
+      assert.ok(Math.abs(box.width - boxes[0].width) < 1);
     }
-    assert.ok(boxes[1].y >= boxes[0].bottom && boxes[2].y >= boxes[1].bottom);
+    assert.ok(boxes[1].x >= boxes[0].x + boxes[0].width && boxes[2].x >= boxes[1].x + boxes[1].width);
     for (const label of [
       "Prepare follow-ups",
       "Match my documents",
@@ -2273,7 +2273,7 @@ test("AI tasks have one clear chat action, discovery expansion survives refresh 
     assert.ok(
       (
         await ui
-          .getByRole("heading", { name: "Financial overview", exact: true })
+          .getByRole("heading", { name: "Financial snapshot", exact: true })
           .boundingBox()
       ).y >= boxes[2].bottom,
     );
@@ -3190,4 +3190,96 @@ test("flexible hosts receive natural initial height even if observation preceded
   } finally {
     await page.close();
   }
+});
+
+test("variant B shortcuts follow company switching from Germany to JDG and full Polish books", async () => {
+  const { page, ui, errors } = await fixture(1100, { overview: true });
+  try {
+    await page.evaluate(() => {
+      window.inbox.capabilities = { ledger: true, taxPreview: true };
+      window.companies[1] = { ...window.companies[1], name: "Demo JDG", country: "PL", legalForm: "JDG" };
+      const jdg = structuredClone(window.inbox);
+      jdg.companyId = window.companies[1].id;
+      jdg.company = structuredClone(window.companies[1]);
+      jdg.capabilities = { polishTax: true, polishTaxBook: true, polishLedger: false };
+      jdg.questions = []; jdg.approvals = []; jdg.taxReviews = [];
+      jdg.summary = { questions: 0, approvals: 0, taxReviewsShown: 0 };
+      jdg.pagination = { page: 1, hasNext: false };
+      jdg.overview.bankBalances = { status: "no_data", values: [] };
+      window.inboxes[jdg.companyId] = jdg;
+      window.pushInbox();
+    });
+    await idle(page);
+    assert.equal(await ui.locator("#market-ledger").isVisible(), true);
+    assert.equal(await ui.locator("#market-polishTaxBook").count(), 0);
+    await ui.locator("#company-toggle").click();
+    await idle(page);
+    await ui.locator('[data-company-id="22222222-2222-4222-8222-222222222222"]').click();
+    await idle(page);
+    assert.equal(await ui.locator("#company-name").innerText(), "Demo JDG");
+    assert.equal(await ui.locator("#market-ledger,#intent-ledger,#intent-taxPreview,#market-polishLedger,#market-polishStatements").count(), 0);
+    assert.equal(await ui.locator("#market-polishTaxBook").isVisible(), true);
+    assert.equal(await ui.locator("#market-polishJpk").isVisible(), true);
+    assert.equal(await ui.locator("[data-tax]").count(), 0);
+    assert.equal(await ui.locator("[data-balance]").innerText(), "No synced bank balances");
+    for (const key of ["polishTaxBook", "polishJpk", "polishEstimates", "yearEnd"])
+      { await ui.locator(`#market-${key}`).click(); await idle(page); }
+    const messages = (await chatMessages(page)).map(m => m.params.content[0].text);
+    for (const text of messages) {
+      assert.match(text, /Use the company selected in Norman Inbox/);
+      assert.match(text, /Obtain separate authorization/);
+      assert.doesNotMatch(text, /Perform only the routine internal changes/);
+    }
+    assert.match(messages[0], /get_polish_tax_book/);
+    assert.match(messages[0], /may synchronize derived accounting data/);
+    assert.doesNotMatch(messages[0], /Use actual read-only tool results/);
+    assert.match(messages[1], /get_polish_jpk_filing_status/);
+    assert.match(messages[1], /Use actual read-only tool results/);
+    assert.match(messages[2], /get_polish_tax_estimates/);
+    assert.match(messages[3], /Do not post closing adjustments/);
+    assert.equal((await chatScopes(page)).at(-1).companyId, "22222222-2222-4222-8222-222222222222");
+    await page.evaluate(() => {
+      window.inbox.company.isSme = true;
+      window.inbox.company.legalForm = "sp. z o.o.";
+      window.inbox.capabilities = { polishTax: true, polishTaxBook: false, polishLedger: true };
+      window.pushInbox();
+    });
+    await idle(page);
+    assert.equal(await ui.locator("#market-polishTaxBook").count(), 0);
+    for (const key of ["polishLedger", "polishStatements"])
+      { await ui.locator(`#market-${key}`).click(); await idle(page); }
+    assert.match((await chatMessages(page)).at(-1).params.content[0].text, /not evidence of KRS filing/);
+    await page.evaluate(() => { window.inbox.company.id = "wrong-company"; window.pushInbox(); });
+    await idle(page);
+    assert.equal(await ui.locator(".market-task,#intent-ledger,#intent-taxPreview").count(), 0);
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+for (const width of [320, 390]) test(`variant B has a scoped main action and ${width}px dark-mode layout without overflow`, async () => {
+  const { page, ui, errors } = await fixture(width, { overview: true, hostContext: { theme: "dark" } });
+  try {
+    await ui.locator("#start-bookkeeping").click();
+    await idle(page);
+    assert.match((await chatMessages(page)).at(-1).params.content[0].text, /Complete monthly bookkeeping within the overview period/);
+    assert.match((await chatMessages(page)).at(-1).params.content[0].text, /Do not approve pending automation/);
+    await ui.locator("#quick-invoice").click();
+    await idle(page);
+    assert.match((await chatMessages(page)).at(-1).params.content[0].text, /Explicitly pass status="draft"/);
+    const layout = await page.frames()[1].evaluate(() => {
+      const rect = s => document.querySelector(s).getBoundingClientRect();
+      const ids = [...document.querySelectorAll("[id]")].map(el => el.id);
+      const buttons = [...document.querySelectorAll("button")].filter(b => b.getClientRects().length);
+      return { overflow: document.documentElement.scrollWidth > innerWidth,
+        stacked: rect(".financial").top >= rect(".decisions").bottom,
+        targets: buttons.every(b => b.getBoundingClientRect().height >= 44),
+        flat: buttons.every(b => getComputedStyle(b).borderRadius === "0px" && getComputedStyle(b).boxShadow === "none"),
+        unique: new Set(ids).size === ids.length,
+        background: getComputedStyle(document.body).backgroundColor };
+    });
+    assert.deepEqual(layout, { overflow: false, stacked: true, targets: true, flat: true, unique: true, background: "rgb(10, 10, 11)" });
+    assert.equal((await mutations(page)).length, 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
 });
