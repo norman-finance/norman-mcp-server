@@ -113,7 +113,7 @@ def register_transaction_tools(mcp):
         max_amount: Optional[float] = Field(default=None, description="Maximum transaction amount"),
         category: Optional[str] = Field(default=None, description="Transaction category name"),
         no_invoice: Optional[bool] = Field(default=None, description="Whether to exclude invoices"),
-        no_receipt: Optional[bool] = Field(default=None, description="True filters transactions with no primary receipt attached in the database. Use for missing-receipt discovery; no attachment archive scan is needed to establish this state."),
+        no_receipt: Optional[bool] = Field(default=None, description="True lists bookings that still need a document: no receipt or invoice attached and not marked as needing none. Use for missing-receipt discovery; no attachment archive scan is needed to establish this state."),
         status: Optional[str] = Field(default=None, description="Status of the transaction (UNVERIFIED, VERIFIED)"),
         cashflow_type: Optional[str] = Field(
             default=None, description="Cashflow type of the transaction (INCOME, EXPENSE)"
@@ -147,7 +147,7 @@ def register_transaction_tools(mcp):
             limit: Results per page (default 20)
             page: Page number; keep filters and limit unchanged while paging
             no_invoice: Whether to exclude invoices
-            no_receipt: Whether to exclude receipts
+            no_receipt: Whether to list only bookings that still need a document
             status: Status of the transaction (UNVERIFIED, VERIFIED)
             cashflow_type: Cashflow type of the transaction (INCOME, EXPENSE)
 
@@ -165,7 +165,7 @@ def register_transaction_tools(mcp):
         amounts = {"minAmount": min_amount, "maxAmount": max_amount}
         filters = {
             "description": description, "dateFrom": from_date, "dateTo": to_date, "categoryName": category,
-            "noInvoice": no_invoice, "noAttachment": no_receipt, "status": status, "cashflowType": cashflow_type,
+            "noInvoice": no_invoice, "missingDocument": no_receipt, "status": status, "cashflowType": cashflow_type,
             "paymentType": payment_type, "source": source,
         }
         params = {name: value for name, value in amounts.items() if value is not None}

@@ -111,7 +111,7 @@ def test_transaction_search_keeps_zero_bounds_and_combines_paging_with_filters()
     assert api.requests[0][1].endswith("/companies/company-1/accounting/transactions/")
     assert api.requests[0][2]["params"] == {
         "minAmount": 0, "maxAmount": 0, "categoryName": "Usługi", "page_size": 10,
-        "page": 2, "paymentType": "NOT_PAID", "source": "document", "noAttachment": True,
+        "page": 2, "paymentType": "NOT_PAID", "source": "document", "missingDocument": True,
     }
 
 
