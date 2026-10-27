@@ -511,7 +511,9 @@ def register_document_tools(mcp):
     async def list_attachments(
         ctx: Context,
         file_name: Optional[str] = Field(default=None, description="Filter by file name (case insensitive partial match)"),
-        linked: Optional[bool] = Field(default=None, description="Legacy API semantics: true returns UNLINKED documents; false returns linked documents. Omit to search all documents."),
+        linked: Optional[bool] = Field(default=None, description="Deprecated, use has_booking. Legacy API semantics: true returns UNLINKED documents; false returns linked documents. Omit to search all documents."),
+        has_booking: Optional[bool] = Field(default=None, description="false: the receipts and invoices no booking holds yet, as its document or as a supporting one; these are what Norman's document review works through. true: the documents a booking holds."),
+        payable: Optional[bool] = Field(default=None, description="true: the documents a payment can still take: no booking holds them, or only a German booking not paid yet, which the payment then pays."),
         attachment_type: Optional[str] = Field(default=None, description="Filter by attachment type (invoice, receipt, contract, other)"),
         description: Optional[str] = Field(default=None, description="Filter by description (case insensitive partial match)"),
         brand_name: Optional[str] = Field(default=None, description="Filter by brand name (case insensitive partial match)"),
@@ -532,7 +534,9 @@ def register_document_tools(mcp):
         
         Args:
             file_name: Filter by file name (case insensitive partial match)
-            linked: Legacy API semantics: true returns UNLINKED documents; false returns linked documents. Omit to search all documents.
+            linked: Deprecated, use has_booking. Legacy API semantics: true returns UNLINKED documents; false returns linked documents.
+            has_booking: false lists the receipts and invoices no booking holds yet; true the ones a booking holds
+            payable: true lists the documents a payment can still take
             attachment_type: Filter by attachment type (invoice, receipt, contract, other)
             description: Filter by description (case insensitive partial match)
             brand_name: Filter by brand name (case insensitive partial match)
@@ -568,6 +572,10 @@ def register_document_tools(mcp):
             params["file_name"] = file_name
         if linked is not None:
             params["linked"] = linked
+        if has_booking is not None:
+            params["has_booking"] = has_booking
+        if payable is not None:
+            params["payable"] = payable
         if attachment_type:
             params["has_type"] = attachment_type
         if description:

@@ -1,7 +1,7 @@
 ---
 name: monthly-reconciliation
 description: Perform a complete monthly financial reconciliation - review all transactions, match invoices, check outstanding payments, and prepare for tax filing. Use when the user wants to close the month, do monthly bookkeeping, or perform a Monatsabschluss (zamknięcie miesiąca).
-version: 1.1.1
+version: 1.1.2
 disable-model-invocation: true
 argument-hint: "[month, e.g. January 2026]"
 metadata:
@@ -42,10 +42,12 @@ Guide the user through a complete monthly reconciliation:
 - Bookings that stay open are unpaid bills or receivables: list them in the summary.
 
 ## Step 5: Document Check
-- Call `list_attachments` for the period
-- Identify transactions without attached receipts (especially expenses)
+- Take the period's unfinalized bookings without a document first (`search_transactions` with `no_receipt=true` and `status=UNVERIFIED`), then the other unfinalized ones: Norman's booking review uses the same order
+- For a payment without a document, call `find_booking_payments` with its id: an open booking it fits already holds the document; pay it with `pay_booking`
+- Otherwise search `list_attachments` with `has_booking=false` and the supplier, and link a match with `link_attachment_transaction`
+- `list_attachments` with `has_booking=false` and the period's `date_from`/`date_to` lists the documents that still wait for a booking
 - Remind the user to upload missing receipts with `upload_bulk_attachments`
-- Use `link_attachment_transaction` to connect any newly uploaded receipts
+- In the app, **Buchhaltung → Prüfen** (Accounting → Review) works through these bookings one at a time, and **Belege → Belege prüfen** (Documents → Review documents) through the documents without a booking
 
 ## Step 6: Tax Preparation
 - Call `get_company_tax_statistics` for the period overview
