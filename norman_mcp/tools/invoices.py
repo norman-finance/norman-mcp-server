@@ -812,11 +812,15 @@ def register_invoice_tools(mcp):
 
         German companies: an invoice is booked when it is issued. A transaction
         that pays the whole open amount takes that booking over: it gets the
-        invoice's lines and the invoice turns paid. A smaller `amount` pays part
-        of the invoice and the rest stays open; one transaction can pay several
-        invoices this way. A larger `amount` is capped at what is still open and at
-        what the transaction has left; the transaction keeps its rest for another
-        invoice or a category. The response's `payments` lists what is paid and open.
+        invoice's lines and the invoice turns paid. An invoice in another currency
+        with no credit note and no earlier payment is paid in full by a transaction
+        that pays no other invoice and is within 3 % of its euro value, at the euros
+        the bank booked; a company that keeps a ledger books the difference as an
+        exchange gain or loss. A smaller `amount` pays part of the invoice and the
+        rest stays open; one transaction can pay several invoices this way. A larger
+        `amount` is capped at what is still open and at what the transaction has
+        left; the transaction keeps its rest for another invoice or a category. The
+        response's `payments` lists what is paid and open.
 
         Other companies: invoice lines replace the transaction's items and the
         invoice turns paid; nonempty items replace them with the supplied lines
