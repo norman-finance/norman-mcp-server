@@ -1,9 +1,11 @@
 """DATEV file reading and Ledger handoff checks, implemented by the shared API."""
 
 from typing import Any, Dict, Optional
+from urllib.parse import urljoin
 
 from pydantic import Field
 
+from norman_mcp import config
 from norman_mcp.context import Context
 from norman_mcp.tools.accounting import (
     READ_ONLY,
@@ -63,6 +65,32 @@ def register_datev_tools(mcp: Any) -> None:
             ),
             file_fields=[("file", file_ref)],
         )
+
+    @mcp.tool(title="Get DATEV Changes Since Handoff", annotations=READ_ONLY)
+    async def get_datev_changes_since_handoff(
+        ctx: Context,
+        date_from: Optional[str] = Field(default=None, description="Period start, YYYY-MM-DD; send with date_to"),
+        date_to: Optional[str] = Field(default=None, description="Period end, YYYY-MM-DD; send with date_from"),
+    ) -> Dict[str, Any]:
+        """What a new DATEV file would hold differently from the newest file the tax advisor has.
+
+        One entry per source (bookings or GmbH ledger) and period the advisor has a file of, newest period
+        first: the newest download by an advisor of the client, DATEV push or email to the advisor, and the
+        bookings a new file would add, change or leave out. A change names the field with its old and new
+        value (amount, side, account, counter_account, vat_key, date, document_number, text, documents, lines
+        for the number of lines, or counterparty for a new counterparty without an account yet). A booking
+        leaves out as deleted, not_finalized or moved to another period. The owner's own download does not
+        count. Pass date_from and date_to for one period. Changes nothing.
+        """
+        api, _company_id, error = _api_and_company(ctx)
+        if error:
+            return error
+        periods = await api.arequest(
+            "GET",
+            urljoin(config.api_base_url, "api/v1/accounting/datev-export/changes/"),
+            params=_compact({"date_from": date_from, "date_to": date_to}),
+        )
+        return periods if isinstance(periods, dict) else {"periods": periods}
 
     @mcp.tool(title="Validate Ledger DATEV Export", annotations=READ_ONLY)
     async def validate_ledger_datev_export(

@@ -76,6 +76,9 @@ available linked documents; unreadable attached documents block the package.
 
 - `validate_ledger_datev_export`: preview structure, source coverage and documents
   for a period without saving company settings, creating a download or sending it.
+- `get_datev_changes_since_handoff`: for each period the advisor has a file of (a download by an
+  advisor of the client, a DATEV push or an email to the advisor), the bookings a new file would add,
+  change or leave out. The owner's own download does not count.
 - `read_datev_file`: inspect an uploaded EXTF/DTVF **Buchungsstapel** without
   importing it. Obtain a `file_ref` through `request_file_upload` or `POST /files/upload`, then
   filter by account, document date, text or minimum amount. Reuse that reference

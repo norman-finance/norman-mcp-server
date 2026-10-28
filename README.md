@@ -134,6 +134,7 @@ and closing postings.
 
 - `trigger_datev_export`: prepare the export and download package.
 - `validate_ledger_datev_export`: check structure, source coverage and documents before handoff.
+- `get_datev_changes_since_handoff`: list the bookings added, changed or left out since the advisor's last file of each period.
 - `read_datev_file`: inspect an **EXTF/DTVF** file without importing postings into your books.
 
 Try: "Check the full GmbH Ledger export before I give it to my accountant."

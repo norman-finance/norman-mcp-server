@@ -1,7 +1,7 @@
 ---
 name: ta-datev-preparation
 description: Prepare a DATEV export for a German client company (Germany only). Verifies all transactions are categorized, receipts attached, DATEV settings configured, and triggers the export. Use when a tax advisor asks to prepare DATEV, export bookkeeping data, or send data to their tax software.
-version: 1.0.1
+version: 1.1.0
 metadata:
   openclaw:
     emoji: "\U0001F4E6"
@@ -34,7 +34,12 @@ Help the tax advisor prepare and execute a DATEV export:
 - Focus on expense transactions >250 EUR (required for Vorsteuerabzug)
 - Report the count and recommend collecting missing receipts before export
 
-## Step 4: Pre-export summary
+## Step 4: Check changes since the advisor's last file
+- Call `get_datev_changes_since_handoff` to compare each period the advisor already has a file of (a download by an advisor of the client, a DATEV push or an email to the advisor) with the books now
+- For each period with new, changed or removed bookings, name them: the changed values as old → new (for example account 6640 → 6600), and why a booking left the file (deleted, no longer finalized, moved to another period)
+- A changed period needs a new file; include it in the summary as an issue to resolve
+
+## Step 5: Pre-export summary
 
 ### DATEV Configuration
 - Chart of accounts: SKR03/SKR04
@@ -48,9 +53,9 @@ Help the tax advisor prepare and execute a DATEV export:
 - Ready for export: X (Y%)
 
 ### Issues to Resolve
-List any blocking issues before export
+List any blocking issues before export, and the periods that changed since the advisor's last file
 
-## Step 5: Trigger export
+## Step 6: Trigger export
 - Only proceed if the advisor confirms
 - Call `trigger_datev_export` to generate the DATEV EXTF CSV package
 - The export includes:
@@ -59,10 +64,10 @@ List any blocking issues before export
   - Attached documents
 - Provide the download link from the response
 
-## Step 6: Post-export
+## Step 7: Post-export
 - Confirm the export was successful
 - Remind the advisor to import the file into their DATEV software
-- Suggest marking the period as exported to avoid duplicate exports
+- Norman keeps a record of each download, push and email; later changes to the period show in `get_datev_changes_since_handoff`
 
 Tips:
 - DATEV EXTF format is the standard for German tax advisors

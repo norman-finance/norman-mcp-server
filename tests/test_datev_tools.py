@@ -109,7 +109,7 @@ def test_reader_refuses_paths_expired_refs_invalid_limits_and_missing_company():
     assert not api.requests
 
 
-@pytest.mark.parametrize("tool", ["trigger_datev_export", "validate_ledger_datev_export"])
+@pytest.mark.parametrize("tool", ["trigger_datev_export", "validate_ledger_datev_export", "get_datev_changes_since_handoff"])
 def test_german_datev_exports_reject_polish_company_before_domain_request(tool):
     api = FakeApi({**COMPANY, "country": "PL", "chartOfAccounts": {"code": "PL_FULL"}})
     result = call_tool(tool, PERIOD, api)
