@@ -77,10 +77,11 @@ def register_datev_tools(mcp: Any) -> None:
         One entry per source (bookings or GmbH ledger) and period the advisor has a file of, newest period
         first: the newest download by an advisor of the client, DATEV push or email to the advisor, and the
         bookings a new file would add, change or leave out. A change names the field with its old and new
-        value (amount, side, account, counter_account, vat_key, date, document_number, text, documents, lines
-        for the number of lines, or counterparty for a new counterparty without an account yet). A booking
-        leaves out as deleted, not_finalized or moved to another period. The owner's own download does not
-        count. Pass date_from and date_to for one period. Changes nothing.
+        value (amount, side, account, counter_account, vat_key, date, document_number, text, any other DATEV
+        column by its DATEV name with its DATEV value, documents, lines for the number of lines, or
+        counterparty for a new counterparty without an account yet). A booking leaves out as deleted,
+        not_finalized or moved to another period. The owner's own download does not count. Pass date_from
+        and date_to for one period. Changes nothing.
         """
         api, _company_id, error = _api_and_company(ctx)
         if error:
