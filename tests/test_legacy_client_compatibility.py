@@ -93,6 +93,13 @@ The October 26 "no document needed" change updates two signatures: create_rule g
 optional mark_document_not_required, and search_transactions' no_receipt now lists
 bookings that still need a document (no receipt or invoice, not marked as needing
 none). No existing argument is removed or renamed.
+
+The October 28 inline upload change updates two reviewed signatures:
+request_file_upload keeps its name and optional description argument, but opens
+a company-bound MCP App that saves attachments directly (with a browser fallback).
+Its metadata and output change; create_attachment only gains instructions to
+avoid saving those files twice. The legacy direct-upload routes remain intact.
+Only these two hashes change; get_file_upload_status is a new read-only tool.
 """
 
 import asyncio

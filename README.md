@@ -39,6 +39,8 @@ https://github.com/user-attachments/assets/10718781-34f2-4640-9253-be4c82de6159
 
 ## What you can do
 
+[Calculator and form workflows](docs/calculators-and-forms.md) cover public estimates and Polish PDF/DOCX preparation, with deployment prerequisites.
+
 | Workflow | Ask Norman to help you |
 | :-- | :-- |
 | **Invoicing** | Create and send invoices, quotes and recurring invoices. Use your branding, product catalog, VAT codes, discounts and service dates. |
@@ -134,6 +136,7 @@ and closing postings.
 
 - `trigger_datev_export`: prepare the export and download package.
 - `validate_ledger_datev_export`: check structure, source coverage and documents before handoff.
+- `get_datev_changes_since_handoff`: list the bookings added, changed or left out since the advisor's last file of each period.
 - `read_datev_file`: inspect an **EXTF/DTVF** file without importing postings into your books.
 
 Try: "Check the full GmbH Ledger export before I give it to my accountant."

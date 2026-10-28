@@ -39,6 +39,9 @@ from norman_mcp.tools.offers import register_offer_tools
 from norman_mcp.tools.taxes import register_tax_tools
 from norman_mcp.tools.transactions import register_transaction_tools
 from norman_mcp.tools.documents import register_document_tools
+from norman_mcp.tools.forms import register_form_tools
+from norman_mcp.tools.calculators import register_calculator_tools
+from norman_mcp.business_tools import BUSINESS_TOOL_INSTRUCTIONS
 from norman_mcp.tools.company import register_company_tools
 from norman_mcp.tools.categories import register_category_tools
 from norman_mcp.tools.rules import register_rule_tools
@@ -291,7 +294,7 @@ async def lifespan(app):
 
 
 DEFAULT_SERVER_NAME = "Norman Finance API"
-DEFAULT_INSTRUCTIONS = "Norman Finance MCP Server - Access your financial data"
+DEFAULT_INSTRUCTIONS = "Norman Finance MCP Server - Access your financial data\n\n" + BUSINESS_TOOL_INSTRUCTIONS
 
 
 def create_app(
@@ -408,6 +411,10 @@ def create_app(
     for route in create_file_upload_routes():
         server._custom_starlette_routes.append(route)
 
+    from norman_mcp.files.inline_upload import create_inline_upload_routes
+    for route in create_inline_upload_routes():
+        server._custom_starlette_routes.append(route)
+
     # Register domain verification route for OpenAI Apps
     from starlette.routing import Route
     from starlette.responses import PlainTextResponse
@@ -456,6 +463,8 @@ def create_app(
     register_rule_tools(scoped_tools)
     register_workflow_tools(scoped_tools)
     register_document_tools(scoped_tools)
+    register_form_tools(scoped_tools)
+    register_calculator_tools(scoped_tools)
     register_company_tools(scoped_tools)
     register_category_tools(scoped_tools)
     register_tax_advisor_tools(scoped_tools)
@@ -470,6 +479,8 @@ def create_app(
     register_prompts(server)
     register_resources(server)
     register_public_apps(server)
+    from norman_mcp.apps.document_upload import register_upload_resource
+    register_upload_resource(server)
     register_inbox(server)
     if live_enabled:
         from norman_mcp.apps.inbox_live import InboxLive, register_inbox_live
