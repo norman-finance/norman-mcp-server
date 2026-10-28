@@ -157,11 +157,19 @@ def register_rule_tools(mcp):
                 "(GmbH/UG, sp. z o.o., or a JDG on its PL_KPIR chart)"
             ),
         ),
+        mark_document_not_required: bool = Field(
+            default=False,
+            description=(
+                "Also mark matching bookings as needing no document of their own, e.g. payment-provider "
+                "fees the provider's statement documents"
+            ),
+        ),
         is_active: bool = Field(default=True, description="Create enabled (true) or as an inactive draft (false)"),
     ) -> Dict[str, Any]:
         """
-        Create an automation rule. Preview first with preview_rule. Send exactly
-        one of category_id / company_category_id (freelancer vs SME). After
+        Create an automation rule. Preview first with preview_rule. Send at most
+        one of category_id / company_category_id (freelancer vs SME); a rule
+        with mark_document_not_required may leave the category alone. After
         creating, offer apply_rule_to_existing to also categorize the backlog.
 
         Returns:
@@ -171,12 +179,18 @@ def register_rule_tools(mcp):
         if not api.company_id:
             return {"error": "No company available. Please authenticate first."}
 
+        actions = None
+        if mark_document_not_required:
+            category = _without_none({"category": category_id, "company_category": company_category_id})
+            actions = [{"type": "set_category", "params": category}] if category else []
+            actions.append({"type": "mark_document_not_required", "params": {}})
         payload = _without_none(
             {
                 "name": name,
                 "conditions": {"logic": logic, "items": conditions},
                 "category": category_id,
                 "companyCategory": company_category_id,
+                "actions": actions,
                 "isActive": is_active,
             }
         )

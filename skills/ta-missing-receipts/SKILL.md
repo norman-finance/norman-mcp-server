@@ -1,7 +1,7 @@
 ---
 name: ta-missing-receipts
 description: Find and collect missing receipts for a client company. Identify high-priority items, suggest a ping strategy, and bulk-notify the client. Use when a tax advisor asks about missing documents, Belege, or requests receipts from a client.
-version: 1.0.1
+version: 1.0.2
 metadata:
   openclaw:
     emoji: "\U0001F4CE"
@@ -16,6 +16,7 @@ Help the tax advisor identify and collect missing receipts from a client:
 ## Step 1: Get the missing documents summary
 - Call `get_missing_documents_summary` with the active company ID
 - This returns all transactions without receipts grouped by month with amounts
+- Its `documentsWithoutBooking` counts the opposite gap by month: receipts and invoices the client uploaded that no booking holds yet, so the books miss them
 
 ## Step 2: Analyze and prioritize
 Present the results in a structured format:
@@ -26,7 +27,7 @@ Present the results in a structured format:
 3. **Medium** (<100 [currency]) — should be collected for compliance
 4. **Informational** — small amounts that may be bundled
 
-**By month:** Show which months have the most gaps
+**By month:** Show which months have the most gaps, and name each month with documents without a booking: the client books or deletes them under Documents → Review documents
 
 **By category:** Group by category to help the client understand what types of documents are needed
 

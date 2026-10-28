@@ -87,6 +87,37 @@ async def missing_document_transactions(
     }
 
 
+def _is_count(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+async def documents_without_booking(
+    api: Any,
+    company_id: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> dict:
+    url = urljoin(config.api_base_url, f"api/v1/companies/{company_id}/attachments/without-booking/")
+    params = {name: value for name, value in (("dateFrom", date_from), ("dateTo", date_to)) if value}
+    try:
+        response = await api.arequest("GET", url, params=params)
+    except Exception:  # noqa: BLE001 - API/transport failure means unavailable, never a zero count.
+        return {"error": "Documents without a booking could not be counted.", "status": "unavailable"}
+    if (
+        not isinstance(response, dict)
+        or "error" in response
+        or not _is_count(response.get("count"))
+        or not isinstance(response.get("months"), list)
+        or not all(
+            isinstance(month, dict) and isinstance(month.get("month"), str) and _is_count(month.get("count"))
+            for month in response["months"]
+        )
+        or sum(month["count"] for month in response["months"]) != response["count"]
+    ):
+        return {"error": "Documents without a booking could not be counted.", "status": "unavailable"}
+    return {"total": response["count"], "byMonth": response["months"]}
+
+
 def needs_document(tx: dict) -> bool:
     exempt = tx.get("documentNotRequired", tx.get("document_not_required"))
     return not tx["attachment"] and not tx["invoice"] and exempt is not True

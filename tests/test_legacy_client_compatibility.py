@@ -89,6 +89,11 @@ tool names and required arguments stay unchanged. Transaction searches now honor
 page_size, with a 20-result default and bounds of 1-100. Only those seven hashes
 change; new tools and the existing non-legacy Polish proposal tool need no entry.
 
+The October 26 "no document needed" change updates two signatures: create_rule gains
+optional mark_document_not_required, and search_transactions' no_receipt now lists
+bookings that still need a document (no receipt or invoice, not marked as needing
+none). No existing argument is removed or renamed.
+
 The October 28 inline upload change updates two reviewed signatures:
 request_file_upload keeps its name and optional description argument, but opens
 a company-bound MCP App that saves attachments directly (with a browser fallback).
