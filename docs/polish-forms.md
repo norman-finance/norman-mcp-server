@@ -1,5 +1,7 @@
 # Polish forms via chat
 
+For calculator-versus-company-data routing and multilingual requests, see [the agent workflow](calculators-and-forms.md).
+
 Three tools reuse Norman's API-owned catalog and generation engine:
 
 1. `list_polish_forms(query, locale)` finds official forms and available generators.
