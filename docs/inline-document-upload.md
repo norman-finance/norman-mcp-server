@@ -44,6 +44,15 @@ ChatGPT/Claude upload after deployment before claiming hosted end-to-end coverag
   The server never automatically repeats it. Check the documents in Norman before
   starting a new upload. Only a definitive upstream 401 permits one credential
   refresh and retry through the existing provider method.
+- The panel stops a byte transfer after 30 seconds without progress and continues
+  with the rest of the batch. Saving after all bytes have been sent retains the
+  existing overall timeout. A status check is bounded to 10 seconds. If status
+  has no reservation for the interrupted file, the panel keeps its local bytes
+  and offers an explicit **Retry upload** with the same ID, bytes and direction.
+  Status is rechecked before sending; the atomic reservation prevents a late
+  first request and this retry from creating two attachments. A recorded success
+  or unconfirmed server write is never replayed. Closing the panel discards local
+  file bytes; use the backup page if the host cannot send the selected file.
 - Only metadata is retained: company, hashed grant/capability, filename, size,
   digest, direction, status and attachment ID. File bytes are spooled only during
   the request. OAuth credentials are never sent to the panel or stored in this DB.

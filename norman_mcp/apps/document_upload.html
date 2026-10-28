@@ -605,7 +605,7 @@
                   row.progress === 100 ? "Saving…" : row.progress + "%",
                 uploaded: "Uploaded",
                 rejected: "Not accepted",
-                unknown: "Check status",
+                unknown: row.retryable ? "Not received" : "Check status",
               }[row.status] || "";
             line.append(status);
             const field = document.createElement("fieldset");
@@ -662,6 +662,15 @@
               error.textContent = row.error;
               line.append(error);
             }
+            if (row.retryable && row.file) {
+              const retry = document.createElement("button");
+              retry.className = "secondary";
+              retry.textContent = "Retry upload";
+              retry.setAttribute("aria-label", "Retry upload of " + row.name);
+              retry.disabled = busy;
+              retry.onclick = () => retryFile(row);
+              line.append(retry);
+            }
             $("rows").append(line);
           }
           const queued = rows.filter((r) => r.status === "queued");
@@ -689,6 +698,7 @@
             !rows.some((r) =>
               ["uploaded", "unknown", "rejected"].includes(r.status),
             );
+          $("check").disabled = busy;
           notifySize();
         }
         function notifySize() {
@@ -742,6 +752,17 @@
           render();
         }
         function acceptResult(data) {
+          const received = new Set((data.files || []).map((file) => file.id));
+          for (const row of rows) {
+            // Absence is only a retry affordance, not proof that a late POST
+            // cannot arrive. Retries MUST reuse the original id and bytes;
+            // the server's atomic reservation still arbitrates once-only writes.
+            row.retryable =
+              row.status === "unknown" && row.file && !received.has(row.id);
+            if (row.retryable)
+              row.error =
+                "No upload was recorded for this file. Retry it here.";
+          }
           for (const file of data.files || []) {
             let row = rows.find((r) => r.id === file.id);
             if (!row) {
@@ -753,52 +774,83 @@
               cashflow: file.cashflow_type,
               error: file.error || "",
               attachment_id: file.attachment_id,
+              retryable: false,
             });
+            if (["uploaded", "rejected"].includes(row.status)) row.file = null;
           }
           render();
         }
         async function readStatus() {
-          const response = await fetch(
-            uploadConfig.base_url + "/files/upload-app/session",
-            {
-              headers: { Authorization: "Bearer " + uploadConfig.ticket },
-              credentials: "omit",
-              cache: "no-store",
-            },
-          );
-          const data = await response.json();
-          if (!response.ok)
-            throw Error(data.error || "Unable to check upload status.");
-          acceptResult(data);
-          return data;
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 10000);
+          try {
+            const response = await fetch(
+              uploadConfig.base_url + "/files/upload-app/session",
+              {
+                headers: { Authorization: "Bearer " + uploadConfig.ticket },
+                credentials: "omit",
+                cache: "no-store",
+                signal: controller.signal,
+              },
+            );
+            const data = await response.json();
+            if (!response.ok)
+              throw Error(data.error || "Unable to check upload status.");
+            acceptResult(data);
+            return data;
+          } finally {
+            clearTimeout(timer);
+          }
         }
         function sendFile(row) {
           return new Promise((resolve) => {
             const xhr = new XMLHttpRequest();
-            xhr.open("POST", uploadConfig.base_url + "/files/upload-app/file");
-            xhr.setRequestHeader(
-              "Authorization",
-              "Bearer " + uploadConfig.ticket,
-            );
-            xhr.timeout = 150000;
+            let settled = false,
+              progressTimer;
+            const finish = (result) => {
+              if (settled) return;
+              settled = true;
+              clearTimeout(progressTimer);
+              resolve(result);
+            };
+            const uncertain = (message) =>
+              finish({
+                status: "unknown",
+                error:
+                  message ||
+                  "Connection interrupted. Check upload status before trying again.",
+              });
+            const watchProgress = () => {
+              clearTimeout(progressTimer);
+              progressTimer = setTimeout(() => {
+                uncertain(
+                  "File transfer stopped. Checking whether Norman received it.",
+                );
+                xhr.abort();
+              }, 30000);
+            };
+            // Register upload handlers before open(): some embedded browsers
+            // otherwise miss progress events. Stop only a stalled byte transfer,
+            // not the server's save after the body has finished uploading.
             xhr.upload.onprogress = (e) => {
+              watchProgress();
               if (e.lengthComputable) {
                 row.progress = Math.round((e.loaded / e.total) * 100);
                 render();
               }
             };
-            const uncertain = () =>
-              resolve({
-                status: "unknown",
-                error:
-                  "Connection interrupted. Check upload status before trying again.",
-              });
-            xhr.onerror = uncertain;
-            xhr.ontimeout = uncertain;
+            xhr.upload.onload = () => {
+              clearTimeout(progressTimer);
+              row.progress = 100;
+              render();
+            };
+            xhr.onerror = () => uncertain();
+            xhr.ontimeout = () => uncertain();
+            xhr.onabort = () => uncertain();
             xhr.onload = () => {
               try {
                 const data = JSON.parse(xhr.responseText);
-                resolve({
+                finish({
                   ...data,
                   status:
                     data.status || (xhr.status >= 400 ? "rejected" : "unknown"),
@@ -807,12 +859,74 @@
                 uncertain();
               }
             };
-            const form = new FormData();
-            form.append("file", row.file, row.name);
-            form.append("file_id", row.id);
-            form.append("cashflow_type", row.cashflow);
-            xhr.send(form);
+            try {
+              const form = new FormData();
+              form.append("file", row.file, row.name);
+              form.append("file_id", row.id);
+              form.append("cashflow_type", row.cashflow);
+              xhr.open(
+                "POST",
+                uploadConfig.base_url + "/files/upload-app/file",
+              );
+              xhr.setRequestHeader(
+                "Authorization",
+                "Bearer " + uploadConfig.ticket,
+              );
+              xhr.timeout = 150000;
+              watchProgress();
+              xhr.send(form);
+            } catch {
+              uncertain(
+                "The file could not be sent. Check its upload status before retrying.",
+              );
+            }
           });
+        }
+        async function uploadFiles(files) {
+          busy = true;
+          notice("");
+          render();
+          try {
+            for (const row of files) {
+              row.status = "uploading";
+              row.retryable = false;
+              row.progress = 0;
+              row.error = "";
+              render();
+              const result = await sendFile(row);
+              Object.assign(row, {
+                status: result.status,
+                error: result.error || "",
+                attachment_id: result.attachment_id,
+              });
+              if (["uploaded", "rejected"].includes(row.status))
+                row.file = null;
+              render();
+            }
+          } finally {
+            busy = false;
+            render();
+          }
+          await check();
+        }
+        async function retryFile(row) {
+          if (busy || !row.retryable || !row.file) return;
+          busy = true;
+          render();
+          try {
+            // Recheck immediately before an explicit retry. A late success or
+            // an unconfirmed server reservation must never be sent again.
+            await readStatus();
+            if (row.retryable && row.file) await uploadFiles([row]);
+          } catch {
+            notice(
+              "Could not check upload status. Check again before retrying.",
+              true,
+            );
+          } finally {
+            busy = false;
+            render();
+          }
         }
         async function publishResult(data) {
           if (standalone) return;
@@ -881,14 +995,16 @@
             const data = await readStatus();
             await publishResult(data);
             const unresolved = rows.filter(
-              (row) => row.status === "unknown",
+              (row) => row.status === "unknown" && !row.retryable,
             ).length;
+            const notReceived = rows.filter((row) => row.retryable).length;
             const rejected = rows.filter(
               (row) => row.status === "rejected",
             ).length;
             let message =
               data.uploaded_count +
-              " documents uploaded. Processing may still be pending.";
+              (data.uploaded_count === 1 ? " document" : " documents") +
+              " uploaded. Processing may still be pending.";
             if (rejected)
               message +=
                 " " + rejected + " not accepted — see the file details.";
@@ -897,33 +1013,24 @@
                 " " +
                 unresolved +
                 " unconfirmed — check your documents in Norman before trying again.";
-            notice(message, Boolean(rejected || unresolved));
+            if (notReceived)
+              message +=
+                " " + notReceived + " not received — use Retry upload above.";
+            notice(message, Boolean(rejected || unresolved || notReceived));
           } catch (error) {
-            notice(error.message, true);
+            notice(
+              error.name === "AbortError"
+                ? "Upload status check timed out. Check again before retrying."
+                : error.message,
+              true,
+            );
           }
         }
         $("upload").onclick = async () => {
           if (busy || !session) return;
           const queued = rows.filter((r) => r.status === "queued");
           if (!queued.length || queued.some((r) => !r.cashflow)) return;
-          busy = true;
-          notice("");
-          render();
-          for (const row of queued) {
-            row.status = "uploading";
-            render();
-            const result = await sendFile(row);
-            Object.assign(row, {
-              status: result.status,
-              error: result.error || "",
-              attachment_id: result.attachment_id,
-            });
-            row.file = null;
-            render();
-          }
-          busy = false;
-          render();
-          await check();
+          await uploadFiles(queued);
         };
         $("check").onclick = check;
         $("drop").onclick = () => $("picker").click();
