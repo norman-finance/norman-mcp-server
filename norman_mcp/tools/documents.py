@@ -214,50 +214,8 @@ def _remove_temp_file(path: Optional[str]) -> None:
 def register_document_tools(mcp):
     """Register all document-related tools with the MCP server."""
 
-    @mcp.tool(
-        title="Create File Upload Link",
-        annotations=ToolAnnotations(
-            readOnlyHint=False,
-            destructiveHint=False,
-            idempotentHint=False,
-            openWorldHint=False,
-        ),
-    )
-    async def request_file_upload(
-        ctx: Context,
-        description: Optional[str] = Field(
-            default=None,
-            description="Short description shown to the user on the upload page, e.g. 'Receipt for Meta Ads January 2025'.",
-        ),
-    ) -> Dict[str, Any]:
-        """
-        Generate a short-lived upload link that the USER opens in their browser.
-
-        Call this BEFORE create_attachment when the user wants to attach a file
-        (image, PDF, receipt) and you cannot provide a public file_url.
-        The link opens a drag-and-drop upload page. After the user uploads,
-        the page shows a file_ref token. Use that file_ref in create_attachment.
-
-        IMPORTANT: Do NOT try to upload the file yourself (curl, base64, etc.).
-        Just give the link to the user and wait for them to upload.
-        """
-        from norman_mcp.files.upload import create_upload_token
-
-        public_url = os.environ.get(
-            "NORMAN_MCP_PUBLIC_URL", "https://mcp.norman.finance"
-        )
-        token = create_upload_token(description)
-        upload_page_url = f"{public_url.rstrip('/')}/files/upload/{token}"
-
-        return {
-            "upload_url": upload_page_url,
-            "expires_in_seconds": 1800,
-            "instructions": (
-                f"Please open this link in your browser and drop the file: {upload_page_url} "
-                "— after uploading, the page will show a file_ref code. "
-                "Give it back to me so I can attach the file."
-            ),
-        }
+    from norman_mcp.apps.document_upload import register_upload_tools
+    register_upload_tools(mcp)
 
     @mcp.tool(
         title="Upload Bulk Attachments",
@@ -635,9 +593,9 @@ def register_document_tools(mcp):
 
         How to provide the file (pick one):
         1. file_url  — an HTTP(S) download URL accessible without extra headers
-        2. file_ref  — call request_file_upload first to get an upload link,
-           ask the user to open it in their browser and drop the file,
-           then pass the file_ref here
+        2. file_ref — a reference from the existing direct POST /files/upload flow.
+           For local file selection, request_file_upload opens an in-chat panel
+           that saves attachments itself; do not create them a second time.
         3. file_content_base64 — content of a small file under 50 KB
 
         For images, PDFs, and scans, supply file_url or file_ref; embedding file

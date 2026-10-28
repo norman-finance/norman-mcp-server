@@ -88,6 +88,13 @@ complete_workflow_step gains optional done=False while retaining skipped. Existi
 tool names and required arguments stay unchanged. Transaction searches now honor
 page_size, with a 20-result default and bounds of 1-100. Only those seven hashes
 change; new tools and the existing non-legacy Polish proposal tool need no entry.
+
+The October 28 inline upload change updates two reviewed signatures:
+request_file_upload keeps its name and optional description argument, but opens
+a company-bound MCP App that saves attachments directly (with a browser fallback).
+Its metadata and output change; create_attachment only gains instructions to
+avoid saving those files twice. The legacy direct-upload routes remain intact.
+Only these two hashes change; get_file_upload_status is a new read-only tool.
 """
 
 import asyncio
