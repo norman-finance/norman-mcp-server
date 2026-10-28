@@ -488,6 +488,35 @@ def test_tax_preview_requires_a_successful_pdf_response(response) -> None:
     assert all("/submit-report/" not in url for _method, url, _kwargs in api.requests)
 
 
+def test_a_refused_tax_number_names_only_its_field_and_blocks_submission() -> None:
+    mcp, api = _registered()
+    original_request = api.arequest
+    wrong_state = (
+        "This tax number belongs to a Finanzamt in Bayern. Change your federal state to Bayern, or check the number."
+    )
+    refusal = {
+        "error": "Request failed: 400 Client Error",
+        "status_code": 400,
+        "detail": [
+            {"field": "tax_state", "detail": wrong_state},
+            {"field": "common", "detail": "ERiC rule text with private data"},
+            {"detail": "a message without a field"},
+        ],
+    }
+
+    async def request(method, url, **kwargs):
+        original = await original_request(method, url, **kwargs)
+        return refusal if url.endswith("/generate-preview-url/") else original
+
+    api.arequest = request
+    data = asyncio.run(mcp.tools["render_tax_preview"](_context(api), "report-1")).structured_content
+
+    assert data["preview"]["error"] == f"tax_state: {wrong_state}"
+    assert data["preview"]["available"] is False
+    assert data["canSubmit"] is False
+    assert all("/submit-report/" not in url for _method, url, _kwargs in api.requests)
+
+
 def test_render_tools_return_structured_content_and_widget_only_meta() -> None:
     mcp, api = _registered()
     result = asyncio.run(
