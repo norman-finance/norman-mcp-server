@@ -34,7 +34,7 @@ Help the user with their tax obligations. Read the company's country first (`com
 
 5. **German companies, preview and submit**:
    - Call `generate_finanzamt_preview` to show the user exactly what will be sent to the Finanzamt. Let them review all figures.
-   - If the preview names `tax_number` or `tax_state`, quote its message, ask for the number from the Finanzamt's letter (slashes and the 13-digit ELSTER form are fine) or for the right federal state, save the answer with `update_company_details` (`tax_id` is the Steuernummer, `tax_state` the state) and preview again.
+   - If the preview names `tax_number`, `tax_state`, `registration_tax_number`, `steuernummer` or `bundesland`, quote its message and ask for the number from the Finanzamt's letter (slashes and the 13-digit ELSTER form are fine) or for the right federal state. The field names where the return reads it. Save `tax_number` and `tax_state` with `update_company_details` (`tax_id` is the Steuernummer, `tax_state` the state). `registration_tax_number` is the number in the corporate tax registration, and `steuernummer` and `bundesland` are the number and state saved in the income tax return: no tool changes them, so the user corrects them in Norman, in the company data or in the return's personal details. Then preview again.
    - Only when the user explicitly confirms, call `submit_tax_report` to file with the Finanzamt via ELSTER. If it answers `Email not confirmed`, call `resend_email_confirmation` and ask the user to open the link in that email; a paid plan confirms the address without it.
 
 6. **Polish companies, check and then file in the app**:
