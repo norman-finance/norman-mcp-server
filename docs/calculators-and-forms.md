@@ -18,12 +18,8 @@ The catalog currently has seven Polish calculators (VAT, JDG annual PIT/ZUS, mon
 | --- | --- |
 | Oblicz VAT z 361 zł brutto w Polsce w 2026, stawka 23% | `pl_vat` schema, then estimate with supplied values |
 | Calculate Polish JDG tax on hypothetical annual revenue | `pl_jdg_annual` schema, ask for missing regime/eligibility/amounts |
-| Рассчитай налог для JDG в Польше по этим условиям | The requested Polish jurisdiction, even with Russian conversation language |
-| Розрахуй амортизацію обладнання в Польщі | `pl_depreciation` schema and missing inputs |
 | Przygotuj wezwanie do zapłaty w PDF | Current `payment-request` schema, then document generation |
 | Generate a Polish handover protocol in DOCX | Current `handover-protocol` schema, then DOCX generation |
-| Сделай требование об оплате на польском | `payment-request`; explain the returned preview in Russian |
-| Підготуй акт передання обладнання | `handover-protocol`; Polish file, Ukrainian conversation |
 | Pokaż moją deklarację ZUS DRA za wrzesień | Existing company tax-report flow, not a public estimate or blank form |
 | Utwórz fakturę dla klienta | Existing invoice workflow, not a payment-request letter |
 
@@ -31,6 +27,6 @@ The catalog currently has seven Polish calculators (VAT, JDG annual PIT/ZUS, mon
 
 ## Verification and rollout
 
-`tests/test_calculators.py` drives the production MCP SDK handler, checks that no company API calls occur, exercises strict input validation and errors, and checks prompt registration. The companion API change tests multilingual discovery and follow-up context in the internal chat. These are deterministic contract tests, not a live-model conversation evaluation.
+`tests/test_calculators.py` drives the production MCP SDK handler, checks that no company API calls occur, exercises strict input validation and errors, and checks prompt registration. The companion API change tests Polish and English discovery and follow-up context in the internal chat. These are deterministic contract tests, not a live-model conversation evaluation.
 
 The website calculator API can be checked with synthetic numeric inputs without account data. Hosted chat use additionally requires deployment of the MCP/API changes and, for documents, the forms backend. Source registration and passing local tests do not prove those deployments.

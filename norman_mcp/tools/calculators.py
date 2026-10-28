@@ -123,7 +123,7 @@ def register_calculator_tools(mcp: Any) -> None:
     async def list_public_calculators(country: Literal["PL", "DE"] | None = None) -> dict[str, Any]:
         """Find calculators for VAT/net/gross, JDG PIT/ZUS, depreciation, salary cost and company taxes.
 
-        Triggers: kalkulator, netto/brutto, amortyzacja, калькулятор, розрахунок, податки, Rechner.
+        Triggers: kalkulator, netto/brutto, amortyzacja, calculator, tax estimate, Rechner.
         Public what-if estimates only. For the selected company's actual tax due, use tax-report tools.
         Country is the requested tax jurisdiction, never inferred from the chat language.
         """

@@ -1,6 +1,6 @@
 ---
 name: calculators-and-forms
-description: Calculate public what-if estimates or find and prepare Polish forms. Use for VAT/net/gross, JDG PIT/ZUS, depreciation, employment cost, company tax/dividends, payment requests and handover protocols. Triggers include kalkulator, oblicz, formularz, wezwanie do zapłaty, protokół przekazania, calculator, form generator, калькулятор, требование об оплате, акт передачи, розрахунок, вимога про оплату, акт передання.
+description: Calculate public what-if estimates or find and prepare Polish forms. Use for VAT/net/gross, JDG PIT/ZUS, depreciation, employment cost, company tax/dividends, payment requests and handover protocols. Triggers include kalkulator, oblicz, formularz, wezwanie do zapłaty, protokół przekazania, calculator, form generator.
 argument-hint: "[calculation or document request]"
 ---
 
@@ -29,8 +29,8 @@ Known IDs: PL `pl_vat`, `pl_jdg_annual`, `pl_zus_monthly`, `pl_depreciation`, `p
 
 ## Forms and documents
 
-1. Search in the user's supported language (`pl`, `en`, `ru`, `uk`). If a narrow query gives no results, broaden it or inspect a known form ID; do not conclude the feature is absent from one empty search.
-2. `payment-request`: wezwanie do zapłaty, demand letter, требование об оплате, вимога про оплату. `handover-protocol`: protokół przekazania, handover, акт передачи, акт передання. Get the current version and required fields. Ask only for missing facts; never invent parties, dates, amounts or interest.
+1. Search using Polish or English (`pl`, `en`). If a narrow query gives no results, broaden it or inspect a known form ID; do not conclude the feature is absent from one empty search.
+2. `payment-request`: wezwanie do zapłaty, payment request, demand letter. `handover-protocol`: protokół przekazania, handover protocol. Get the current version and required fields. Ask only for missing facts; never invent parties, dates, amounts or interest.
 3. Prepare only on the user's request using `generate_polish_document` with that version and exact field keys. PDF is the default unless DOCX is requested. The file is Polish regardless of the chat language. Show the real preview/download returned by the tool. Say that the user reviews and signs; the bearer link expires after 10 minutes and anyone holding it can download it.
 4. `upl-1`, `zaw-fa`, `vat-r`, `zus-dra` are official-source references only. Provide the current authority link and instructions; do not claim to fill, sign, send or file these forms. For the company's prepared ZUS DRA, use its report flow instead of the blank-form entry.
 

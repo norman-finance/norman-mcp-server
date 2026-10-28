@@ -1,7 +1,5 @@
 """Shared discovery guidance for the app agent and MCP clients."""
 
-# ruff: noqa: RUF001 - Intentional Polish, Russian and Ukrainian discovery phrases.
-
 BUSINESS_TOOL_INSTRUCTIONS = """
 NORMAN CALCULATORS, TOOLS AND FORMS:
 For a numeric what-if, VAT net/gross conversion, JDG PIT/ZUS illustration, depreciation,
@@ -17,9 +15,8 @@ For the company's actual amounts or existing declarations, use list_tax_reports,
 get_tax_report or get_polish_tax_estimates. For creating an invoice use create_invoice;
 for reviewing the business use get_financial_overview. Do not replace these with an estimate.
 For Polish blank forms or a payment request/handover document, use list_polish_forms and
-get_polish_form. Wezwanie do zapłaty / требование об оплате / вимога про оплату maps to
-payment-request; protokół przekazania / handover / акт передачи / акт передання maps to
-handover-protocol. For these two only, collect missing required fields and pass the current
+get_polish_form. Wezwanie do zapłaty / payment request maps to payment-request;
+protokół przekazania / handover maps to handover-protocol. For these two only, collect missing required fields and pass the current
 version to generate_polish_document for PDF or DOCX. The document is Polish; reply in the
 user's language. Return the real preview/download and explain review/signature and the
 10-minute bearer link. Preparation never sends, signs, files or pays. UPL-1, ZAW-FA, VAT-R
