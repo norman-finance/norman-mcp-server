@@ -39,7 +39,9 @@ def register_form_tools(mcp):
         query: str = Field(default="", max_length=100, description="Form name, code or purpose"),
         locale: Literal["pl", "en", "ru", "uk"] = "pl",
     ) -> dict[str, Any]:
-        """Find Polish official forms and business document generators. No company data is read.
+        """Find Polish forms and generators: wezwanie do zapłaty, payment requests and handover protocols.
+
+        Also: formularze, protokół przekazania, UPL-1, ZAW-FA, VAT-R, ZUS DRA. No company data is read.
 
         Returns current official sources, localized instructions and whether generation is supported.
         A catalog entry is not proof that the form is required for the user's circumstances.

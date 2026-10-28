@@ -39,6 +39,8 @@ https://github.com/user-attachments/assets/10718781-34f2-4640-9253-be4c82de6159
 
 ## What you can do
 
+[Calculator and form workflows](docs/calculators-and-forms.md) cover public estimates and Polish PDF/DOCX preparation, with deployment prerequisites.
+
 | Workflow | Ask Norman to help you |
 | :-- | :-- |
 | **Invoicing** | Create and send invoices, quotes and recurring invoices. Use your branding, product catalog, VAT codes, discounts and service dates. |
