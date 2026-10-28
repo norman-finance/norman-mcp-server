@@ -29,6 +29,8 @@ class PreviewAPI:
         assert method == "POST"
         assert url.endswith("/preview-fixture-report/generate-preview-url/")
         self.calls.append((method, url))
+        if isinstance(self.failure, dict):
+            return self.failure
         if self.failure is not None:
             raise self.failure
         return {}
@@ -54,8 +56,20 @@ class PreviewVerifier:
             RuntimeError(PRIVATE_DETAIL),
             "Could not generate the tax preview. Please try again or contact Norman support.",
         ),
+        (
+            {
+                "error": "Request failed: 400 Client Error",
+                "status_code": 400,
+                "detail": [
+                    {"field": "tax_number", "detail": "Add your tax number. You find it on letters from your Finanzamt."},
+                    {"field": "common", "detail": PRIVATE_DETAIL},
+                ],
+            },
+            "Fix these details before the preview: "
+            "tax_number: Add your tax number. You find it on letters from your Finanzamt.",
+        ),
     ],
-    ids=("missing-download-url", "upstream-error", "unexpected-error"),
+    ids=("missing-download-url", "upstream-error", "unexpected-error", "refused-field"),
 )
 def test_preview_error_is_useful_and_safe_on_wire(
     version, failure, expected, monkeypatch, tmp_path

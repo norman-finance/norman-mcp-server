@@ -94,7 +94,7 @@
     "dismiss_rule_execution": "7d5cc98f95ead4f5feb83ceb342f69f34bd1c9b19a240584f3a21377fceec3f7",
     "duplicate_invoice": "5693e2876060a28865e4575c9146304d900dc0fcddcb242c7c55702bfb6d6123",
     "end_recurring_invoice": "e0667f32a69e40c61753bd9087aeb9b363897cc485b54bcd24bbe1ddac3441cc",
-    "generate_finanzamt_preview": "b0e4f591bbf33fedcb40a0435f0e3efa5d7a2b27ff3b52edb1b43fc74901ab24",
+    "generate_finanzamt_preview": "bec5e1a1a2895b92371ac8b7eaa632d0110c44f64b404b75580a228e45ff8263",
     "generate_gewerbe_document": "ea78169da3cc800e94b983395759fb2b9ecb1af718fb717a25b1df986df45c93",
     "generate_incorporation_documents": "a546db173120e60484214fcbebc8fad3710fdff5645774df630c046ad9ffce43",
     "get_accounting_setup": "ae0a06a99dfbae5845f9c60879b73a0aaf977826fe2460e82fcaa1bc3d244d11",
@@ -242,6 +242,6 @@
     "update_vendor": "741897e5129a0fd254a453ecaddb1591a206c660fddc22466ecf4c4e80fdee7a",
     "upload_bulk_attachments": "7660a2626b3ac1fe574b9aa237f7be89c965496c30cdf49587de6223fbe79af9",
     "upload_structured_attachments": "fbe7edcb38be73c3062cde56e4d0942d80f5a8c7b5e9565a77abc67475a9e592",
-    "validate_tax_number": "9a2b4d33f8efb32771922f4e73c1d556f4cee04e8b875cb06925d147d12bed38"
+    "validate_tax_number": "8469a1bb811df360088d633ae85601a5b8e0b1102ddef7e0c4f67e86d6e7bc80"
   }
 }

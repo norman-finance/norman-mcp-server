@@ -19,6 +19,7 @@ from pydantic import Field
 
 from norman_mcp import config
 from norman_mcp.context import Context
+from norman_mcp.tools.taxes import fields_to_fix
 
 APP_RESOURCE_URI = "ui://norman/accounting-workbench-v3.html"
 TAX_APP_RESOURCE_URI = "ui://norman/tax-filing-v2.html"
@@ -444,7 +445,7 @@ def register_public_apps(mcp: Any, *, widget_domain: Optional[str] = None) -> No
                 if not preview["available"]:
                     preview["error"] = "The preview service returned incomplete data."
             else:
-                preview["error"] = str(
+                preview["error"] = " ".join(fields_to_fix(preview_response)) or str(
                     preview_response.get("error", "Preview generation failed")
                     if isinstance(preview_response, dict)
                     else "Preview generation failed"

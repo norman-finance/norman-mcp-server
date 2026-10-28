@@ -1,7 +1,7 @@
 ---
 name: tax-report
 description: "Review and manage tax reports. German companies: VAT (UStVA, ZM, Umsatzsteuer), income tax prepayments and Finanzamt submissions via ELSTER. Polish companies: the JPK_V7 and VAT-UE, PIT or CIT advances, ZUS DRA, the annual PIT and the CIT-8, which Norman prepares and the owner files in the Norman app or outside it. Use when the user asks about taxes, Steuern, podatki, VAT, USt, JPK, Finanzamt, urząd skarbowy, or tax filing."
-version: 1.2.2
+version: 1.2.3
 disable-model-invocation: true
 argument-hint: "[period or tax type]"
 metadata:
@@ -34,6 +34,7 @@ Help the user with their tax obligations. Read the company's country first (`com
 
 5. **German companies, preview and submit**:
    - Call `generate_finanzamt_preview` to show the user exactly what will be sent to the Finanzamt. Let them review all figures.
+   - If the preview names `tax_number` or `tax_state`, quote its message, ask for the number from the Finanzamt's letter (slashes and the 13-digit ELSTER form are fine) or for the right federal state, save the answer with `update_company_details` (`tax_id` is the Steuernummer, `tax_state` the state) and preview again.
    - Only when the user explicitly confirms, call `submit_tax_report` to file with the Finanzamt via ELSTER. If it answers `Email not confirmed`, call `resend_email_confirmation` and ask the user to open the link in that email; a paid plan confirms the address without it.
 
 6. **Polish companies, check and then file in the app**:

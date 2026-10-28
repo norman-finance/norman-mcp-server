@@ -70,6 +70,21 @@ def _enrich_report_download_url(
     return data
 
 
+UPSTREAM_TEXT_FIELDS = (None, "", "common")
+
+
+def fields_to_fix(result: Any) -> list[str]:
+    if not isinstance(result, dict) or result.get("status_code") != 400 or not isinstance(result.get("detail"), list):
+        return []
+    return [
+        f"{item['field']}: {item['detail']}"
+        for item in result["detail"]
+        if isinstance(item, dict)
+        and item.get("field") not in UPSTREAM_TEXT_FIELDS
+        and isinstance(item.get("detail"), str)
+    ]
+
+
 def register_tax_tools(mcp):
     """Register all tax-related tools with the MCP server."""
     
@@ -239,6 +254,7 @@ def register_tax_tools(mcp):
     ) -> Dict[str, Any]:
         """
         Check a German tax number (Steuernummer) with the ELSTER validator.
+        Slashes, spaces and the 13-digit ELSTER form are accepted.
 
         Returns {"valid": true|false, "message": ...}. An invalid number is a
         normal result, not an error.
@@ -280,6 +296,8 @@ def register_tax_tools(mcp):
         Generates and stores a temporary preview PDF without submitting the report.
         Returns its first page as an inline image in the API's format (normally JPEG)
         plus a downloadUrl for the full PDF. Repeated calls create new preview files.
+        When the data cannot be sent yet, the error names each field to fix with its
+        message, for example tax_number or tax_state.
         """
         api = ctx.request_context.lifespan_context["api"]
 
@@ -293,6 +311,8 @@ def register_tax_tools(mcp):
 
         try:
             result = api._make_request("POST", preview_url)
+            if fixes := fields_to_fix(result):
+                raise ToolError("Fix these details before the preview: " + " ".join(fixes))
             if not result.get("downloadUrl"):
                 raise ToolError("Preview generation failed: no download URL returned")
 
