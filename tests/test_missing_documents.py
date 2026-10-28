@@ -103,7 +103,16 @@ def test_mismatched_active_company_does_not_read_or_relabel_another_company():
 
 @pytest.mark.parametrize(
     "counts",
-    [{"error": "Resource not found", "status_code": 404}, {"count": 2}, {"months": []}, RuntimeError("token refresh")],
+    [
+        {"error": "Resource not found", "status_code": 404},
+        {"count": 2},
+        {"months": []},
+        {"count": 2, "months": []},
+        {"count": 0, "months": [{"month": "2025-11", "count": 2}]},
+        {"count": True, "months": [{"month": "2025-11", "count": True}]},
+        {"count": -1, "months": [{"month": "2025-11", "count": -1}]},
+        RuntimeError("token refresh"),
+    ],
 )
 def test_documents_without_booking_never_report_a_zero_when_unknown(counts):
     page = {"count": 1, "next": None, "results": [tx("1")]}

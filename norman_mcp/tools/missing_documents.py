@@ -87,6 +87,10 @@ async def missing_document_transactions(
     }
 
 
+def _is_count(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
 async def documents_without_booking(
     api: Any,
     company_id: str,
@@ -102,12 +106,13 @@ async def documents_without_booking(
     if (
         not isinstance(response, dict)
         or "error" in response
-        or not isinstance(response.get("count"), int)
+        or not _is_count(response.get("count"))
         or not isinstance(response.get("months"), list)
         or not all(
-            isinstance(month, dict) and isinstance(month.get("month"), str) and isinstance(month.get("count"), int)
+            isinstance(month, dict) and isinstance(month.get("month"), str) and _is_count(month.get("count"))
             for month in response["months"]
         )
+        or sum(month["count"] for month in response["months"]) != response["count"]
     ):
         return {"error": "Documents without a booking could not be counted.", "status": "unavailable"}
     return {"total": response["count"], "byMonth": response["months"]}

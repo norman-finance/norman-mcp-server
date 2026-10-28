@@ -36,7 +36,7 @@ Guide the user through a complete monthly reconciliation:
 
 ## Step 4: Document Check
 - Search the period with `search_transactions` and `no_receipt=true`, without a status filter: finalizing a booking does not give it a document. Take the unfinalized ones first, as Norman's booking review does
-- For a payment without a document, call `find_booking_payments` with its id. Pay a fitting open booking with `pay_booking`, then read back the row `pay_booking` returns (its `publicId`: the payment in German companies, the booking in Polish ones, whose payment then retires) and use that id from then on: a booking made by hand may have no document, so keep searching while it has none
+- For a payment without a document, call `find_booking_payments` with its id. Pay a fitting open booking with `pay_booking`, then read back the row `pay_booking` returns (its `publicId`: the payment in German companies, the booking in Polish ones, whose payment then retires) and use that id from then on: a booking made by hand may have no document, so keep searching while it has none. A Norman invoice's booking (its `invoice` field in `get_transaction`) is paid with `link_transaction` (that invoice id, the payment id), never with `pay_booking`.
 - Search `list_attachments` with `has_booking=false` and the supplier, and link a match with `link_attachment_transaction`
 - `list_attachments` with `has_booking=false` and the period's `date_from`/`date_to` lists the documents that still wait for a booking
 - Remind the user to upload missing receipts with `upload_bulk_attachments`
