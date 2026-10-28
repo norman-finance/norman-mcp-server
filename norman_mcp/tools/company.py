@@ -367,6 +367,11 @@ def register_company_tools(mcp):
             description="SKR03 or SKR04; uses the company's chart of accounts when omitted",
         ),
         source: Literal["auto", "ledger", "transactions"] = "auto",
+        only_changes: bool = Field(
+            default=False,
+            description="Only what changed since the newest DATEV file the advisor has of this period: a reversal "
+            "(Generalumkehr) of each changed or removed booking, then each new or changed booking",
+        ),
     ) -> Dict[str, Any]:
         """
         Export DATEV and return a downloadUrl valid for one hour. By default GmbH/UG
@@ -375,6 +380,7 @@ def register_company_tools(mcp):
         are structurally checked before download; show validation findings to the user.
         include_documents adds a ZIP with receipts. Nothing is sent to DATEV or an advisor.
         Use source=transactions only when the user explicitly wants that narrower export.
+        only_changes answers 409 with code no_datev_file or no_changes when there is nothing to send.
         """
         api = ctx.request_context.lifespan_context["api"]
         company_id = api.company_id
@@ -421,7 +427,7 @@ def register_company_tools(mcp):
                 "dateFrom": date_from, "dateTo": date_to,
                 "advisorNumber": resolved_advisor_number, "clientNumber": resolved_client_number,
                 "kind": "journal", "includeDocuments": include_documents,
-                "responseFormat": "download_url",
+                "onlyChanges": only_changes, "responseFormat": "download_url",
             })
 
         export_url = urljoin(config.api_base_url, "api/v1/accounting/datev-export/")
@@ -433,6 +439,7 @@ def register_company_tools(mcp):
             "advisorNumber": resolved_advisor_number,
             "clientNumber": resolved_client_number,
             "skrVariant": resolved_skr_variant,
+            "onlyChanges": only_changes,
             # A ZIP cannot travel through a JSON tool result (the client used to
             # replace it with {"success": true}); the API stores the file and
             # returns a one-hour download link instead.
