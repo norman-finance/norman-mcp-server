@@ -229,6 +229,7 @@ def test_datev_export_uses_live_endpoint_and_saved_company_settings() -> None:
             advisor_number=None,
             client_number=None,
             skr_variant=None,
+            only_changes=False,
         ),
     )
 
@@ -243,6 +244,7 @@ def test_datev_export_uses_live_endpoint_and_saved_company_settings() -> None:
         "advisorNumber": "1234",
         "clientNumber": "5678",
         "skrVariant": "SKR03",
+        "onlyChanges": False,
         "responseFormat": "download_url",
     }
     assert _annotation_tuple(tool) == WRITE
