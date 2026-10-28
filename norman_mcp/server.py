@@ -408,6 +408,10 @@ def create_app(
     for route in create_file_upload_routes():
         server._custom_starlette_routes.append(route)
 
+    from norman_mcp.files.inline_upload import create_inline_upload_routes
+    for route in create_inline_upload_routes():
+        server._custom_starlette_routes.append(route)
+
     # Register domain verification route for OpenAI Apps
     from starlette.routing import Route
     from starlette.responses import PlainTextResponse
@@ -470,6 +474,8 @@ def create_app(
     register_prompts(server)
     register_resources(server)
     register_public_apps(server)
+    from norman_mcp.apps.document_upload import register_upload_resource
+    register_upload_resource(server)
     register_inbox(server)
     if live_enabled:
         from norman_mcp.apps.inbox_live import InboxLive, register_inbox_live
