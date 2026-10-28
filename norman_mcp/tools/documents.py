@@ -511,7 +511,27 @@ def register_document_tools(mcp):
     async def list_attachments(
         ctx: Context,
         file_name: Optional[str] = Field(default=None, description="Filter by file name (case insensitive partial match)"),
-        linked: Optional[bool] = Field(default=None, description="Legacy API semantics: true returns UNLINKED documents; false returns linked documents. Omit to search all documents."),
+        linked: bool | None = Field(
+            default=None,
+            description=(
+                "Deprecated, use has_booking. Legacy API semantics: true returns UNLINKED documents; "
+                "false returns linked documents. Omit to search all documents."
+            ),
+        ),
+        has_booking: bool | None = Field(
+            default=None,
+            description=(
+                "false: the receipts and invoices no booking holds yet, as its document or as a supporting one; "
+                "these are what Norman's document review works through. true: the documents a booking holds."
+            ),
+        ),
+        payable: bool | None = Field(
+            default=None,
+            description=(
+                "true: the documents a payment can still take: no booking holds them, or only a German booking "
+                "not paid yet, which the payment then pays."
+            ),
+        ),
         attachment_type: Optional[str] = Field(default=None, description="Filter by attachment type (invoice, receipt, contract, other)"),
         description: Optional[str] = Field(default=None, description="Filter by description (case insensitive partial match)"),
         brand_name: Optional[str] = Field(default=None, description="Filter by brand name (case insensitive partial match)"),
@@ -532,7 +552,10 @@ def register_document_tools(mcp):
         
         Args:
             file_name: Filter by file name (case insensitive partial match)
-            linked: Legacy API semantics: true returns UNLINKED documents; false returns linked documents. Omit to search all documents.
+            linked: Deprecated, use has_booking. Legacy API semantics: true returns UNLINKED documents;
+                false returns linked documents.
+            has_booking: false lists the receipts and invoices no booking holds yet; true the ones a booking holds
+            payable: true lists the documents a payment can still take
             attachment_type: Filter by attachment type (invoice, receipt, contract, other)
             description: Filter by description (case insensitive partial match)
             brand_name: Filter by brand name (case insensitive partial match)
@@ -558,22 +581,18 @@ def register_document_tools(mcp):
         )
         
         params = {"page": page, "page_size": page_size}
-        if date_from:
-            params["date_from"] = date_from
-        if date_to:
-            params["date_to"] = date_to
-        if search:
-            params["search"] = search
-        if file_name:
-            params["file_name"] = file_name
-        if linked is not None:
-            params["linked"] = linked
-        if attachment_type:
-            params["has_type"] = attachment_type
-        if description:
-            params["description"] = description
-        if brand_name:
-            params["brand_name"] = brand_name
+        filters = {
+            "date_from": date_from,
+            "date_to": date_to,
+            "search": search,
+            "file_name": file_name,
+            "has_type": attachment_type,
+            "description": description,
+            "brand_name": brand_name,
+        }
+        params.update({name: value for name, value in filters.items() if value})
+        flags = {"linked": linked, "has_booking": has_booking, "payable": payable}
+        params.update({name: value for name, value in flags.items() if value is not None})
             
         result = await api.arequest("GET", attachments_url, params=params)
         if include_download_urls:

@@ -1,7 +1,7 @@
 ---
 name: ta-datev-preparation
 description: Prepare a DATEV export for a German client company (Germany only). Verifies all transactions are categorized, receipts attached, DATEV settings configured, and triggers the export. Use when a tax advisor asks to prepare DATEV, export bookkeeping data, or send data to their tax software.
-version: 1.0.1
+version: 1.0.2
 metadata:
   openclaw:
     emoji: "\U0001F4E6"
@@ -33,6 +33,7 @@ Help the tax advisor prepare and execute a DATEV export:
 - Call `get_missing_documents_summary` to identify transactions without receipts
 - Focus on expense transactions >250 EUR (required for Vorsteuerabzug)
 - Report the count and recommend collecting missing receipts before export
+- Check `documentsWithoutBooking` for the export months: documents no booking holds are missing from the export, so the client books or deletes them first
 
 ## Step 4: Pre-export summary
 
