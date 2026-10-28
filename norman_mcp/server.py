@@ -39,6 +39,7 @@ from norman_mcp.tools.offers import register_offer_tools
 from norman_mcp.tools.taxes import register_tax_tools
 from norman_mcp.tools.transactions import register_transaction_tools
 from norman_mcp.tools.documents import register_document_tools
+from norman_mcp.tools.forms import register_form_tools
 from norman_mcp.tools.company import register_company_tools
 from norman_mcp.tools.categories import register_category_tools
 from norman_mcp.tools.rules import register_rule_tools
@@ -460,6 +461,7 @@ def create_app(
     register_rule_tools(scoped_tools)
     register_workflow_tools(scoped_tools)
     register_document_tools(scoped_tools)
+    register_form_tools(scoped_tools)
     register_company_tools(scoped_tools)
     register_category_tools(scoped_tools)
     register_tax_advisor_tools(scoped_tools)
