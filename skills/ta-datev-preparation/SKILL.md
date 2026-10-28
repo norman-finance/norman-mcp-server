@@ -33,6 +33,7 @@ Help the tax advisor prepare and execute a DATEV export:
 - Call `get_missing_documents_summary` to identify transactions without receipts
 - Focus on expense transactions >250 EUR (required for Vorsteuerabzug)
 - Report the count and recommend collecting missing receipts before export
+- Check `documentsWithoutBooking` for the export months: documents no booking holds are missing from the export, so the client books or deletes them first
 
 ## Step 4: Check changes since the advisor's last file
 - Call `get_datev_changes_since_handoff` to compare each period the advisor already has a file of (a download by an advisor of the client, a DATEV push or an email to the advisor) with the books now

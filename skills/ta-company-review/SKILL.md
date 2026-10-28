@@ -1,7 +1,7 @@
 ---
 name: ta-company-review
 description: Full company review for tax advisors. Generates a structured health report covering financials, document completeness, tax compliance, and action items. Use when a tax advisor asks for an overview, health check, or status of a client company.
-version: 1.0.1
+version: 1.0.2
 metadata:
   openclaw:
     emoji: "\U0001F50D"
@@ -20,6 +20,7 @@ Perform a comprehensive company review for the tax advisor:
 ## Step 2: Check document completeness
 - Call `get_missing_documents_summary` to identify all transactions without receipts
 - Note the total missing count and the highest-value missing items
+- Note `documentsWithoutBooking`: months with uploaded documents that no booking holds are incomplete in the books
 
 ## Step 3: Assess tax compliance
 - Call `get_tax_compliance_status` to check report filing status and registration completeness
