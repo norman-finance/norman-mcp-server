@@ -2,7 +2,7 @@ import pytest
 
 from norman_mcp.files.upload import store_file
 from norman_mcp.server import mcp
-from tests.mcp_harness import FakeApi, call_tool, error_payload, structured
+from tests.mcp_harness import FakeApi, GermanApi, call_tool, error_payload, structured
 
 COMPANY = {
     "isSme": True,
@@ -107,6 +107,19 @@ def test_reader_refuses_paths_expired_refs_invalid_limits_and_missing_company():
     api = FakeApi({}, company_id=None)
     call_tool("read_datev_file", {"file_ref": "ref_unused"}, api)
     assert not api.requests
+
+
+def test_changes_since_handoff_reads_every_period_or_one_and_passes_errors_through():
+    periods = [{"source": "transactions", "dateFrom": "2026-01-01", "dateTo": "2026-12-31", "changedBookings": []}]
+    api = GermanApi(periods)
+    assert structured(call_tool("get_datev_changes_since_handoff", {}, api)) == {"periods": periods}
+    assert structured(call_tool("get_datev_changes_since_handoff", PERIOD, api)) == {"periods": periods}
+    assert [(method, url.split("/api/v1/")[1], kwargs["params"]) for method, url, kwargs in api.requests] == [
+        ("GET", "accounting/datev-export/changes/", {}),
+        ("GET", "accounting/datev-export/changes/", PERIOD),
+    ]
+    error = {"error": "Resource not found", "status_code": 404}
+    assert structured(call_tool("get_datev_changes_since_handoff", PERIOD, GermanApi(error))) == error
 
 
 @pytest.mark.parametrize("tool", ["trigger_datev_export", "validate_ledger_datev_export", "get_datev_changes_since_handoff"])
