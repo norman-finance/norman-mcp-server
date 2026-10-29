@@ -429,8 +429,10 @@ def register_tax_advisor_tools(mcp):
     ) -> Dict[str, Any]:
         """
         Each client of the tax advisor in one period, the way the advisor's client list shows it.
-        Per client: open bookings (not finalized), bookings without a document and documents without
-        a booking dated in the period, the newest DATEV file the advisor has of exactly this period
+        Per client: open bookings (not finalized; an unpaid booking waits for its payment and is left
+        out), bookings without a document and documents without a booking dated in the period,
+        undatedDocuments (documents without a booking and without a date, which belong to no
+        period), the newest DATEV file the advisor has of exactly this period
         with the number of changes since it (file), else the newest file of an earlier period
         (earlierFile), and the VAT return of the period (due date, filing date, or none for a
         Kleinunternehmer or a yearly filer).

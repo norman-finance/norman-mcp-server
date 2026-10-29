@@ -21,10 +21,11 @@ Help the tax advisor see all clients for one period:
 - `status` says where the client stands:
   - `changed`: the books changed after the advisor's DATEV file of this period
   - `missing_documents`: bookings of the period have no document
-  - `in_progress`: bookings not finalized, or documents without a booking
+  - `in_progress`: bookings not finalized, or documents without a booking (an unpaid booking waits for its payment and does not count)
   - `ready`: nothing open, no DATEV file yet
   - `handed_over`: the advisor has the DATEV file and nothing changed since
 - `changed` and `missing_documents` need the advisor first; the list already sorts them on top
+- `undatedDocuments` counts documents without a booking and without a date: they belong to no period, so name them apart
 - `vatReturn` gives the UStVA of the period for a German company: `due` with the earliest open due date, `filed` with the newest filing date, or `none` (Kleinunternehmer, yearly filer or Polish client)
 
 ## Step 3: Present
