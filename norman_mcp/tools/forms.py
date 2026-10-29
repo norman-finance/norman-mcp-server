@@ -11,7 +11,34 @@ from pydantic import Field
 from norman_mcp import config
 from norman_mcp.context import Context
 
-FormId = Literal["payment-request", "handover-protocol", "zaw-fa", "upl-1", "vat-r", "zus-dra"]
+FormId = Literal[
+    "payment-request",
+    "handover-protocol",
+    "zaw-fa",
+    "upl-1",
+    "vat-r",
+    "zus-dra",
+    "vat-z",
+    "vat-26",
+    "pit-2",
+    "pit-11",
+    "pit-28",
+    "pit-36",
+    "pit-36l",
+    "pit-37",
+    "pit-4r",
+    "pit-8ar",
+    "ord-in",
+    "zus-zua",
+    "zus-zza",
+    "zus-zwua",
+    "zus-zcna",
+    "zus-rca",
+    "zus-pel",
+    "nip-8",
+    "annual-leave-request",
+    "payment-receipt",
+]
 READ = ToolAnnotations(
     readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False
 )
@@ -39,9 +66,10 @@ def register_form_tools(mcp):
         query: str = Field(default="", max_length=100, description="Form name, code or purpose"),
         locale: Literal["pl", "en", "ru", "uk"] = "pl",
     ) -> dict[str, Any]:
-        """Find Polish forms and generators: wezwanie do zapłaty, payment requests and handover protocols.
+        """Find Polish forms, PIT/VAT/ZUS guides and generators for business documents.
 
-        Also: formularze, protokół przekazania, UPL-1, ZAW-FA, VAT-R, ZUS DRA. No company data is read.
+        Includes wniosek o urlop, pokwitowanie, PIT-11, VAT-26, ZUS ZUA, PEL and NIP-8.
+        Search new forms in pl/en. No company data is read.
 
         Returns current official sources, localized instructions and whether generation is supported.
         A catalog entry is not proof that the form is required for the user's circumstances.
@@ -63,7 +91,9 @@ def register_form_tools(mcp):
     @mcp.tool(title="Prepare Polish document", annotations=PREPARE)
     async def generate_polish_document(
         ctx: Context,
-        form_id: Literal["payment-request", "handover-protocol"],
+        form_id: Literal[
+            "payment-request", "handover-protocol", "annual-leave-request", "payment-receipt"
+        ],
         version: str = Field(
             description="Exact version returned by get_polish_form", max_length=40
         ),
@@ -76,6 +106,8 @@ def register_form_tools(mcp):
 
         Get the current schema first; never invent names, amounts or dates. For a payment request,
         use only the verified outstanding principal; no interest or collection fees are calculated.
+        For payment-receipt, require confirmation that money was received and its allocation/remaining amounts.
+        A leave request does not approve leave or calculate entitlement.
         Return previewText and a download link, explain that the user must review and sign.
         The link is accessible to anyone holding it and expires after 10 minutes; generate again
         if expired. Files are temporary and are not saved to the company's records.
