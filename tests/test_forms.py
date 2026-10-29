@@ -1,5 +1,7 @@
 import asyncio
 
+import pytest
+
 from norman_mcp.server import mcp
 from tests.mcp_harness import FakeApi, call_tool, structured
 
@@ -50,7 +52,7 @@ def test_preparation_passes_exact_fields_version_and_only_calls_generation():
 
 def test_sdk_rejects_official_form_generation_and_unsafe_ids():
     api = FakeApi({})
-    for form_id in ["upl-1", "../companies", "unknown"]:
+    for form_id in ["upl-1", "pit-11", "zus-pel", "../companies", "unknown"]:
         result = call_tool(
             "generate_polish_document",
             {"form_id": form_id, "version": "v1", "fields": {}},
@@ -58,6 +60,52 @@ def test_sdk_rejects_official_form_generation_and_unsafe_ids():
         )
         assert result.is_error
     assert not api.requests
+
+
+@pytest.mark.parametrize("form_id", ["annual-leave-request", "payment-receipt"])
+def test_new_generators_are_callable_through_the_real_mcp_schema(form_id):
+    api = FakeApi({"status": "draft", "formId": form_id}, company_id=None)
+    call_tool("get_polish_form", {"form_id": form_id}, api)
+    result = call_tool(
+        "generate_polish_document",
+        {"form_id": form_id, "version": "2026-10-29.1", "fields": {"place": "Synthetic Test"}},
+        api,
+    )
+    assert not result.is_error
+    assert structured(result)["formId"] == form_id
+    assert len(api.requests) == 2
+    assert api.requests[-1][1].endswith(f"/forms/{form_id}/generate/")
+
+
+@pytest.mark.parametrize(
+    "form_id",
+    [
+        "pit-2",
+        "pit-11",
+        "pit-28",
+        "pit-36",
+        "pit-36l",
+        "pit-37",
+        "pit-4r",
+        "pit-8ar",
+        "vat-z",
+        "vat-26",
+        "ord-in",
+        "nip-8",
+        "zus-zua",
+        "zus-zza",
+        "zus-zwua",
+        "zus-zcna",
+        "zus-rca",
+        "zus-pel",
+    ],
+)
+def test_new_official_forms_can_be_retrieved(form_id):
+    api = FakeApi({"id": form_id, "kind": "official"}, company_id=None)
+    result = call_tool("get_polish_form", {"form_id": form_id}, api)
+    assert not result.is_error
+    assert structured(result)["id"] == form_id
+    assert api.requests[0][1].endswith(f"/forms/{form_id}/")
 
 
 def test_annotations_are_truthful_and_api_errors_stay_errors():

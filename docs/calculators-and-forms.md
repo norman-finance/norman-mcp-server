@@ -20,6 +20,8 @@ The catalog currently has seven Polish calculators (VAT, JDG annual PIT/ZUS, mon
 | Calculate Polish JDG tax on hypothetical annual revenue | `pl_jdg_annual` schema, ask for missing regime/eligibility/amounts |
 | Przygotuj wezwanie do zapłaty w PDF | Current `payment-request` schema, then document generation |
 | Generate a Polish handover protocol in DOCX | Current `handover-protocol` schema, then DOCX generation |
+| Przygotuj wniosek o urlop wypoczynkowy | Current `annual-leave-request` schema; collect dates and parties; no approval of leave |
+| Prepare a payment receipt | Confirm money was received, collect allocation and remaining amounts; use `payment-receipt` |
 | Pokaż moją deklarację ZUS DRA za wrzesień | Existing company tax-report flow, not a public estimate or blank form |
 | Utwórz fakturę dla klienta | Existing invoice workflow, not a payment-request letter |
 

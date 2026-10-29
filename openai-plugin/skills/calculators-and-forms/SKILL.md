@@ -1,6 +1,6 @@
 ---
 name: calculators-and-forms
-description: Calculate public what-if estimates or find and prepare Polish forms. Use for VAT/net/gross, JDG PIT/ZUS, depreciation, employment cost, company tax/dividends, payment requests and handover protocols. Triggers include kalkulator, oblicz, formularz, wezwanie do zapłaty, protokół przekazania, calculator, form generator.
+description: Calculate public what-if estimates or find and prepare Polish forms. Use for VAT/net/gross, JDG PIT/ZUS, depreciation, employment cost, company tax/dividends, payment requests, handover protocols, annual leave requests and payment receipts. Triggers include kalkulator, oblicz, formularz, wezwanie do zapłaty, protokół przekazania, calculator, form generator.
 argument-hint: "[calculation or document request]"
 ---
 
@@ -16,7 +16,7 @@ Use the existing Norman tools to complete the request. Respond in the user's lan
 | Actual tax due or an existing declaration for the selected company | `list_tax_reports` → `get_tax_report`, or `get_polish_tax_estimates` where applicable |
 | Create an invoice in the account | Existing `create_invoice` flow, not a letter template |
 | Find an official Polish form or blank document | `list_polish_forms` → `get_polish_form` |
-| Prepare a payment request or handover protocol | `get_polish_form` → `generate_polish_document` |
+| Prepare a payment request, handover protocol, annual leave request or payment receipt | `get_polish_form` → `generate_polish_document` |
 
 ## Public calculations
 
@@ -30,9 +30,9 @@ Known IDs: PL `pl_vat`, `pl_jdg_annual`, `pl_zus_monthly`, `pl_depreciation`, `p
 ## Forms and documents
 
 1. Search using Polish or English (`pl`, `en`). If a narrow query gives no results, broaden it or inspect a known form ID; do not conclude the feature is absent from one empty search.
-2. `payment-request`: wezwanie do zapłaty, payment request, demand letter. `handover-protocol`: protokół przekazania, handover protocol. Get the current version and required fields. Ask only for missing facts; never invent parties, dates, amounts or interest.
+2. `payment-request`: wezwanie do zapłaty, payment request, demand letter. `handover-protocol`: protokół przekazania, handover protocol. `annual-leave-request`: wniosek o urlop wypoczynkowy, annual leave request. `payment-receipt`: pokwitowanie odbioru zapłaty, acknowledgment of payment received. Confirm actual receipt and allocation of funds, including remaining amounts, before preparing a receipt. Leave preparation neither approves an absence nor calculates entitlement. Get the current version and required fields. Ask only for missing facts; never invent parties, dates, amounts or interest.
 3. Prepare only on the user's request using `generate_polish_document` with that version and exact field keys. PDF is the default unless DOCX is requested. The file is Polish regardless of the chat language. Show the real preview/download returned by the tool. Say that the user reviews and signs; the bearer link expires after 10 minutes and anyone holding it can download it.
-4. `upl-1`, `zaw-fa`, `vat-r`, `zus-dra` are official-source references only. Provide the current authority link and instructions; do not claim to fill, sign, send or file these forms. For the company's prepared ZUS DRA, use its report flow instead of the blank-form entry.
+4. Any entry with `kind=official`, including PIT, VAT, ZUS, NIP-8, ORD-IN and authorizations, is an official-source reference only. Provide the current authority link and instructions; do not claim to fill, sign, send or file these forms. For the company's prepared ZUS DRA, use its report flow instead of the blank-form entry.
 
 Preparation never sends a reminder, signs a document, files a declaration or pays money. A request to send an account invoice reminder belongs to the separate reminder tool and its own authorization, not this generator. Calculator and form requests do not authorize other account mutations.
 
