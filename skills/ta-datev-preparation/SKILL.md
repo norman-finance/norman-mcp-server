@@ -1,7 +1,7 @@
 ---
 name: ta-datev-preparation
 description: Prepare a DATEV export for a German client company (Germany only). Verifies all transactions are categorized, receipts attached, DATEV settings configured, and triggers the export. Use when a tax advisor asks to prepare DATEV, export bookkeeping data, or send data to their tax software.
-version: 1.2.0
+version: 1.3.0
 metadata:
   openclaw:
     emoji: "\U0001F4E6"
@@ -34,13 +34,15 @@ Help the tax advisor prepare and execute a DATEV export:
 - Focus on expense transactions >250 EUR (required for Vorsteuerabzug)
 - Report the count and recommend collecting missing receipts before export
 - Check `documentsWithoutBooking` for the export months: documents no booking holds are missing from the export, so the client books or deletes them first
+- Unpaid bookings (issued invoices, received documents, bookings marked Not paid) need no finalizing: the file holds them with their documents in the month of their date, so the UStVA gets their input VAT when the invoice comes. A self-employed client's unpaid sales wait for their payment (Ist)
 
 ## Step 4: Check changes since the advisor's last file
 - Call `get_datev_changes_since_handoff` to compare each period the advisor already has a file of (a download by an advisor of the client, a DATEV push or an email to the advisor) with the books now
 - For each period with new, changed or removed bookings, name them: the changed values as old → new (for example account 6640 → 6600), and why a booking left the file (deleted, no longer finalized, moved to another period)
 - Name the period's new documents too, and how many of them no booking holds yet: the client books them before the new file
 - A changed period needs a new file; include it in the summary as an issue to resolve
-- For a changed period, offer only the changes: `trigger_datev_export` with `only_changes` gives a reversal (Generalumkehr) of each changed or removed booking and each new or changed booking, so the advisor's earlier import stays
+- For a changed period, offer only the changes: `trigger_datev_export` with `only_changes` gives a reversal (Generalumkehr) of each changed or removed line and each new or changed line, so the advisor's earlier import stays
+- A payment of an unpaid booking in the advisor's file shows as one new booking in the month it was paid: it moves the money off the Kreditor or Debitor (GmbH/UG) or off account 3612 / 1692 (self-employed, SKR04 / SKR03); the booking's own month does not change
 
 ## Step 5: Pre-export summary
 
@@ -62,7 +64,9 @@ List any blocking issues before export, and the periods that changed since the a
 - Only proceed if the advisor confirms
 - Call `trigger_datev_export` to generate the DATEV EXTF CSV package
 - The export includes:
-  - DATEV EXTF CSV file (booking records)
+  - DATEV EXTF CSV file (booking records): finalized bookings and every unpaid booking, each line in the month of its date
+  - GmbH/UG: an unpaid document books "Aufwand an Kreditor" on its date, its payment "Kreditor an Bank"
+  - Self-employed: an unpaid expense books against 3612 (SKR04) / 1692 (SKR03), "Neutralisierung aufwandswirksamer Sachverhalte für § 4 Abs. 3 EStG", on its date, with its input VAT; its payment clears that account, and the EÜR counts the cost then
   - Transaction statement
   - Attached documents
 - Provide the download link from the response
