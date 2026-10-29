@@ -414,6 +414,39 @@ def register_tax_advisor_tools(mcp):
         }
 
     @mcp.tool(
+        title="List Clients for a Period",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def list_clients_for_period(
+        ctx: Context,
+        date_from: str = Field(description="First day of the period, YYYY-MM-DD: a month, a quarter or a year"),
+        date_to: str = Field(description="Last day of the period, YYYY-MM-DD"),
+    ) -> Dict[str, Any]:
+        """
+        Each client of the tax advisor in one period, the way the advisor's client list shows it.
+        Per client: open bookings (not finalized), bookings without a document and documents without
+        a booking dated in the period, the newest DATEV file the advisor has of exactly this period
+        with the number of changes since it (file), else the newest file of an earlier period
+        (earlierFile), and the VAT return of the period (due date, filing date, or none for a
+        Kleinunternehmer or a yearly filer).
+
+        status is one of: changed (changed since the DATEV file), missing_documents, in_progress,
+        ready (ready to hand over), handed_over. Clients that need the advisor come first.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        url = urljoin(config.api_base_url, "api/v1/tax-advisor/clients/period/")
+        try:
+            rows = api._make_request("GET", url, params={"date_from": date_from, "date_to": date_to})
+        except Exception as e:
+            return {"error": str(e)}
+        return {"dateFrom": date_from, "dateTo": date_to, "clients": rows}
+
+    @mcp.tool(
         title="Switch Active Company",
         annotations=ToolAnnotations(
             readOnlyHint=False,
