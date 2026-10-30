@@ -18,7 +18,7 @@ Help the user create and send an invoice step by step:
 1. **Identify the client**: If a client name is provided in `$ARGUMENTS`, call `list_clients` and find the matching client. If ambiguous, ask the user to clarify. If no client exists, offer to create one with `create_client`.
 
 2. **Gather invoice details**: Collect the following information (ask for anything not provided):
-   - Line items: description, quantity, unit price, VAT rate (DE: default 19% / PL: default 23%)
+   - Line items: description, quantity, unit price, VAT rate (DE: default 19%, 0% for a Kleinunternehmer or a company with VAT-exempt sales under § 4 UStG / PL: default 23%)
    - Invoice date (default: today)
    - Due date / payment terms (default: 14 days)
    - Any notes or special terms
