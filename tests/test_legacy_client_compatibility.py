@@ -81,6 +81,10 @@ non_bank). No existing argument changes. The new find_booking_payments, pay_book
 record_booking_payment, unlink_payment and get_filed_report_changes tools need no
 oracle entry.
 
+The October 22 EU model change updates one description: suggest_skr_category
+says its query goes to Norman's AI model, processed in the EU. No argument
+changes.
+
 The October 23 Polish parity sync updates seven reviewed tool signatures:
 list_attachments, search_transactions, list_tax_reports and list_bills gain bounded
 filters/pagination; create_invoice and list_invoices gain quote_kind for proforma;
