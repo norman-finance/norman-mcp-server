@@ -42,7 +42,7 @@ Help the tax advisor prepare and execute a DATEV export:
 - Name the period's new documents too, and how many of them no booking holds yet: the client books them before the new file
 - A changed period needs a new file; include it in the summary as an issue to resolve
 - For a changed period, offer only the changes: `trigger_datev_export` with `only_changes` gives a reversal (Generalumkehr) of each changed or removed line and each new or changed line, so the advisor's earlier import stays
-- A payment of an unpaid booking in the advisor's file shows as one new booking in the month it was paid: it moves the money off the Kreditor or Debitor (GmbH/UG) or off account 3612 / 1692 (self-employed, SKR04 / SKR03); the booking's own month does not change
+- A payment of an unpaid booking in the advisor's file shows as one new booking in the month it was paid: it moves the money off the Kreditor or Debitor (GmbH/UG) or off account 3612 / 1692 (self-employed, SKR04 / SKR03); the booking's own month does not change. A booking marked paid by hand books the same way. If the bank's rate differs from the document's, a second line in the payment month books the difference without a tax key. A credit note and its refund book the other way round.
 
 ## Step 5: Pre-export summary
 
