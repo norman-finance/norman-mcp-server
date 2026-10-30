@@ -54,6 +54,7 @@ def _conversation(thread: Dict[str, Any]) -> Dict[str, Any]:
         "subject": thread.get("subject") or None,
         "lastMessageAt": thread.get("last_message_at"),
         "lastMessage": thread.get("last_message_preview") or None,
+        "lastEvent": thread.get("last_message_system_kind") or None,
         "unread": thread.get("unread_count", 0),
     }
 
@@ -189,6 +190,10 @@ def register_advisor_comms_tools(mcp):
         conversation_id: Optional[str] = Field(
             default=None, description="A conversation id from an earlier call; the newest conversation if omitted.",
         ),
+        archived: bool = Field(
+            default=False,
+            description="Read the conversations this user archived instead; a new message brings one back.",
+        ),
     ) -> Dict[str, Any]:
         """Read the conversation with the company's tax advisor (a German Steuerberater, a Polish
         company's own accountant).
@@ -206,7 +211,8 @@ def register_advisor_comms_tools(mcp):
         advisors = await _active_advisors(api)
         if _failed(advisors):
             return advisors
-        threads = await api.arequest("GET", _url("comms/threads/"), params=params)
+        thread_params = {**params, "archived": "true"} if archived else params
+        threads = await api.arequest("GET", _url("comms/threads/"), params=thread_params)
         if _failed(threads):
             return threads
         result = await _read_conversation(
@@ -286,6 +292,10 @@ def register_advisor_comms_tools(mcp):
         conversation_id: Optional[str] = Field(
             default=None, description="A conversation id from an earlier call; the newest conversation if omitted.",
         ),
+        archived: bool = Field(
+            default=False,
+            description="Read the conversations this user archived instead; a new message brings one back.",
+        ),
     ) -> Dict[str, Any]:
         """For tax advisors: read a client's conversations and open document requests.
 
@@ -293,7 +303,7 @@ def register_advisor_comms_tools(mcp):
         """
         api = ctx.request_context.lifespan_context["api"]
         base = _url(f"clients/{company_id}/")
-        threads = await api.arequest("GET", f"{base}threads/")
+        threads = await api.arequest("GET", f"{base}threads/", params={"archived": "true"} if archived else None)
         if _failed(threads):
             return threads
         result = await _read_conversation(api, base, _rows(threads), conversation_id, None)
