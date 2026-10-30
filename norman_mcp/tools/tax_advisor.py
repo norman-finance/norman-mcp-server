@@ -433,11 +433,16 @@ def register_tax_advisor_tools(mcp):
         out), bookings without a document, documents without a booking of the period (by their
         date, else their upload date), the newest DATEV file the advisor has of exactly this period
         with the number of changes since it (file), else the newest file of an earlier period
-        (earlierFile), and the VAT return of the period (due date, filing date, or none for a
-        Kleinunternehmer or a yearly filer).
+        (earlierFile), and the VAT return of the period: the UStVA or the Polish JPK_V7, due with its
+        earliest due date or filed with its newest filing date. A Kleinunternehmer or a VAT-exempt
+        company has one only for a period with tax, such as reverse charge; otherwise none, as
+        for a yearly filer.
 
         status is one of: changed (changed since the DATEV file), missing_documents, in_progress,
-        ready (ready to hand over), handed_over. Clients that need the advisor come first.
+        ready (ready to hand over), handed_over (nothing open and nothing changed since the file),
+        closed (bookkeeping is not opened for the advisor). Clients that need the advisor come first. closedBlocks names the parts of the books the
+        client or the firm has not opened for the advisor (bookkeeping, documents, datev,
+        taxes_prepare); their facts are null.
         """
         api = ctx.request_context.lifespan_context["api"]
         url = urljoin(config.api_base_url, "api/v1/tax-advisor/clients/period/")

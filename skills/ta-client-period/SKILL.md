@@ -23,12 +23,14 @@ Help the tax advisor see all clients for one period:
   - `missing_documents`: bookings of the period have no document
   - `in_progress`: bookings not finalized, or documents without a booking (an unpaid booking waits for its payment and does not count)
   - `ready`: nothing open, no DATEV file yet
-  - `handed_over`: the advisor has the DATEV file and nothing changed since
+  - `handed_over`: the advisor has the DATEV file, nothing changed since and nothing is open
+  - `closed`: bookkeeping is not opened for the advisor, so the list cannot say what is open
 - `changed` and `missing_documents` need the advisor first; the list already sorts them on top
-- `vatReturn` gives the UStVA of the period for a German company: `due` with the earliest open due date, `filed` with the newest filing date, or `none` (Kleinunternehmer, yearly filer or Polish client)
+- `vatReturn` gives the VAT return of the period, the UStVA or the Polish JPK_V7: `due` with the earliest open due date, `filed` with the newest filing date, or `none`. A Kleinunternehmer or a VAT-exempt company has one only for a period with tax, such as reverse charge. A yearly filer normally has none
+- `closedBlocks` names what the client or the firm has not opened for the advisor; those facts are null. Say so instead of reading them as zero
 
 ## Step 3: Present
-- One line per client: name, status, the counts that are not zero, the DATEV file and, for a German company, the UStVA
+- One line per client: name, status, the counts that are not zero, the DATEV file and the VAT return
 - Then the next step for each client that needs the advisor:
   - `changed`: run `get_datev_changes_since_handoff` for the client and offer only the changes as a new file
   - `missing_documents`: offer `ta-missing-receipts` for the client

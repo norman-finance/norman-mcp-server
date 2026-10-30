@@ -80,14 +80,22 @@ def _message(message: Dict[str, Any], advisor_emails: Optional[set] = None) -> D
     return entry
 
 
+def _period(year: Optional[int], month: Optional[int], quarter: Optional[int]) -> Optional[str]:
+    if not year:
+        return None
+    if month:
+        return f"{month:02d}/{year}"
+    if quarter:
+        return f"Q{quarter}/{year}"
+    return str(year)
+
+
 def _document_request(request: Dict[str, Any]) -> Dict[str, Any]:
-    year, month = request.get("period_year"), request.get("period_month")
-    period = f"{month:02d}/{year}" if year and month else (str(year) if year else None)
     return {
         "id": request.get("public_id"),
         "title": request.get("title"),
         "description": request.get("description") or None,
-        "period": period,
+        "period": _period(request.get("period_year"), request.get("period_month"), request.get("period_quarter")),
         "dueDate": request.get("due_at"),
         "status": request.get("status"),
         "requestedBy": request.get("requested_by_name") or None,
@@ -351,6 +359,9 @@ def register_advisor_comms_tools(mcp):
         description: Optional[str] = Field(default=None, description="Details for the client."),
         period_year: Optional[int] = Field(default=None, ge=2000, le=2100, description="The year the documents cover."),
         period_month: Optional[int] = Field(default=None, ge=1, le=12, description="The month the documents cover."),
+        period_quarter: Optional[int] = Field(
+            default=None, ge=1, le=4, description="The quarter the documents cover, instead of a month.",
+        ),
         due_date: Optional[str] = Field(default=None, description="Due date, YYYY-MM-DD."),
         conversation_id: Optional[str] = Field(
             default=None, description="Ask in this conversation; the client's general conversation if omitted.",
@@ -364,6 +375,7 @@ def register_advisor_comms_tools(mcp):
         api = ctx.request_context.lifespan_context["api"]
         payload: Dict[str, Any] = {"title": title}
         optional = {"description": description, "period_year": period_year, "period_month": period_month,
+                    "period_quarter": period_quarter,
                     "due_at": due_date, "thread_id": conversation_id}
         payload.update({key: value for key, value in optional.items() if value not in (None, "")})
         result = await api.arequest("POST", _url(f"clients/{company_id}/document-requests/"), json_data=payload)
