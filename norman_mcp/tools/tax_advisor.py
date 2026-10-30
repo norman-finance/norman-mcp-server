@@ -440,9 +440,9 @@ def register_tax_advisor_tools(mcp):
 
         status is one of: changed (changed since the DATEV file), missing_documents, in_progress,
         ready (ready to hand over), handed_over (nothing open and nothing changed since the file),
-        closed (bookkeeping is not opened for the advisor). Clients that need the advisor come first. closedBlocks names the parts of the books the
-        client or the firm has not opened for the advisor (bookkeeping, documents, datev,
-        taxes_prepare); their facts are null.
+        closed (bookkeeping is not opened for the advisor). Clients that need the advisor come
+        first. closedBlocks names the parts of the books the client or the firm has not opened for
+        the advisor (bookkeeping, documents, datev, taxes_prepare); their facts are null.
         """
         api = ctx.request_context.lifespan_context["api"]
         url = urljoin(config.api_base_url, "api/v1/tax-advisor/clients/period/")
