@@ -32,5 +32,5 @@ Help the user complete their GoBD Verfahrensdokumentation.
 - Call `update_verfahrensdokumentation` with the answers the user gave. Norman logs each change, and the PDF lists them.
 
 ## Step 4: Download
-- The user downloads the PDF in the app: Export on the transactions page, then Verfahrensdokumentation. A GmbH or UG also finds it under Ledger, Export GoBD.
+- The user downloads the PDF in the app: Export on the transactions page, turn on Download in GoBD format, then Verfahrensdokumentation. A GmbH or UG also finds it under Ledger, Export GoBD.
 - There is no link to the PDF. Tell the user to keep each downloaded version as long as the records it explains.

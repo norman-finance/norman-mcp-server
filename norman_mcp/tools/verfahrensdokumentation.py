@@ -14,9 +14,9 @@ def register_verfahrensdokumentation_tools(mcp: Any) -> None:
         """Read the company's saved answers for its GoBD Verfahrensdokumentation. German companies only.
 
         Norman creates the PDF fresh at each download from these answers and the company's current data. It is free on
-        every plan. The user downloads it in the app: Export on the transactions page, or Export GoBD in the ledger.
-        There is no link to it. Say plainly that the document stays the customer's own, nobody at Norman reviews it
-        and Norman holds no GoBD attestation.
+        every plan. The user downloads it in the app: Export on the transactions page with the GoBD format switched
+        on, or Export GoBD in the ledger. There is no link to it. Say plainly that the document stays the customer's
+        own, nobody at Norman reviews it and Norman holds no GoBD attestation.
         """
         api, company_id, error = _api_and_company(ctx)
         if error:
