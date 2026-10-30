@@ -222,6 +222,7 @@ Ready-to-use skills compatible with **Claude Code**, **OpenClaw**, and the [Agen
 | `run-payroll-month` | German payroll : changes, calculation, approval, social insurance, payment, and Lohnsteuer-Anmeldung |
 | `categorize-transactions` | Categorize and verify bank transactions |
 | `find-receipts` | Find missing receipts from Gmail or email and attach them |
+| `verfahrensdokumentation` | Fill in the answers for the GoBD Verfahrensdokumentation (German companies) |
 | `overdue-reminders` | Identify overdue invoices and send payment reminders |
 | `expense-report` | Expense breakdown by category, top vendors, and trends |
 | `tax-deduction-finder` | Scan transactions for missed deductions and suggest fixes |
