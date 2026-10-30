@@ -39,8 +39,6 @@ GERMAN_ONLY_TOOLS = frozenset(
         "list_annual_closes",
         "create_annual_close",
         "get_annual_close",
-        "get_verfahrensdokumentation",
-        "update_verfahrensdokumentation",
         "create_annual_close_entry",
         "get_annual_close_workbook",
         # DATEV: the migration from it, the SKR03/SKR04 switch and catalog, the export.

@@ -30,7 +30,6 @@ from norman_mcp.tools.country_scope import CountryScopedTools
 from norman_mcp.tools.polish_accounting import register_polish_accounting_tools
 from norman_mcp.tools.accounting import register_accounting_tools
 from norman_mcp.tools.datev import register_datev_tools
-from norman_mcp.tools.verfahrensdokumentation import register_verfahrensdokumentation_tools
 from norman_mcp.tools.clients import register_client_tools
 from norman_mcp.tools.products import register_product_tools
 from norman_mcp.tools.vendors import register_vendor_tools
@@ -460,7 +459,6 @@ def create_app(
     register_transaction_tools(scoped_tools)
     register_accounting_tools(scoped_tools)
     register_datev_tools(scoped_tools)
-    register_verfahrensdokumentation_tools(scoped_tools)
     register_polish_accounting_tools(scoped_tools)
     register_rule_tools(scoped_tools)
     register_workflow_tools(scoped_tools)
