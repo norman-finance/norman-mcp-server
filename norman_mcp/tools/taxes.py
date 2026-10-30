@@ -474,7 +474,7 @@ def register_tax_tools(mcp):
             vat_percent: VAT percentage supported for the company country (Germany and Poland differ).
             start_tax_report_date: Start date for tax reporting (YYYY-MM-DD)
             reporting_frequency: Frequency of reporting (e.g. "monthly"), Options: "monthly", "quarterly", "yearly".
-                A German Kleinunternehmer files the UStVA of its § 13b periods "monthly" (the default) or "quarterly".
+                A German Kleinunternehmer files the UStVA of its § 13b periods "quarterly" (the default) or "monthly".
             
         Returns:
             Updated tax setting
