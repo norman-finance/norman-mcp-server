@@ -25,7 +25,6 @@ Help the tax advisor see all clients for one period:
   - `ready`: nothing open, no DATEV file yet
   - `handed_over`: the advisor has the DATEV file and nothing changed since
 - `changed` and `missing_documents` need the advisor first; the list already sorts them on top
-- `undatedDocuments` counts documents without a booking and without a date: they belong to no period, so name them apart
 - `vatReturn` gives the UStVA of the period for a German company: `due` with the earliest open due date, `filed` with the newest filing date, or `none` (Kleinunternehmer, yearly filer or Polish client)
 
 ## Step 3: Present
