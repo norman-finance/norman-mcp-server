@@ -54,6 +54,7 @@ def _conversation(thread: Dict[str, Any]) -> Dict[str, Any]:
         "subject": thread.get("subject") or None,
         "lastMessageAt": thread.get("last_message_at"),
         "lastMessage": thread.get("last_message_preview") or None,
+        "lastEvent": thread.get("last_message_system_kind") or None,
         "unread": thread.get("unread_count", 0),
     }
 
@@ -79,14 +80,22 @@ def _message(message: Dict[str, Any], advisor_emails: Optional[set] = None) -> D
     return entry
 
 
+def _period(year: Optional[int], month: Optional[int], quarter: Optional[int]) -> Optional[str]:
+    if not year:
+        return None
+    if month:
+        return f"{month:02d}/{year}"
+    if quarter:
+        return f"Q{quarter}/{year}"
+    return str(year)
+
+
 def _document_request(request: Dict[str, Any]) -> Dict[str, Any]:
-    year, month = request.get("period_year"), request.get("period_month")
-    period = f"{month:02d}/{year}" if year and month else (str(year) if year else None)
     return {
         "id": request.get("public_id"),
         "title": request.get("title"),
         "description": request.get("description") or None,
-        "period": period,
+        "period": _period(request.get("period_year"), request.get("period_month"), request.get("period_quarter")),
         "dueDate": request.get("due_at"),
         "status": request.get("status"),
         "requestedBy": request.get("requested_by_name") or None,
@@ -189,6 +198,10 @@ def register_advisor_comms_tools(mcp):
         conversation_id: Optional[str] = Field(
             default=None, description="A conversation id from an earlier call; the newest conversation if omitted.",
         ),
+        archived: bool = Field(
+            default=False,
+            description="Read the conversations this user archived instead; a new message brings one back.",
+        ),
     ) -> Dict[str, Any]:
         """Read the conversation with the company's tax advisor (a German Steuerberater, a Polish
         company's own accountant).
@@ -206,7 +219,8 @@ def register_advisor_comms_tools(mcp):
         advisors = await _active_advisors(api)
         if _failed(advisors):
             return advisors
-        threads = await api.arequest("GET", _url("comms/threads/"), params=params)
+        thread_params = {**params, "archived": "true"} if archived else params
+        threads = await api.arequest("GET", _url("comms/threads/"), params=thread_params)
         if _failed(threads):
             return threads
         result = await _read_conversation(
@@ -286,6 +300,10 @@ def register_advisor_comms_tools(mcp):
         conversation_id: Optional[str] = Field(
             default=None, description="A conversation id from an earlier call; the newest conversation if omitted.",
         ),
+        archived: bool = Field(
+            default=False,
+            description="Read the conversations this user archived instead; a new message brings one back.",
+        ),
     ) -> Dict[str, Any]:
         """For tax advisors: read a client's conversations and open document requests.
 
@@ -293,7 +311,7 @@ def register_advisor_comms_tools(mcp):
         """
         api = ctx.request_context.lifespan_context["api"]
         base = _url(f"clients/{company_id}/")
-        threads = await api.arequest("GET", f"{base}threads/")
+        threads = await api.arequest("GET", f"{base}threads/", params={"archived": "true"} if archived else None)
         if _failed(threads):
             return threads
         result = await _read_conversation(api, base, _rows(threads), conversation_id, None)
@@ -341,6 +359,9 @@ def register_advisor_comms_tools(mcp):
         description: Optional[str] = Field(default=None, description="Details for the client."),
         period_year: Optional[int] = Field(default=None, ge=2000, le=2100, description="The year the documents cover."),
         period_month: Optional[int] = Field(default=None, ge=1, le=12, description="The month the documents cover."),
+        period_quarter: Optional[int] = Field(
+            default=None, ge=1, le=4, description="The quarter the documents cover, instead of a month.",
+        ),
         due_date: Optional[str] = Field(default=None, description="Due date, YYYY-MM-DD."),
         conversation_id: Optional[str] = Field(
             default=None, description="Ask in this conversation; the client's general conversation if omitted.",
@@ -354,6 +375,7 @@ def register_advisor_comms_tools(mcp):
         api = ctx.request_context.lifespan_context["api"]
         payload: Dict[str, Any] = {"title": title}
         optional = {"description": description, "period_year": period_year, "period_month": period_month,
+                    "period_quarter": period_quarter,
                     "due_at": due_date, "thread_id": conversation_id}
         payload.update({key: value for key, value in optional.items() if value not in (None, "")})
         result = await api.arequest("POST", _url(f"clients/{company_id}/document-requests/"), json_data=payload)
