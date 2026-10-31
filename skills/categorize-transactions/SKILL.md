@@ -1,7 +1,7 @@
 ---
 name: categorize-transactions
 description: Review and categorize uncategorized bank transactions, match them with invoices, and verify bookkeeping entries. Use when the user wants to review transactions, categorize expenses, do bookkeeping, or reconcile their bank account.
-version: 1.2.0
+version: 1.2.1
 metadata:
   openclaw:
     emoji: "\U0001F3F7"
@@ -20,6 +20,10 @@ Call `get_company_details` and check `isSme`, `country` and `usesCompanyChart`:
 - **JDG** (`isSme: false`, `country: PL`, `usesCompanyChart: true`): a Polish sole trader books on its own PL_KPIR chart, never on the freelance categories. Its tax book is the KPiR, or on the ryczałt the revenue register; the account decides the KPiR column. Use `list_company_categories` and assign the account with `update_transaction` (`company_category_id`).
 - **GmbH / UG** (`isSme: true`, `country: DE`): Use `list_company_categories` to find DATEV categories by code. If the right category isn't provisioned, use `search_skr_by_code` or `suggest_skr_category` to search the full SKR catalog, then `create_company_category` to add it.
 - **Sp. z o.o.** (`isSme: true`, `country: PL`): full books on the PL_FULL chart of accounts (Zakładowy Plan Kont), not a KPiR. Use `list_company_categories` with `chart_template: "PL_FULL"` and assign the account with `update_transaction`. The SKR tools are German and not available for it; if no PL_FULL account fits, ask the user which account to use.
+
+## Transfers between own accounts
+
+With automatic categorization on, a bank import books a German company's payment to or from another of its connected accounts by IBAN: on `Internal transfer` for a freelancer or trader, on `Transfers between own accounts` for a GmbH or UG. These rows carry no VAT and do not change profit. Leave them there unless the user says the payment is something else.
 
 ## Workflow
 
