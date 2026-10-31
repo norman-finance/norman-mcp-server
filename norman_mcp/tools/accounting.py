@@ -59,6 +59,10 @@ EBILANZ_RULES = (
 )
 
 
+
+# What a closing adjustment means for VAT: none (an accrual, provision or reclassification), or the legacy reading.
+ClosingTaxTreatment = Literal["NONE", "DOMESTIC_NO_VAT"]
+
 class EbilanzAssignment(BaseModel):
     """How one account is reported in the E-Bilanz for one fiscal year."""
 
@@ -1385,8 +1389,14 @@ def register_accounting_tools(mcp: Any) -> None:
         amount: float = Field(gt=0),
         memo: str = "",
         booking_date: Optional[str] = None,
+        tax_treatment: ClosingTaxTreatment = "NONE",
     ) -> Dict[str, Any]:
-        """Post a closing adjustment to a Draft annual close; locked years remain server-protected."""
+        """Post a closing adjustment to a Draft annual close; locked years remain server-protected.
+
+        tax_treatment: DOMESTIC_NO_VAT for an accrual, provision or reclassification, which has no VAT
+        effect. Left at NONE, a posting on a revenue or expense account counts in the VAT returns. A
+        VAT-relevant correction belongs in the journal with its tax data, not in a closing entry.
+        """
         api, company_id, error = _api_and_company(ctx)
         if error:
             return error
@@ -1404,8 +1414,34 @@ def register_accounting_tools(mcp: Any) -> None:
                     "memo": memo,
                     "bookingDate": booking_date,
                     "source": "CLOSING",
+                    "taxTreatment": tax_treatment,
                 }
             ),
+        )
+
+    @mcp.tool(title="Update Annual Close Entry", annotations=WRITE)
+    async def update_annual_close_entry(
+        ctx: Context,
+        annual_close_id: str,
+        entry_id: str,
+        tax_treatment: ClosingTaxTreatment,
+    ) -> Dict[str, Any]:
+        """Set the tax treatment of a closing adjustment posted to a Draft annual close.
+
+        DOMESTIC_NO_VAT takes an accrual, provision or reclassification out of the VAT returns.
+        Depreciation written from the asset register and locked years cannot change.
+        """
+        api, company_id, error = _api_and_company(ctx)
+        if error:
+            return error
+        return await _request(
+            api,
+            "PATCH",
+            _company_url(
+                company_id,
+                f"accounting/annual-closes/{annual_close_id}/entries/{entry_id}/",
+            ),
+            json_data={"taxTreatment": tax_treatment},
         )
 
     @mcp.tool(title="Get Annual Close Workbook", annotations=READ_ONLY)

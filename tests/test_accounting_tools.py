@@ -73,6 +73,7 @@ def test_accounting_workspace_registers_safe_parity_without_binding_submission()
         "create_annual_close",
         "get_annual_close",
         "create_annual_close_entry",
+        "update_annual_close_entry",
         "get_annual_close_workbook",
     }.issubset(mcp.tools)
     assert not {name for name in mcp.tools if "submit" in name or "lock" in name}
@@ -449,3 +450,33 @@ def test_storno_requires_confirmation() -> None:
 
     assert warning["confirmationRequired"] is True
     assert api.requests == []
+
+
+def test_a_closing_accrual_says_it_has_no_vat_effect() -> None:
+    mcp, api = registered_tools()
+
+    asyncio.run(
+        mcp.tools["create_annual_close_entry"](
+            context_for(api),
+            annual_close_id="close-1",
+            debit_code="4400",
+            credit_code="3900",
+            amount=376.77,
+            memo="PRAP 2025",
+            tax_treatment="DOMESTIC_NO_VAT",
+        )
+    )
+    asyncio.run(
+        mcp.tools["update_annual_close_entry"](
+            context_for(api),
+            annual_close_id="close-1",
+            entry_id="entry-1",
+            tax_treatment="DOMESTIC_NO_VAT",
+        )
+    )
+
+    (create_method, create_url, create), (update_method, update_url, update) = api.requests
+    assert (create_method, create["json_data"]["taxTreatment"]) == ("POST", "DOMESTIC_NO_VAT")
+    assert create_url.endswith("/accounting/annual-closes/close-1/entries/")
+    assert (update_method, update["json_data"]) == ("PATCH", {"taxTreatment": "DOMESTIC_NO_VAT"})
+    assert update_url.endswith("/accounting/annual-closes/close-1/entries/entry-1/")
