@@ -32,6 +32,7 @@ from norman_mcp.tools.accounting import register_accounting_tools
 from norman_mcp.tools.datev import register_datev_tools
 from norman_mcp.tools.clients import register_client_tools
 from norman_mcp.tools.products import register_product_tools
+from norman_mcp.tools.integrations import register_integration_tools
 from norman_mcp.tools.vendors import register_vendor_tools
 from norman_mcp.tools.bills import register_bill_tools
 from norman_mcp.tools.invoices import register_invoice_tools
@@ -451,6 +452,7 @@ def create_app(
     scoped_tools = CountryScopedTools(server)
     register_client_tools(scoped_tools)
     register_product_tools(scoped_tools)
+    register_integration_tools(scoped_tools)
     register_vendor_tools(scoped_tools)
     register_bill_tools(scoped_tools)
     register_invoice_tools(scoped_tools)
