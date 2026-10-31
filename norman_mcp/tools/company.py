@@ -370,13 +370,14 @@ def register_company_tools(mcp):
         only_changes: bool = Field(
             default=False,
             description="Only what changed since the newest DATEV file the advisor has of this period: a reversal "
-            "(Generalumkehr) of each changed or removed booking, then each new or changed booking",
+            "(Generalumkehr) of each changed or removed line, then each new or changed line",
         ),
     ) -> Dict[str, Any]:
         """
         Export DATEV and return a downloadUrl valid for one hour. By default GmbH/UG
         use the complete Ledger, including opening, manual, payroll, depreciation and
-        closing entries; other companies use finalized transactions. Ledger exports
+        closing entries; other companies use finalized transactions and unpaid ones, which need
+        no finalizing; a self-employed company's unpaid sales wait for their payment. Ledger exports
         are structurally checked before download; show validation findings to the user.
         include_documents adds a ZIP with receipts. Nothing is sent to DATEV or an advisor.
         Use source=transactions only when the user explicitly wants that narrower export.
