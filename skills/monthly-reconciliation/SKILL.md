@@ -15,6 +15,16 @@ metadata:
 
 Guide the user through a complete monthly reconciliation:
 
+## Stripe import status
+
+- Use `list_integrations` to inspect the selected company's connections before reconciling imported Stripe data.
+- `stripe_bookkeeping` is the marketplace app for accounting imports. `stripe` is the separate Connect connection for customer payments. A Stripe MCP Source is a third connection with its own permissions.
+- If the user requests a new import, call `sync_integration` for the bookkeeping connection. A queued import is not a completed import: read its status and `lastSyncedAt` again.
+- Daily imports stay off until the user enables them at `/integrations/stripe/install`. Do not enable them during reconciliation.
+- Report `lastSyncSkipped` once. Never reopen finalized or locked records to attach imported invoices.
+- For a new connection, direct the user to `/integrations/stripe/install`, which requires Norman login and company selection. Never request Stripe passwords or API keys.
+- Use `disconnect_integration` only when the user asks to disconnect the named connection. Removing bookkeeping access must not remove the payment connection.
+
 ## Step 1: Transaction Review
 - Call `search_transactions` for the specified month (or last month if not specified)
 - Identify uncategorized transactions
