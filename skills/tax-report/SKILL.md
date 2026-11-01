@@ -42,7 +42,7 @@ Help the user with their tax obligations. Read the company's country first (`com
    - There is no Polish signing or submission tool here. Norman files the JPK_V7 (the monthly JPK_V7M, or each monthly file of a quarterly JPK_V7K) from the Norman app only after the owner approves and signs it, on the JDG Pro and Sp. z o.o. Max plans. Norman prepares the PIT returns, the CIT-8 draft and the VAT-UE and calculates ZUS; the user or their accountant files them.
    - Give facts and next steps, never an individual tax opinion.
 
-7. **Tax settings**: Call `list_tax_settings` to review VAT registration, filing frequency, and other tax configuration.
+7. **Tax settings**: Call `list_tax_settings` to review VAT registration, filing frequency, and other tax configuration. A German Kleinunternehmer files no ZM (§ 18a Abs. 4 UStG), also for EU B2B sales. Filed ZMs stay in the reports.
 
 Important warnings:
 - German companies: ALWAYS show the Finanzamt preview before submitting
