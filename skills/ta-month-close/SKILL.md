@@ -1,7 +1,7 @@
 ---
 name: ta-month-close
 description: Close, reopen or check a German client's VAT period for a tax advisor, and read the state of its year. Use when a tax advisor says a month, quarter or year is done, asks what changed after a close, or asks whether a year is closed.
-version: 1.0.0
+version: 1.1.0
 metadata:
   openclaw:
     emoji: "\U0001F512"
@@ -19,6 +19,7 @@ Help the tax advisor close a client's period:
 - `close.canChange` is false while the period runs or when the advisor may not write bookings. Say so
 
 ## Step 2: Name what is open
+- If `close.period` differs from the period you read, call `list_clients_for_period` again with `close.period`: the counts must be those of the VAT period that closes
 - Name the open items of that VAT period: `documentsWithoutBooking`, `missingDocuments` and `openBookings`
 - Open items never block the close. Say this plainly and let the advisor decide
 
@@ -28,12 +29,13 @@ Help the tax advisor close a client's period:
 - A late document keeps its legal date, also in a closed period
 
 ## Step 4: Changes after the close
-- `close.changes` counts the changes since the close. `get_client_period_close_changes` names them: new, changed and removed bookings, and new documents
+- `close.changes` counts the changes since the close, also in a quarter or year whose months the advisor closed one by one. `get_client_period_close_changes` names them per closed period: new, changed and removed bookings, and new documents. A new booking counts even before it is finalized
+- The document facts are null while the client's documents are closed to the advisor. Say so instead of reading them as zero
 - To accept them, close the period again with the advisor's yes: it takes a new record
 - Call `reopen_client_period` only when the advisor asks for it
 
 ## Step 5: The year
 - Pick the calendar year: `year.closed` and `year.missing` give its state
 - A self-employed year is closed when its last period is closed and the EUeR and, where due, the annual VAT return are filed. There is no extra step to close it
-- A GmbH's or UG's year is closed when its annual close is locked: use `annual-close`. Its months read as closed then, and they do not reopen here
+- A GmbH's or UG's year is closed when its annual close is locked: read it with `list_annual_closes` and `get_annual_close`. Its months read as closed then, with 0 changes. They do not close or reopen here: the API answers `year_closed`
 - In a GmbH's or UG's closed year, whatever arrives late books on the first open day and its VAT keeps the legal month

@@ -481,6 +481,7 @@ def register_tax_advisor_tools(mcp):
         period holds now. Closing locks nothing and asks for nothing: open items stay open, the
         client can still change the period and sees nothing of the close, and each later change
         shows to the advisor as a change after the close. Closing again takes a new record.
+        A period under a GmbH's or UG's locked annual close does not close here: code year_closed.
         Before you call it, name what is still open in the period and ask the advisor.
 
         Returns:
@@ -510,7 +511,7 @@ def register_tax_advisor_tools(mcp):
     ) -> Dict[str, Any]:
         """
         Reopen a VAT period the advisor closed. Ask the advisor first. A GmbH's or UG's annual
-        close does not reopen here.
+        close does not reopen here, and a period under it answers code year_closed.
 
         Returns:
             The client's row of list_clients_for_period for this period.
@@ -539,7 +540,9 @@ def register_tax_advisor_tools(mcp):
     ) -> Dict[str, Any]:
         """
         What changed after the advisor closed a client's period: for each closed VAT period in the
-        range, the new, changed and removed bookings and the new documents since its close.
+        range, the new, changed and removed bookings and the new documents since its close. A new
+        booking counts even before it is finalized. The document facts are null while the client's
+        documents are closed to the advisor. A period under a locked annual close returns nothing.
         """
         api = ctx.request_context.lifespan_context["api"]
         url = urljoin(config.api_base_url, f"api/v1/tax-advisor/clients/{company_id}/period/close-changes/")

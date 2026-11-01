@@ -53,9 +53,6 @@ GERMAN_ONLY_TOOLS = frozenset(
         "trigger_datev_export",
         "validate_ledger_datev_export",
         "get_datev_changes_since_handoff",
-        "close_client_period",
-        "reopen_client_period",
-        "get_client_period_close_changes",
         # ELSTER and the Finanzamt.
         "generate_finanzamt_preview",
         "get_filed_report_changes",
