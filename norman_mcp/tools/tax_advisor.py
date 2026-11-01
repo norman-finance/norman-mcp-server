@@ -438,11 +438,19 @@ def register_tax_advisor_tools(mcp):
         company has one only for a period with tax, such as reverse charge; otherwise none, as
         for a yearly filer.
 
-        status is one of: changed (changed since the DATEV file), missing_documents, in_progress,
-        ready (ready to hand over), handed_over (nothing open and nothing changed since the file),
-        closed (bookkeeping is not opened for the advisor). Clients that need the advisor come
-        first. closedBlocks names the parts of the books the client or the firm has not opened for
-        the advisor (bookkeeping, documents, datev, taxes_prepare); their facts are null.
+        close says whether the advisor closed the period: closed, closedAt, by, changes (changes
+        since the close), period (the client's VAT period that closes from here, null if the
+        picked period spans several) and canChange. year comes only when the picked period is a
+        calendar year: closed and what it still lacks (missing). A self-employed year is closed
+        when its last period is closed and the EUeR and, where due, the annual VAT return are
+        filed; a GmbH's or UG's when its annual close is locked.
+
+        status is one of: changed (changed since the DATEV file or since the close),
+        missing_documents, in_progress, ready (ready to hand over), handed_over (nothing open and
+        nothing changed since the file), period_closed (the advisor closed the period), closed
+        (bookkeeping is not opened for the advisor). Clients that need the advisor come first.
+        closedBlocks names the parts of the books the client or the firm has not opened for the
+        advisor (bookkeeping, documents, datev, taxes_prepare); their facts are null.
         """
         api = ctx.request_context.lifespan_context["api"]
         url = urljoin(config.api_base_url, "api/v1/tax-advisor/clients/period/")
@@ -451,6 +459,98 @@ def register_tax_advisor_tools(mcp):
         except Exception as e:
             return {"error": str(e)}
         return {"dateFrom": date_from, "dateTo": date_to, "clients": rows}
+
+    @mcp.tool(
+        title="Close a Client's Period",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
+    async def close_client_period(
+        ctx: Context,
+        company_id: str = Field(description="Public ID of the client company"),
+        date_from: str = Field(description="First day of the client's VAT period, YYYY-MM-DD"),
+        date_to: str = Field(description="Last day of the client's VAT period, YYYY-MM-DD"),
+    ) -> Dict[str, Any]:
+        """
+        Close one VAT period of a German client: its month, quarter or year, as close.period of
+        list_clients_for_period names it. Norman keeps a record of the bookings and documents the
+        period holds now. Closing locks nothing and asks for nothing: open items stay open, the
+        client can still change the period and sees nothing of the close, and each later change
+        shows to the advisor as a change after the close. Closing again takes a new record.
+        A period under a GmbH's or UG's locked annual close does not close here: code year_closed.
+        Before you call it, name what is still open in the period and ask the advisor.
+
+        Returns:
+            The client's row of list_clients_for_period for this period.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        url = urljoin(config.api_base_url, f"api/v1/tax-advisor/clients/{company_id}/period/close/")
+        try:
+            return api._make_request("POST", url, json_data={"date_from": date_from, "date_to": date_to})
+        except Exception as e:
+            return {"error": str(e)}
+
+    @mcp.tool(
+        title="Reopen a Client's Period",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
+    async def reopen_client_period(
+        ctx: Context,
+        company_id: str = Field(description="Public ID of the client company"),
+        date_from: str = Field(description="First day of the closed VAT period, YYYY-MM-DD"),
+        date_to: str = Field(description="Last day of the closed VAT period, YYYY-MM-DD"),
+    ) -> Dict[str, Any]:
+        """
+        Reopen a VAT period the advisor closed. Ask the advisor first. A GmbH's or UG's annual
+        close does not reopen here, and a period under it answers code year_closed.
+
+        Returns:
+            The client's row of list_clients_for_period for this period.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        url = urljoin(config.api_base_url, f"api/v1/tax-advisor/clients/{company_id}/period/reopen/")
+        try:
+            return api._make_request("POST", url, json_data={"date_from": date_from, "date_to": date_to})
+        except Exception as e:
+            return {"error": str(e)}
+
+    @mcp.tool(
+        title="Get Changes After a Period's Close",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def get_client_period_close_changes(
+        ctx: Context,
+        company_id: str = Field(description="Public ID of the client company"),
+        date_from: str = Field(description="First day of the period, YYYY-MM-DD"),
+        date_to: str = Field(description="Last day of the period, YYYY-MM-DD"),
+    ) -> Dict[str, Any]:
+        """
+        What changed after the advisor closed a client's period: for each closed VAT period in the
+        range, the new, changed and removed bookings and the new documents since its close. A new
+        booking counts even before it is finalized. The document facts are null while the client's
+        documents are closed to the advisor. A period under a locked annual close returns nothing.
+        """
+        api = ctx.request_context.lifespan_context["api"]
+        url = urljoin(config.api_base_url, f"api/v1/tax-advisor/clients/{company_id}/period/close-changes/")
+        try:
+            periods = api._make_request("GET", url, params={"date_from": date_from, "date_to": date_to})
+        except Exception as e:
+            return {"error": str(e)}
+        return {"companyId": company_id, "periods": periods}
 
     @mcp.tool(
         title="Switch Active Company",
