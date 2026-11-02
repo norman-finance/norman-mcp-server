@@ -17,9 +17,3 @@ For a receipt, confirm actual receipt of funds and collect allocation and remain
 The API controls validation, template version and rendering. Links expire after 10 minutes and are accessible to anyone holding them. State that fact with the preview/download. A 409 requires rereading the form schema; an expired link requires regeneration. API failures are MCP tool errors, never successful document results.
 
 The existing MCP login and company isolation are unchanged. These generic Polish forms do not read a selected company and can be discovered without changing company selection.
-
-Deployment depends on the forms API endpoints and a shared Redis artifact cache being available first. Local contract tests do not prove hosted API/chat availability.
-
-```sh
-python -m pytest tests/test_forms.py tests/test_polish_public_sync.py -q
-```

@@ -20,35 +20,5 @@
       "type": "streamable-http",
       "url": "https://mcp.norman.finance/mcp"
     }
-  ],
-  "packages": [
-    {
-      "registryType": "pypi",
-      "identifier": "norman-mcp-server",
-      "version": "0.1.8",
-      "transport": {
-        "type": "stdio"
-      },
-      "environmentVariables": [
-        {
-          "name": "NORMAN_EMAIL",
-          "description": "Your Norman account email",
-          "isRequired": true,
-          "isSecret": false
-        },
-        {
-          "name": "NORMAN_PASSWORD",
-          "description": "Your Norman account password",
-          "isRequired": true,
-          "isSecret": true
-        },
-        {
-          "name": "NORMAN_ENVIRONMENT",
-          "description": "API environment: 'production' or 'sandbox'",
-          "isRequired": false,
-          "default": "production"
-        }
-      ]
-    }
   ]
 }

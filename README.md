@@ -189,7 +189,6 @@ Polish journal postings, or generate or close annual statements. They inspect
 existing filing state; an XML download is not an acceptance receipt or UPO.
 
 [Polish tool guide, arguments and examples](docs/polish-accounting.md) ·
-[Public/internal sync details](docs/pl-internal-sync-2026-10-23.md) ·
 [Start with a Polish company](https://app.norman.finance/sign-up?country=PL&lang=pl&utm_source=mcp_server)
 
 ## Interactive UI inside your AI assistant
@@ -249,12 +248,17 @@ limits are documented in the linked guides.
 
 | Guide | Contents |
 | :-- | :-- |
-| [Connect your AI client](docs/connecting.md) | Hosted OAuth, client installs and local options |
+| [Connect your AI client](docs/connecting.md) | Hosted OAuth and client installs |
+| [All tools](docs/tools.md) | Every tool the hosted server offers, by area |
 | [Polish accounting](docs/polish-accounting.md) | KPiR, full books, JPK, estimates, filing status and limits |
 | [Tool workflows](docs/tool-workflows.md) | Invoice settings, emails, uploads, company formation and DATEV details |
 | [German VAT item workflows](docs/vat-item-workflows.md) | Mixed VAT, input tax, refunds and corrections |
-| [Norman Inbox and MCP Events](docs/inbox-and-events.md) | UI behavior, resource subscriptions and optional webhook deployment |
 | [Workflow gallery](docs/gallery.md) | Invoices, transactions, documents and VAT examples |
+| [Changelog](CHANGELOG.md) | What changed in each release |
+
+This repository holds the documentation, skills and client manifests of the
+hosted Norman MCP server. Issues and skill suggestions are welcome; see
+[Contributing](CONTRIBUTING.md) and [Security](SECURITY.md).
 
 <details>
 <summary>Links retained from earlier README versions</summary>
@@ -273,7 +277,7 @@ limits are documented in the linked guides.
 
 <a id="norman-inbox-and-mcp-events-development"></a>
 
-[Norman Inbox and MCP Events](docs/inbox-and-events.md)
+[Norman Inbox and MCP Events](#interactive-ui-inside-your-ai-assistant)
 
 <a id="datev-files-and-complete-ledger-exports"></a>
 

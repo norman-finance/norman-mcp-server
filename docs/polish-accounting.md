@@ -191,12 +191,3 @@ Dedicated Polish tools return structured data. The German SKR Ledger Explorer,
 Finanzamt preview, payroll and incorporation workflows are not Polish interfaces.
 Availability in a hosted connection depends on both its MCP deployment and the
 matching API endpoints, separately from repository or package metadata.
-
-Tests exercise actual MCP argument/result validation with synthetic API responses,
-company scoping, DE/PL behavior, VAT payloads, currencies and asset inputs. They do
-not establish live OAuth, deployed API calculations, provider acceptance or UPO.
-
-Implementation: [Polish tools](../norman_mcp/tools/polish_accounting.py),
-[company guards](../norman_mcp/tools/country_scope.py),
-[Polish asset inputs](../norman_mcp/tools/polish_assets.py), and
-[protocol tests](../tests/test_polish_protocol.py).

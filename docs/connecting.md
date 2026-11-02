@@ -140,18 +140,6 @@ git clone https://github.com/norman-finance/norman-mcp-server.git
 cp -r norman-mcp-server/skills/* ~/.openclaw/skills/
 openclaw gateway restart
 ```
-
-**Option 3 — Local stdio**
-
-```bash
-pip install norman-mcp-server
-```
-
-```bash
-openclaw mcp add norman -- norman-mcp --transport stdio
-```
-
-Set your credentials as environment variables (`NORMAN_EMAIL`, `NORMAN_PASSWORD`) before starting the gateway.
 </details>
 
 <details>

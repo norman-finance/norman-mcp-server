@@ -26,9 +26,3 @@ The catalog currently has seven Polish calculators (VAT, JDG annual PIT/ZUS, mon
 | Utwórz fakturę dla klienta | Existing invoice workflow, not a payment-request letter |
 
 [Forms contract and hosted prerequisites](polish-forms.md). Official form references do not fill or submit tax returns. A generated PDF/DOCX is for user review and signature; its download link expires after ten minutes.
-
-## Verification and rollout
-
-`tests/test_calculators.py` drives the production MCP SDK handler, checks that no company API calls occur, exercises strict input validation and errors, and checks prompt registration. The companion API change tests Polish and English discovery and follow-up context in the internal chat. These are deterministic contract tests, not a live-model conversation evaluation.
-
-The website calculator API can be checked with synthetic numeric inputs without account data. Hosted chat use additionally requires deployment of the MCP/API changes and, for documents, the forms backend. Source registration and passing local tests do not prove those deployments.
