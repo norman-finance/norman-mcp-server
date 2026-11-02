@@ -198,7 +198,10 @@ def register_incorporation_tools(mcp):
         ),
         is_managing_director: bool = Field(
             default=False,
-            description="Exactly one shareholder must be the Geschäftsführer; setting True unsets others",
+            description=(
+                "At least one shareholder must be a Geschäftsführer. Several are allowed, but then "
+                "the Musterprotokoll no longer fits"
+            ),
         ),
     ) -> dict[str, Any]:
         """Section 2/5 — add a shareholder (max 3 for the statutory Musterprotokoll).
@@ -242,7 +245,7 @@ def register_incorporation_tools(mcp):
         share_nominal_amount: str | None = Field(default=None, description="New Nennbetrag in full euros"),
         is_managing_director: bool | None = Field(
             default=None,
-            description="True makes this shareholder the sole Geschäftsführer",
+            description="True makes this shareholder a Geschäftsführer; other shareholders keep their role",
         ),
         first_name: str | None = Field(default=None),
         last_name: str | None = Field(default=None),

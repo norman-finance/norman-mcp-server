@@ -1,7 +1,7 @@
 ---
 name: company-incorporation
 description: Found a German GmbH or UG (haftungsbeschränkt) through a guided chat. Use when the user wants to open, found or incorporate a company in Germany, start a GmbH/UG, prepare founding documents (Musterprotokoll, Gesellschafterliste) or find a notary for incorporation. Germany only.
-version: 1.1.1
+version: 1.2.0
 disable-model-invocation: true
 metadata:
   openclaw:
@@ -25,6 +25,14 @@ generate pre-filled founding document drafts, and hand off to a notary.
   `status`. Navigate by `sections.missing`; never track progress yourself.
 - Collect conversationally — one topic at a time, not a wall of questions.
 - Amounts are full euros (§ 5 Abs. 2 GmbHG: nominal amounts in whole euros).
+
+## A person to talk to
+
+Aaron, Norman's formation advisor, takes free 15-minute calls:
+https://cal.com/aaron-wagner-norman/15min. Offer the call once when the user hesitates over
+the legal form or the capital, asks for a person, or right after the notary hand-off is
+requested. Aaron explains the process and the next steps; individual legal or tax advice
+stays with the notary and a tax advisor.
 
 ## Before you start
 
@@ -61,8 +69,10 @@ generate pre-filled founding document drafts, and hand off to a notary.
   nationality, residential address) or legal entities (Firma, Sitz, register court + number).
 - Each shareholder takes a nominal amount (`share_nominal_amount`) — the amounts must sum
   to the share capital.
-- Exactly one shareholder must be managing director (`is_managing_director=true` — setting
-  it unsets others). Ask "who will be the managing director?" once all founders are in.
+- At least one shareholder must be managing director (`is_managing_director=true`). Ask
+  "who will be the managing director?" once all founders are in. Several are possible, but
+  then the Musterprotokoll no longer fits (`MULTIPLE_MANAGING_DIRECTORS`) and the notary
+  drafts individual articles.
 
 ## Section 3 — Capital (update_incorporation_capital)
 

@@ -48,7 +48,7 @@
   "sourceCommit": "6b2cec4",
   "sourceSDK": "1.26.0",
   "tools": {
-    "add_incorporation_shareholder": "0e79fa8212c5aeae561b50083ecfcabcba1fa74107a29bd787be4db46836364d",
+    "add_incorporation_shareholder": "9e15310cb1b3c060ab28257fecbb7461c8232f55a36f9ebcf0be0ca602f83431",
     "analyze_accounting_cutover_documents": "20fd134c6833a033c4e1ff4f95f469f38d0e6223e1c6203a6e1e97c0eb56d15f",
     "answer_workflow_question": "1aecba36398b4a1f5877a8a31a3f297add09db4aa9e79bcb12ff5a5ceca77f02",
     "apply_accounting_cutover": "22726c628d5db8d6697ba397de9e938d1a2128084ed24bc5c4a04236ede33962",
@@ -231,7 +231,7 @@
     "update_incorporation_capital": "0d02471a3a611480a1974c0328c732875c2468a0beb89719ddcff220e079b2d2",
     "update_incorporation_company": "a1e6f3a127a3f1ee145edfc569147aee67b619255030fdbe93735e8cf7fe0f5a",
     "update_incorporation_notary_preferences": "6c5b8877a165160719f6f97f966c5351bf124c5990c1cccdf48c7357dcfc029b",
-    "update_incorporation_shareholder": "163443ad733497cb3a97ba2ed0fb227b960712998b134db94d3c74a5fe4c9e83",
+    "update_incorporation_shareholder": "ca55ddf922ef960690af8daf771adf0da16c0ebc113850b9258afde9e64c6a88",
     "update_invoice": "9da6aa057cab39e365a0eca8a6833785333868b03763abcb8d1db1beae12054b",
     "update_invoice_settings": "6514b167ae592105f991729e3ec30be3d887b35593339e52b1c594b6a9cefa25",
     "update_product": "89377c44fd1d813086cb79cc1e59edd6656c923796ee7a6acce8ac50d7089d45",
