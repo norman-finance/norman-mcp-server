@@ -1,6 +1,6 @@
 # Tools
 
-The hosted Norman MCP server offers 298 tools. Your AI client
+The hosted Norman MCP server offers 299 tools. Your AI client
 picks them by itself; you never need to call one by name. Tools marked
 **reads** only read your data.
 
@@ -242,7 +242,7 @@ This page is generated from the server's tool list at each release.
 | `suggest_tax_office` | Find the German Finanzamt responsible for a German address (Germany only). | reads |
 | `update_tax_setting` | Update a tax setting for the selected company. Read its country and supported settings first. Review the report through its country-specific tools before any submission. |  |
 | `update_vat_proportion` | Set the owner's choices about the Polish VAT deduction proportion (art. 90) of one tax year. Only what is given changes. Confirm the numbers with the user first: they come from the user's records. |  |
-| `validate_tax_number` | Germany only. Check a German tax number (Steuernummer) with the ELSTER validator. | reads |
+| `validate_tax_number` | Germany only. Check a German tax number (Steuernummer) with the ELSTER validator. Slashes, spaces and the 13-digit ELSTER form are accepted. | reads |
 
 ## Poland
 
@@ -410,6 +410,7 @@ This page is generated from the server's tool list at each release.
 | `get_missing_documents_summary` | Check the selected company; select company_id first when switching clients. | reads |
 | `get_tax_advisor_messages` | Read the conversation with the company's tax advisor (a German Steuerberater, a Polish company's own accountant). | reads |
 | `get_tax_compliance_status` | Check the tax compliance status for a client company. Identifies which tax reports are due, overdue, or unfiled, and flags any validation issues. | reads |
+| `list_clients_for_period` | Each client of the tax advisor in one period, the way the advisor's client list shows it. Per client: open bookings (not finalized; an unpaid booking waits for its payment and is left out), bookings w… | reads |
 | `list_signature_requests` | For tax advisors of German clients (Germany only): declarations waiting for your signature, or their history. | reads |
 | `list_tax_advisor_clients` | List all client companies managed by the authenticated tax advisor. Each entry includes the company ID, name, account type, transaction count, and number of transactions missing documents. | reads |
 | `ping_client_for_documents` | Send document request reminders to a client for multiple transactions at once. Each transaction triggers an email to the company owner asking them to upload the missing receipt or invoice. |  |

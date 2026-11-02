@@ -1,7 +1,7 @@
 ---
 name: tax-report
 description: "Review and manage tax reports. German companies: VAT (UStVA, ZM, Umsatzsteuer), income tax prepayments and Finanzamt submissions via ELSTER. Polish companies: the JPK_V7 and VAT-UE, PIT or CIT advances, ZUS DRA, the annual PIT and the CIT-8, which Norman prepares and the owner files in the Norman app or outside it. Use when the user asks about taxes, Steuern, podatki, VAT, USt, JPK, Finanzamt, urząd skarbowy, or tax filing."
-version: 1.2.2
+version: 1.2.3
 disable-model-invocation: true
 argument-hint: "[period or tax type]"
 metadata:
@@ -34,6 +34,7 @@ Help the user with their tax obligations. Read the company's country first (`com
 
 5. **German companies, preview and submit**:
    - Call `generate_finanzamt_preview` to show the user exactly what will be sent to the Finanzamt. Let them review all figures.
+   - If the preview names `tax_number`, `tax_state`, `steuernummer` or `bundesland`, quote its message and ask for the number from the Finanzamt's letter (slashes and the 13-digit ELSTER form are fine) or for the right federal state. The field names where the return reads it. Save `tax_number` and `tax_state` with `update_company_details` (`tax_id` is the Steuernummer, `tax_state` the state). `steuernummer` and `bundesland` are the number and state saved in the income tax return: no tool changes them, so the user corrects them in Norman, in the return's personal details. Then preview again.
    - Only when the user explicitly confirms, call `submit_tax_report` to file with the Finanzamt via ELSTER. If it answers `Email not confirmed`, call `resend_email_confirmation` and ask the user to open the link in that email; a paid plan confirms the address without it.
 
 6. **Polish companies, check and then file in the app**:
@@ -41,7 +42,7 @@ Help the user with their tax obligations. Read the company's country first (`com
    - There is no Polish signing or submission tool here. Norman files the JPK_V7 (the monthly JPK_V7M, or each monthly file of a quarterly JPK_V7K) from the Norman app only after the owner approves and signs it, on the JDG Pro and Sp. z o.o. Max plans. Norman prepares the PIT returns, the CIT-8 draft and the VAT-UE and calculates ZUS; the user or their accountant files them.
    - Give facts and next steps, never an individual tax opinion.
 
-7. **Tax settings**: Call `list_tax_settings` to review VAT registration, filing frequency, and other tax configuration. A German Kleinunternehmer files a UStVA only for a period with VAT it owes as recipient (§ 13b, § 1a UStG), quarterly by default. To file monthly, call `update_tax_setting` with `reporting_frequency` "monthly".
+7. **Tax settings**: Call `list_tax_settings` to review VAT registration, filing frequency, and other tax configuration. A German Kleinunternehmer files a UStVA only for a period with VAT it owes as recipient (§ 13b, § 1a UStG), quarterly by default. To file monthly, call `update_tax_setting` with `reporting_frequency` "monthly". A German Kleinunternehmer files no ZM (§ 18a Abs. 4 UStG), also for EU B2B sales. Filed ZMs stay in the reports.
 
 Important warnings:
 - German companies: ALWAYS show the Finanzamt preview before submitting

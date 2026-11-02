@@ -46,6 +46,7 @@ With automatic categorization on, a bank import books a German company's payment
    - Use `link_transaction` to connect the payment to the invoice
 
 6. **Document attachment**: Remind the user to attach receipts for expenses:
+   - An uploaded receipt or invoice books itself as an unpaid booking. Never create a second transaction for it. Use `find_booking_payments` to find its payment, and `record_booking_payment` if it was paid another way.
    - Use `upload_bulk_attachments` for multiple receipts
    - Use `link_attachment_transaction` to connect receipts to transactions
 
