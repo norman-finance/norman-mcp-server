@@ -1,0 +1,34 @@
+{
+  "name": "norman-finance",
+  "version": "1.0.0",
+  "description": "AI-powered bookkeeping, accounting, invoicing, and tax workflows for European businesses through MCP.",
+  "author": {
+    "name": "Norman Finance",
+    "email": "support@norman.finance"
+  },
+  "homepage": "https://norman.finance",
+  "repository": "https://github.com/norman-finance/norman-mcp-server",
+  "license": "MIT",
+  "keywords": [
+    "finance",
+    "ai",
+    "automation",
+    "bookkeeping",
+    "accounting",
+    "invoicing",
+    "taxes",
+    "receipts",
+    "documents",
+    "freelancer",
+    "ledger",
+    "mcp",
+    "oauth",
+    "kpir",
+    "jpk",
+    "poland",
+    "jdg",
+    "sp-z-o-o",
+    "upo"
+  ],
+  "logo": "assets/logo.svg"
+}

@@ -1,0 +1,62 @@
+{
+  "name": "norman-finance",
+  "owner": {
+    "name": "Norman Finance",
+    "email": "support@norman.finance"
+  },
+  "metadata": {
+    "description": "AI-powered bookkeeping, accounting, invoicing, and tax workflows for European businesses through MCP.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "norman-finance",
+      "source": "./",
+      "description": "Connect Norman Finance to your AI for European bookkeeping, invoices and tax workflows. Polish tools include JDG KPiR, sp. z o.o. ledgers, JPK registers, estimates and existing filing status; they do not sign or submit Polish returns.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Norman Finance"
+      },
+      "homepage": "https://norman.finance",
+      "repository": "https://github.com/norman-finance/norman-mcp-server",
+      "license": "MIT",
+      "keywords": [
+        "finance",
+        "ai",
+        "automation",
+        "bookkeeping",
+        "accounting",
+        "invoicing",
+        "taxes",
+        "receipts",
+        "documents",
+        "freelancer",
+        "ledger",
+        "mcp",
+        "oauth",
+        "kpir",
+        "jpk",
+        "poland",
+        "jdg",
+        "sp-z-o-o",
+        "upo"
+      ],
+      "category": "finance",
+      "tags": [
+        "buchhaltung",
+        "rechnungen",
+        "steuern",
+        "finanzamt",
+        "umsatzsteuer",
+        "kleinunternehmer",
+        "freiberufler",
+        "ksiegowosc",
+        "faktury",
+        "podatki",
+        "jdg",
+        "kpir",
+        "jpk"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "norman-finance": {
+      "type": "http",
+      "url": "https://mcp.norman.finance/mcp"
+    }
+  }
+}

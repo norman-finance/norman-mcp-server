@@ -1,0 +1,11 @@
+{
+  "name": "norman-finance",
+  "version": "1.0.0",
+  "description": "AI-powered bookkeeping, accounting, invoicing, and tax workflows for European businesses through MCP.",
+  "mcpServers": {
+    "norman-finance": {
+      "httpUrl": "https://mcp.norman.finance/mcp"
+    }
+  },
+  "contextFileName": "GEMINI.md"
+}
