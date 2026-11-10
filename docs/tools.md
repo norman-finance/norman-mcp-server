@@ -1,6 +1,6 @@
 # Tools
 
-The hosted Norman MCP server offers 299 tools. Your AI client
+The hosted Norman MCP server offers 302 tools. Your AI client
 picks them by itself; you never need to call one by name. Tools marked
 **reads** only read your data.
 
@@ -232,7 +232,7 @@ This page is generated from the server's tool list at each release.
 | `get_filed_report_changes` | Germany only. What changed in a filed UStVA since it was sent to ELSTER. | reads |
 | `get_tax_offices` | Search German tax offices (Finanzämter) by name, town or postcode. Germany only: a Polish company's urząd skarbowy is not in this directory. | reads |
 | `get_tax_report` | Retrieve a specific tax report. | reads |
-| `get_vat_next_report` | The next VAT return: its period, VAT amount and deadline. A German company's UStVA; a Polish VAT payer's JPK_V7M or JPK_V7K, due the 25th (next working day); none for a Polish company exempt from VAT.… | reads |
+| `get_vat_next_report` | The next VAT return: its period, VAT amount and deadline. A German company's UStVA (for a Kleinunternehmer or a company with VAT-exempt sales under § 4 UStG, only a month or quarter with reverse-charg… | reads |
 | `get_vat_proportion` | Polish VAT payers with both taxed and VAT-exempt (art. 43) sales: the VAT deduction proportion of art. 90 by tax year. | reads |
 | `list_tax_reports` | List existing tax reports, optionally scoped to a period and report type. | reads |
 | `list_tax_settings` | Get list of tax settings for the current company. | reads |
@@ -364,14 +364,14 @@ This page is generated from the server's tool list at each release.
 | `get_incorporation_choices` | Germany only. Get valid values for incorporation enum fields (label by value). | reads |
 | `get_incorporation_document_preview` | Germany only. Show the user a first-page image of a generated founding document for review. | reads |
 | `invite_incorporation_shareholder` | Germany only. Send (or resend) a secure fill-your-details link to a co-founder. |  |
-| `match_incorporation_notaries` | Germany only. Get up to 3 notaries matching the collected preferences (online capability, city). |  |
+| `match_incorporation_notaries` | Germany only. Get up to 3 notaries in the founder's notary city, partner notaries first. |  |
 | `remove_incorporation_shareholder` | Germany only. Remove a shareholder. Remaining shareholders are renumbered automatically. |  |
-| `request_incorporation_notary` | Germany only. Final step — request the notary hand-off. REQUIRES generated documents. |  |
+| `request_incorporation_notary` | Germany only. Final step — record that the founder contacts a notary directly. REQUIRES generated documents. |  |
 | `set_incorporation_agreement` | Germany only. Section 4/5 — founding agreement type. |  |
 | `suggest_incorporation_purpose` | Germany only. Reformulate a rough business purpose (Unternehmensgegenstand) into registry-ready wording. | reads |
 | `update_incorporation_capital` | Germany only. Section 3/5 — share capital. Validated against the legal form. |  |
 | `update_incorporation_company` | Germany only. Section 1/5 — company basics. Any subset of fields; provided fields are validated. |  |
-| `update_incorporation_notary_preferences` | Germany only. Section 5/5 — notary preferences (city, online vs in person, timeframe). |  |
+| `update_incorporation_notary_preferences` | Germany only. Section 5/5 — notary preferences (city, online vs in person). |  |
 | `update_incorporation_shareholder` | Germany only. Update a shareholder (any subset of fields). Returns the full record. |  |
 
 ## Registrations
@@ -403,10 +403,12 @@ This page is generated from the server's tool list at each release.
 | Tool | What it does | |
 | :-- | :-- | :-- |
 | `ask_tax_advisor` | Send a written question or message to the company's tax advisor (a German Steuerberater, a Polish company's own accountant). |  |
+| `close_client_period` | Close one VAT period of a German client: its month, quarter or year, as close.period of list_clients_for_period names it. Norman keeps a record of the bookings and documents the period holds now. |  |
 | `fulfill_document_request` | Answer the tax advisor's request for documents with documents uploaded to Norman. |  |
 | `get_advisor_inbox` | For tax advisors: the clients with unanswered messages or open document requests. | reads |
 | `get_client_messages` | For tax advisors: read a client's conversations and open document requests. | reads |
 | `get_client_overview` | Get an aggregated financial health snapshot for a client company. Combines company details, balance, transaction stats, missing receipts, outstanding invoices, and tax report status into a single over… | reads |
+| `get_client_period_close_changes` | What changed after the advisor closed a client's period: for each closed VAT period in the range, the new, changed and removed bookings and the new documents since its close. | reads |
 | `get_missing_documents_summary` | Check the selected company; select company_id first when switching clients. | reads |
 | `get_tax_advisor_messages` | Read the conversation with the company's tax advisor (a German Steuerberater, a Polish company's own accountant). | reads |
 | `get_tax_compliance_status` | Check the tax compliance status for a client company. Identifies which tax reports are due, overdue, or unfiled, and flags any validation issues. | reads |
@@ -415,6 +417,7 @@ This page is generated from the server's tool list at each release.
 | `list_tax_advisor_clients` | List all client companies managed by the authenticated tax advisor. Each entry includes the company ID, name, account type, transaction count, and number of transactions missing documents. | reads |
 | `ping_client_for_documents` | Send document request reminders to a client for multiple transactions at once. Each transaction triggers an email to the company owner asking them to upload the missing receipt or invoice. |  |
 | `reject_signature_request` | For tax advisors of German clients: send a declaration back unsigned, with a reason the client sees. |  |
+| `reopen_client_period` | Reopen a VAT period the advisor closed. Ask the advisor first. A GmbH's or UG's annual close does not reopen here, and a period under it answers code year_closed. |  |
 | `reply_to_client` | For tax advisors: write to a client in Norman. |  |
 | `request_documents_from_client` | For tax advisors: ask a client for documents. |  |
 | `sign_and_submit_declaration` | For tax advisors of German clients: sign a declaration with your ELSTER certificate and submit it to the Finanzamt (Germany only). |  |

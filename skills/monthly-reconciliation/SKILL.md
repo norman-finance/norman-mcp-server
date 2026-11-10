@@ -28,7 +28,7 @@ Guide the user through a complete monthly reconciliation:
 - Flag any overdue unpaid invoices and suggest sending reminders via `send_invoice_overdue_reminder`
 
 ## Step 3: Open Bookings
-- German companies book every document and invoice when it arrives. One that no payment has paid yet is an open booking: `search_transactions` with `payment_type=NOT_PAID` lists them, `source=document` the ones Norman booked from documents. `openAmount` and `payments` say how much is paid.
+- German companies book every document and invoice when it arrives. One that no payment has paid yet is an open booking: `search_transactions` with `payment=not_paid` lists them, `payment=partly_paid` the ones partly paid, `source=document` the ones Norman booked from documents. `openAmount` and `payments` say how much is paid.
 - For each open booking, call `find_booking_payments`. Pay it with `pay_booking` and the payment's id: a payment of the whole open amount takes the booking over (one row, the document's date, the bank's payment date), and so does a payment that pays no other booking and is within 3 % of a booking in another currency that nothing has paid yet; pass `amount` for a part payment, and the rest stays open. A Norman invoice's booking is paid with `link_transaction` (Step 2).
 - Paid with cash, a card, PayPal or a bank Norman does not see: `record_booking_payment` with the day, the method and the amount.
 - A wrong match is undone with `unlink_payment` on the payment; the booking opens again.
