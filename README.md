@@ -215,7 +215,8 @@ Ready-to-use skills compatible with **Claude Code**, **OpenClaw**, and the [Agen
 |:--|:--|
 | `financial-overview` | Full dashboard : balance, transactions, invoices, and tax status |
 | `create-invoice` | Step-by-step invoice creation and sending |
-| `manage-clients` | List, create, and update client records |
+| `manage-clients` | List, create and update clients, find duplicates and merge them |
+| `manage-vendors` | List and update vendors, find duplicates and merge them |
 | `manage-products` | List, create, update, and archive catalog products; fill invoice lines from them |
 | `tax-report` | German reports: review, preview, and file with the Finanzamt |
 | `run-payroll-month` | German payroll : changes, calculation, approval, social insurance, payment, and Lohnsteuer-Anmeldung |

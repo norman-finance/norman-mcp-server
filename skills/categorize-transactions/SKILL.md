@@ -1,7 +1,7 @@
 ---
 name: categorize-transactions
 description: Review and categorize uncategorized bank transactions, match them with invoices, and verify bookkeeping entries. Use when the user wants to review transactions, categorize expenses, do bookkeeping, or reconcile their bank account.
-version: 1.2.1
+version: 1.3.0
 metadata:
   openclaw:
     emoji: "\U0001F3F7"
@@ -24,6 +24,10 @@ Call `get_company_details` and check `isSme`, `country` and `usesCompanyChart`:
 ## Transfers between own accounts
 
 With automatic categorization on, a bank import books a German company's payment to or from another of its connected accounts by IBAN: on `Internal transfer` for a freelancer or trader, on `Transfers between own accounts` for a GmbH or UG. These rows carry no VAT and do not change profit. Leave them there unless the user says the payment is something else.
+
+## Shareholder loans and other liability accounts
+
+A GmbH or UG can switch a liability account on for transactions in its chart of accounts (Kontenrahmen). Book a transaction on a liability account only when the user names it; never pick one yourself, even for a recurring transfer from a shareholder. A rule the user creates may book to it. A shareholder loan goes on `Payables to shareholders` (Verbindlichkeiten gegenüber GmbH-Gesellschaftern), SKR04 3640 or SKR03 1665. For the remaining term, the user can add and switch on SKR04 3641, 3642 or 3643 (SKR03 1666, 1667 or 1668): up to 1 year, 1 to 5 years, over 5 years. If the user books their loans on `Shareholder loans` (Gesellschafterdarlehen, SKR04 2020 or SKR03 890), follow that choice. A liability booking carries no VAT and does not change profit or the VAT return; the loan shows on the balance sheet under liabilities to shareholders. Repayments go on the same account.
 
 ## Workflow
 

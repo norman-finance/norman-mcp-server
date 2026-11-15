@@ -1,7 +1,7 @@
 ---
 name: ta-datev-preparation
 description: Prepare a DATEV export for a German client company (Germany only). Verifies all transactions are categorized, receipts attached, DATEV settings configured, and triggers the export. Use when a tax advisor asks to prepare DATEV, export bookkeeping data, or send data to their tax software.
-version: 1.3.0
+version: 1.4.0
 metadata:
   openclaw:
     emoji: "\U0001F4E6"
@@ -65,7 +65,7 @@ List any blocking issues before export, and the periods that changed since the a
 - Call `trigger_datev_export` to generate the DATEV EXTF CSV package
 - The export includes:
   - DATEV EXTF CSV file (booking records): finalized bookings and every unpaid booking, each line in the month of its date
-  - GmbH/UG: an unpaid document books "Aufwand an Kreditor" on its date, its payment "Kreditor an Bank"
+  - GmbH/UG: a booking with a document books "Aufwand an Kreditor" on its date and its payment "Kreditor an Bank", also when it was paid on the day of the document. Both lines carry the document number in Belegfeld 1, so DATEV clears the open item. A document that names no vendor or client books on "Diverse Kreditoren" or "Diverse Debitoren". A payment without a document books straight to the bank. The rule holds for every booking with a document, also for earlier months: a new export of an old month shows two lines for a same-day payment and the document number in Belegfeld 1, so the first list of changes for such a month is long
   - Self-employed: an unpaid expense books against 3612 (SKR04) / 1692 (SKR03), "Neutralisierung aufwandswirksamer Sachverhalte für § 4 Abs. 3 EStG", on its date, with its input VAT; its payment clears that account, and the EÜR counts the cost then
   - Transaction statement
   - Attached documents

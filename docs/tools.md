@@ -1,6 +1,6 @@
 # Tools
 
-The hosted Norman MCP server offers 302 tools. Your AI client
+The hosted Norman MCP server offers 310 tools. Your AI client
 picks them by itself; you never need to call one by name. Tools marked
 **reads** only read your data.
 
@@ -26,7 +26,10 @@ This page is generated from the server's tool list at each release.
 | `create_client` | Create a new client. |  |
 | `delete_client` | Delete a client. |  |
 | `get_client` | Get detailed information about a specific client. | reads |
+| `list_client_duplicates` | Find clients that look like the same company. | reads |
 | `list_clients` | Get a list of all clients for the company. | reads |
+| `mark_clients_not_duplicates` | Take a group out of list_client_duplicates when the user says the clients are different companies. The clients, their bookings and their documents do not change. |  |
+| `merge_clients` | Merge duplicate clients into the one to keep. This cannot be undone: ask the user which client to keep before you call it. |  |
 | `update_client` | Update an existing client. |  |
 
 ## Vendors
@@ -36,7 +39,11 @@ This page is generated from the server's tool list at each release.
 | `create_vendor` | Create a new vendor (supplier). |  |
 | `delete_vendor` | Delete a vendor. |  |
 | `get_vendor` | Get detailed information about a specific vendor. | reads |
+| `list_vendor_duplicates` | Find vendors that look like the same supplier. | reads |
 | `list_vendors` | Get a list of all vendors (suppliers) for the company. | reads |
+| `mark_vendors_not_duplicates` | Take a row out of list_vendor_duplicates when the user says the vendors are different companies. The vendors and their bookings do not change. |  |
+| `merge_vendor_with_suggestion` | Tell Norman that an own vendor is a suggested brand (for example "amazon"). |  |
+| `merge_vendors` | Merge duplicate vendors into the one to keep. This cannot be undone: ask the user which vendor to keep before you call it. |  |
 | `update_vendor` | Update an existing vendor. Only the fields you pass are changed. |  |
 
 ## Products and services
@@ -185,7 +192,7 @@ This page is generated from the server's tool list at each release.
 | `create_annual_close` | Germany only. Create a Draft annual-close workspace; this does not lock or submit the year. |  |
 | `create_annual_close_entry` | Germany only. Post a closing adjustment to a Draft annual close; locked years remain server-protected. |  |
 | `create_asset` | Create an active asset, optionally linked to a Norman Transaction or split item. |  |
-| `create_chart_of_accounts_account` | Create a custom Ledger account; balance-sheet accounts stay Ledger-only. |  |
+| `create_chart_of_accounts_account` | Create a custom Ledger account; a liability takes Transactions once switched on, an asset never. |  |
 | `create_manual_ledger_entry` | Germany only. Create a balanced manual posting with explicit tax semantics. |  |
 | `deactivate_chart_of_accounts_account` | Soft-delete an account. Existing postings remain in the immutable Ledger. |  |
 | `delete_asset` | Delete an asset only after explicit confirmation; audit/reversal rules remain server-side. |  |
@@ -212,7 +219,7 @@ This page is generated from the server's tool list at each release.
 | `switch_account_framework` | Germany only. Switch SKR framework with the same explicit confirmation used by the Norman UI. |  |
 | `update_annual_close_entry` | Germany only. Set the tax treatment of a closing adjustment posted to a Draft annual close. |  |
 | `update_asset` | Edit an asset through the audited Asset service. |  |
-| `update_chart_of_accounts_account` | Edit a custom account, or hide/unhide a built-in account. |  |
+| `update_chart_of_accounts_account` | Edit a custom account, hide/unhide a built-in account, or switch a liability account on for Transactions. |  |
 
 ## DATEV
 
@@ -230,6 +237,7 @@ This page is generated from the server's tool list at each release.
 | `generate_finanzamt_preview` | Germany only. Generate a test Finanzamt preview for a tax report. |  |
 | `get_company_tax_statistics` | Get tax statistics for the company. | reads |
 | `get_filed_report_changes` | Germany only. What changed in a filed UStVA since it was sent to ELSTER. | reads |
+| `get_kleinunternehmer_limit` | Germany only. German Kleinunternehmer (§ 19 UStG): where the company stands against the limits in a year. Revenue is the payments received in the year, without services to business clients abroad. | reads |
 | `get_tax_offices` | Search German tax offices (Finanzämter) by name, town or postcode. Germany only: a Polish company's urząd skarbowy is not in this directory. | reads |
 | `get_tax_report` | Retrieve a specific tax report. | reads |
 | `get_vat_next_report` | The next VAT return: its period, VAT amount and deadline. A German company's UStVA (for a Kleinunternehmer or a company with VAT-exempt sales under § 4 UStG, only a month or quarter with reverse-charg… | reads |
