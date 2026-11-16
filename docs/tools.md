@@ -1,6 +1,6 @@
 # Tools
 
-The hosted Norman MCP server offers 313 tools. Your AI client
+The hosted Norman MCP server offers 316 tools. Your AI client
 picks them by itself; you never need to call one by name. Tools marked
 **reads** only read your data.
 
@@ -130,12 +130,15 @@ This page is generated from the server's tool list at each release.
 | :-- | :-- | :-- |
 | `categorize_transaction` | Detect category for a transaction using AI. | reads |
 | `change_transaction_verification` | Verify or unverify a transaction (finalize or unfinalize). |  |
+| `confirm_bank_statement_import` | Import the new rows of a reviewed PDF statement, after the user approved them. |  |
 | `create_transaction` | Create a new manual transaction. |  |
 | `delete_transaction` | Delete a transaction and its regenerable Ledger postings after confirmation. |  |
 | `find_booking_payments` | German and Polish companies: what may pay an open booking, or what a payment may pay. | reads |
 | `find_same_counterparty_transactions` | Before one booking's category changes: the counterparty's other open bookings still in that category. | reads |
+| `get_bank_statement_import` | Read a statement import: its status and, once read, the statement Norman found. | reads |
 | `get_flat_rates` | German official (BMF) flat rates Norman uses for the travel meal allowance and the home office flat rate of German sole proprietors; none apply to a Polish company. | reads |
 | `get_transaction` | Get a transaction including its split items and current VAT semantics. | reads |
+| `import_bank_statement_pdf` | Start importing a bank's PDF statement (Kontoauszug, wyciąg) into the active company. |  |
 | `list_csv_import_jobs` | List recent CSV transaction imports for the active company. | reads |
 | `pay_booking` | A payment pays an open booking made from a document or by hand. |  |
 | `record_booking_payment` | Germany only. An open booking paid another way, with cash, a card, PayPal or a bank Norman does not see. |  |

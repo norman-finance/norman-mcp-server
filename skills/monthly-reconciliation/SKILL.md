@@ -1,7 +1,7 @@
 ---
 name: monthly-reconciliation
 description: Perform a complete monthly financial reconciliation - review all transactions, match invoices, check outstanding payments, and prepare for tax filing. Use when the user wants to close the month, do monthly bookkeeping, or perform a Monatsabschluss (zamknięcie miesiąca).
-version: 1.1.4
+version: 1.1.5
 disable-model-invocation: true
 argument-hint: "[month, e.g. January 2026]"
 metadata:
@@ -17,6 +17,7 @@ Guide the user through a complete monthly reconciliation:
 
 ## Step 1: Transaction Review
 - Call `search_transactions` for the specified month (or last month if not specified)
+- If the bank does not connect or its feed left days without bookings, ask for the bank's statement of the month. A PDF works (text or scanned): `import_bank_statement_pdf`, then `get_bank_statement_import` until it shows the statement, then `confirm_bank_statement_import` once the user approved the rows. Rows already in Norman are skipped. When the rows do not add up to the closing balance, tell the user and ask whether to import the recognized rows anyway (`import_despite_mismatch`)
 - Identify uncategorized transactions
 - For each batch, suggest categories and let the user confirm
 - Use `categorize_transaction` to assign the correct bookkeeping category
