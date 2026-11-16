@@ -14,6 +14,15 @@ The full list of tools is in [docs/tools.md](docs/tools.md).
   documentation, skills and client manifests, and is updated with each release.
 - The local `norman-mcp-server` package on PyPI is no longer updated. Connect
   to the hosted server with OAuth instead; see [Connect your AI client](docs/connecting.md).
+- Several businesses of one person (German Freiberufler and Gewerbetreibende):
+  the new read-only tool `get_vat_entrepreneur` says whether they file one
+  UStVA, annual VAT return and ZM from a main business, and which one.
+  `company://current` names the main business of a grouped company, and the
+  `tax-report` skill (1.3.0) never files a member's VAT itself.
+  `submit_tax_report` explains the 409 for a return already filed from another
+  company and takes `replace_filed_return`, which files an income tax return in
+  place of the first only after the user confirms it; a VAT return has no
+  override.
 
 ## 0.5.0 (2026-10-20)
 

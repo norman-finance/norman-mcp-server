@@ -1,6 +1,6 @@
 # Tools
 
-The hosted Norman MCP server offers 312 tools. Your AI client
+The hosted Norman MCP server offers 313 tools. Your AI client
 picks them by itself; you never need to call one by name. Tools marked
 **reads** only read your data.
 
@@ -242,6 +242,7 @@ This page is generated from the server's tool list at each release.
 | `get_kleinunternehmer_limit` | Germany only. German Kleinunternehmer (§ 19 UStG): where the company stands against the limits in a year. Revenue is the payments received in the year, without services to business clients abroad. | reads |
 | `get_tax_offices` | Search German tax offices (Finanzämter) by name, town or postcode. Germany only: a Polish company's urząd skarbowy is not in this directory. | reads |
 | `get_tax_report` | Retrieve a specific tax report. | reads |
+| `get_vat_entrepreneur` | Germany only. Whether the user's own German sole-trader businesses (Freiberufler, Gewerbetreibender, each its own company in Norman) file their VAT together, and which one files it. | reads |
 | `get_vat_next_report` | The next VAT return: its period, VAT amount and deadline. A German company's UStVA (for a Kleinunternehmer or a company with VAT-exempt sales under § 4 UStG, only a month or quarter with reverse-charg… | reads |
 | `get_vat_proportion` | Polish VAT payers with both taxed and VAT-exempt (art. 43) sales: the VAT deduction proportion of art. 90 by tax year. | reads |
 | `list_tax_reports` | List existing tax reports, optionally scoped to a period and report type. | reads |

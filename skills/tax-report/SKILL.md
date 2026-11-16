@@ -1,7 +1,7 @@
 ---
 name: tax-report
 description: "Review and manage tax reports. German companies: VAT (UStVA, ZM, Umsatzsteuer), income tax prepayments and Finanzamt submissions via ELSTER. Polish companies: the JPK_V7 and VAT-UE, PIT or CIT advances, ZUS DRA, the annual PIT and the CIT-8, which Norman prepares and the owner files in the Norman app or outside it. Use when the user asks about taxes, Steuern, podatki, VAT, USt, JPK, Finanzamt, urząd skarbowy, or tax filing."
-version: 1.2.4
+version: 1.3.0
 disable-model-invocation: true
 argument-hint: "[period or tax type]"
 metadata:
@@ -50,6 +50,16 @@ Help the user with their tax obligations. Read the company's country first (`com
    - Give facts and next steps, never an individual tax opinion.
 
 8. **Tax settings**: Call `list_tax_settings` to review VAT registration, filing frequency, and other tax configuration. A German Kleinunternehmer or a company with VAT-exempt sales under § 4 UStG files a UStVA only for a period with VAT it owes as recipient (§ 13b, § 1a UStG), quarterly by default. To file monthly, call `update_tax_setting` with `reporting_frequency` "monthly". A German Kleinunternehmer files no ZM (§ 18a Abs. 4 UStG), also for EU B2B sales. Filed ZMs stay in the reports. For a German Kleinunternehmer, call `get_kleinunternehmer_limit` to say where this year's revenue stands against 100,000 € (25,000 € in the founding year) and next year's 25,000 €; at `near_limit`, `crossed` or `not_eligible`, tell the user the invoice that crosses the limit already needs VAT and suggest updating the VAT status in the tax settings. Never change the VAT status for them.
+
+9. **Several businesses of one person (German Freiberufler and Gewerbetreibende)**: one person is one VAT entrepreneur for all their businesses (§ 2 Abs. 1 Satz 2 UStG). When the user runs several businesses or a VAT return seems missing, call `get_vat_entrepreneur`. If `enabled` is false, say nothing about filing them together.
+   - `selectedCompany` role `member`: from `joinedOn` the main business (`filedBy`) files this business's UStVA and ZM, from 1 January of that year its annual VAT return, and the person's income tax return. Never prepare, preview or submit one of those for the member: `switch_company` to the main business. Returns the member filed before stay as filed.
+   - The main business files one UStVA, ZM and annual VAT return for all of them under its Steuernummer. Each line's `byCompany` shows what each business put in (`netAmount`, `taxAmount`): quote these figures, never recompute them. Each business keeps its own books and its own EÜR.
+   - One income tax return a year for the person, from the main business: `businesses` has a row per business for Anlage G (`gewerbe`) or S (`freelance`) with its own profit (`amount`), Steuernummer and, for a Gewerbe, the § 35 EStG figures (`tradeTax`). In a joint assessment the spouse's businesses are typed in on Person B's side of the income tab (`personBBusinesses`). Spouses never file VAT together.
+   - The Kleinunternehmer limits count the turnover of all the businesses, and all of them have the same VAT status.
+   - `warnings` `same_trade_same_municipality`: two Gewerbe of the same trade in one town are usually one Gewerbebetrieb for the trade tax, with one return and one allowance. Suggest the user checks with their Finanzamt; never decide it.
+   - Grouping, adding a business and filing separately again (only before anything was filed together) happen in Norman only, never with a tool: Account (Konto) -> the company name -> Group overview (Gruppenübersicht), section "VAT for all your businesses" ("Umsatzsteuer für alle deine Unternehmen"). A GmbH, UG or partnership files its own VAT.
+   - `submit_tax_report` answering 409 `vat_return_filed_elsewhere`: the UStVA or annual VAT return of this Steuernummer and period was already filed from `companyName` (for a member, the main business). This one is refused and cannot replace it; there is no override. Tell the user which company filed it and never submit it again.
+   - `submit_tax_report` answering 409 `income_tax_filed_elsewhere`: the income tax return of the year and person was already filed from `companyName`. Quote the message. Only when the user then explicitly confirms that this one should replace it, call `submit_tax_report` again with `replace_filed_return` true: that files it too, and the Finanzamt takes it as a replacement.
 
 Important warnings:
 - German companies: ALWAYS show the Finanzamt preview before submitting
