@@ -5,6 +5,11 @@ The full list of tools is in [docs/tools.md](docs/tools.md).
 
 ## Unreleased
 
+- German partnerships (GbR, eGbR, PartG): the company details describe
+  `isPartnership`, `partnershipForm` and `partnershipIncome`; new read-only
+  tools `list_partnership_partners` and `get_partnership_profit_key`; the tax
+  report tools know the Feststellungserklärung (`PARTNERSHIP_ASSESSMENT`) and
+  never offer a partnership an income tax return.
 - The server source moved to a private repository. This repository keeps the
   documentation, skills and client manifests, and is updated with each release.
 - The local `norman-mcp-server` package on PyPI is no longer updated. Connect

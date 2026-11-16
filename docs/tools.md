@@ -1,6 +1,6 @@
 # Tools
 
-The hosted Norman MCP server offers 310 tools. Your AI client
+The hosted Norman MCP server offers 312 tools. Your AI client
 picks them by itself; you never need to call one by name. Tools marked
 **reads** only read your data.
 
@@ -13,9 +13,11 @@ This page is generated from the server's tool list at each release.
 | `get_company_balance` | Get the current balance of the company. | reads |
 | `get_company_details` | Get detailed information about the user's company. | reads |
 | `get_financial_overview` | Get a financial overview in one call: company, current balances, period revenue/costs/profit, current tax estimates and next VAT period. Independent reads run concurrently. | reads |
+| `get_partnership_profit_key` | Germany only. Whether a German partnership's partners can be declared for a year: at least two partners, and shares that add up to exactly 1 on every day of the year. | reads |
 | `list_coa_templates` | List available Chart of Accounts templates (e.g. SKR03, SKR04, PL_KPIR, PL_FULL) supported for the selected company. | reads |
 | `list_companies` | List every company the user can work in: the ones they own or are a member of, and the ones they advise as a tax advisor. | reads |
 | `list_company_categories` | List categories from the selected company chart (SKR03/SKR04, PL_KPIR or PL_FULL). Use these company-specific IDs whenever usesCompanyChart or isSme is true. | reads |
+| `list_partnership_partners` | Germany only. The partners (Gesellschafter) of the selected company when it is a German partnership: a GbR, an eGbR or a PartG (company details: isPartnership true). | reads |
 | `trigger_datev_export` | Germany only. Export DATEV and return a downloadUrl valid for one hour. By default GmbH/UG use the complete Ledger, including opening, manual, payroll, depreciation and closing entries; other companie… |  |
 | `update_company_details` | Update company information. |  |
 

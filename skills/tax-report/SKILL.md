@@ -1,7 +1,7 @@
 ---
 name: tax-report
 description: "Review and manage tax reports. German companies: VAT (UStVA, ZM, Umsatzsteuer), income tax prepayments and Finanzamt submissions via ELSTER. Polish companies: the JPK_V7 and VAT-UE, PIT or CIT advances, ZUS DRA, the annual PIT and the CIT-8, which Norman prepares and the owner files in the Norman app or outside it. Use when the user asks about taxes, Steuern, podatki, VAT, USt, JPK, Finanzamt, urząd skarbowy, or tax filing."
-version: 1.2.3
+version: 1.2.4
 disable-model-invocation: true
 argument-hint: "[period or tax type]"
 metadata:
@@ -38,12 +38,18 @@ Help the user with their tax obligations. Read the company's country first (`com
    - If it names `tax_liability_entry_date`, that is ELSTER's KSt 1 F check: the date unlimited tax liability began must equal the first day of the annual close's fiscal year. Quote its message and never pick a date: no tool changes either value, so the user corrects the date in the KSt wizard's first step or the close period in the Jahresabschluss, then previews again.
    - Only when the user explicitly confirms, call `submit_tax_report` to file with the Finanzamt via ELSTER. If it answers `Email not confirmed`, call `resend_email_confirmation` and ask the user to open the link in that email; a paid plan confirms the address without it.
 
-6. **Polish companies, check and then file in the app**:
+6. **German partnerships (GbR, eGbR, PartG)**: when the company details say `isPartnership` true, the partnership files the UStVA, the annual VAT return, the ZM, the EÜR under its own name, the Gewerbesteuer only when `partnershipIncome` is `gewerbebetrieb`, and the Feststellungserklärung (`PARTNERSHIP_ASSESSMENT`), never an income tax return of its own: never offer one.
+   - The Feststellungserklärung splits the year's EÜR profit over the partners: the Vorabvergütungen first, the rest by each partner's share. `list_partnership_partners` lists the partners, who are separate people; each declares their part in their own income tax return, outside this company.
+   - Read the report with `get_tax_report`. If its lineItems has `blockedBy`, quote each detail: `tax_number` and `tax_state` are the partnership's own Steuernummer and Finanzamt state (save them with `update_company_details`), `address` its street, postal code and city, `partners` a key that does not hold (`get_partnership_profit_key` says on which day). The partners and their shares are changed in Norman under Kontoeinstellungen -> Gesellschafter.
+   - The answers (activity, each partner's Vorab and Sonderbetrieb balance, real estate, the § 35 figures of a trading partnership) are entered on the report's page in Norman (Steuern -> Feststellungserklärung). Ask the user to check them there, then preview and submit as in step 5.
+   - Norman files it from 2025 on, for a year whose partners stay the same all year.
+
+7. **Polish companies, check and then file in the app**:
    - Read a JPK_V7's sales, purchases, totals and exclusions with `get_polish_jpk_register`, and its filing state (methods, MF status, UPO) with `get_polish_jpk_filing_status`; a PIT return's with `get_polish_pit_filing_status`. `get_polish_tax_estimates` gives PIT/ZUS or CIT estimates, which are not filed returns.
    - There is no Polish signing or submission tool here. Norman files the JPK_V7 (the monthly JPK_V7M, or each monthly file of a quarterly JPK_V7K) from the Norman app only after the owner approves and signs it, on the JDG Pro and Sp. z o.o. Max plans. Norman prepares the PIT returns, the CIT-8 draft and the VAT-UE and calculates ZUS; the user or their accountant files them.
    - Give facts and next steps, never an individual tax opinion.
 
-7. **Tax settings**: Call `list_tax_settings` to review VAT registration, filing frequency, and other tax configuration. A German Kleinunternehmer or a company with VAT-exempt sales under § 4 UStG files a UStVA only for a period with VAT it owes as recipient (§ 13b, § 1a UStG), quarterly by default. To file monthly, call `update_tax_setting` with `reporting_frequency` "monthly". A German Kleinunternehmer files no ZM (§ 18a Abs. 4 UStG), also for EU B2B sales. Filed ZMs stay in the reports. For a German Kleinunternehmer, call `get_kleinunternehmer_limit` to say where this year's revenue stands against 100,000 € (25,000 € in the founding year) and next year's 25,000 €; at `near_limit`, `crossed` or `not_eligible`, tell the user the invoice that crosses the limit already needs VAT and suggest updating the VAT status in the tax settings. Never change the VAT status for them.
+8. **Tax settings**: Call `list_tax_settings` to review VAT registration, filing frequency, and other tax configuration. A German Kleinunternehmer or a company with VAT-exempt sales under § 4 UStG files a UStVA only for a period with VAT it owes as recipient (§ 13b, § 1a UStG), quarterly by default. To file monthly, call `update_tax_setting` with `reporting_frequency` "monthly". A German Kleinunternehmer files no ZM (§ 18a Abs. 4 UStG), also for EU B2B sales. Filed ZMs stay in the reports. For a German Kleinunternehmer, call `get_kleinunternehmer_limit` to say where this year's revenue stands against 100,000 € (25,000 € in the founding year) and next year's 25,000 €; at `near_limit`, `crossed` or `not_eligible`, tell the user the invoice that crosses the limit already needs VAT and suggest updating the VAT status in the tax settings. Never change the VAT status for them.
 
 Important warnings:
 - German companies: ALWAYS show the Finanzamt preview before submitting
