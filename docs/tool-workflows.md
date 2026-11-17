@@ -80,7 +80,7 @@ available linked documents; unreadable attached documents block the package.
   advisor of the client, a DATEV push or an email to the advisor), the bookings a new file would add,
   change or leave out. The owner's own download does not count.
 - `read_datev_file`: inspect an uploaded EXTF/DTVF **Buchungsstapel** without
-  importing it. Obtain a `file_ref` through `request_file_upload` or `POST /files/upload`, then
+  importing it. Obtain a `file_ref` through `request_datev_file_upload` or `POST /files/upload`, then
   filter by account, document date, text or minimum amount. Reuse that reference
   for subsequent pages (up to 100 rows/page) until its normal upload expiry.
   No DATEV connection or chart setup is needed; an authenticated Norman company
@@ -96,6 +96,11 @@ available linked documents; unreadable attached documents block the package.
   import needs `confirmed=true` after a ready preview; `list_datev_batch_imports` and
   `delete_datev_batch_import` show and undo it. The batch links no invoice PDFs, and
   outgoing invoices uploaded as documents would be booked a second time.
+- `request_datev_file_upload`: the in-chat panel for these files. It takes up to 12 CSV,
+  TXT or ZIP files of 20 MB each, books nothing and keeps each file for 30 minutes;
+  `get_file_upload_status` then returns one `file_ref` per file for
+  `preview_datev_batch_import` or `read_datev_file`. `request_file_upload` is the wrong
+  panel for a batch: it books every file as a receipt or invoice.
 
 The reader preserves tax keys and Generalumkehr markers. Its totals are source-row
 amounts grouped by currency, **not** tax-expanded account balances or open items.

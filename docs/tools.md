@@ -1,6 +1,6 @@
 # Tools
 
-The hosted Norman MCP server offers 322 tools. Your AI client
+The hosted Norman MCP server offers 323 tools. Your AI client
 picks them by itself; you never need to call one by name. Tools marked
 **reads** only read your data.
 
@@ -184,6 +184,7 @@ This page is generated from the server's tool list at each release.
 | `get_file_upload_status` | Read this user's upload panel result, including per-document direction and attachment IDs. | reads |
 | `link_attachment_transaction` | Link a transaction to an attachment. |  |
 | `list_attachments` | Search saved purchase invoices and receipts (not outgoing sales invoices). Prefer search for supplier discovery. Individual filters are combined with AND. | reads |
+| `request_datev_file_upload` | Germany only. Open an in-chat uploader for DATEV booking batches (EXTF Buchungsstapel as CSV, TXT or ZIP). |  |
 | `request_file_upload` | Open an in-chat multi-file uploader for receipts and invoices. |  |
 | `upload_bulk_attachments` | Upload multiple file attachments in bulk. |  |
 | `upload_structured_attachments` | Store pre-processed documents without transaction side effects. |  |

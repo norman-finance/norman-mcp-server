@@ -141,6 +141,8 @@ and closing postings.
 - `preview_datev_batch_import` / `apply_datev_batch_import`: import the booking batches of an online
   shop or ERP tool (pathway, JTL-Wawi and similar) into the GmbH/UG ledger, **OSS** sales included;
   `set_datev_batch_vat_rates`, `list_datev_batch_imports` and `delete_datev_batch_import` complete it.
+- `request_datev_file_upload`: an in-chat panel for the batch files (CSV, TXT or ZIP). It books
+  nothing and hands each file to the two tools above.
 
 Try: "Check the full GmbH Ledger export before I give it to my accountant."
 
