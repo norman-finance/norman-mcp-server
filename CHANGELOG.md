@@ -5,6 +5,11 @@ The full list of tools is in [docs/tools.md](docs/tools.md).
 
 ## Unreleased
 
+- DATEV booking batches of online shops and ERP tools (pathway, JTL-Wawi and
+  similar) into the GmbH/UG ledger, OSS sales included:
+  `preview_datev_batch_import`, `apply_datev_batch_import` (after the user
+  confirms), `set_datev_batch_vat_rates`, `list_datev_batch_imports` and
+  `delete_datev_batch_import`.
 - German partnerships (GbR, eGbR, PartG): the company details describe
   `isPartnership`, `partnershipForm` and `partnershipIncome`; new read-only
   tools `list_partnership_partners` and `get_partnership_profit_key`; the tax

@@ -1,6 +1,6 @@
 # Tools
 
-The hosted Norman MCP server offers 316 tools. Your AI client
+The hosted Norman MCP server offers 322 tools. Your AI client
 picks them by itself; you never need to call one by name. Tools marked
 **reads** only read your data.
 
@@ -230,8 +230,13 @@ This page is generated from the server's tool list at each release.
 
 | Tool | What it does | |
 | :-- | :-- | :-- |
+| `apply_datev_batch_import` | Germany only. Post DATEV booking batches to the GmbH/UG ledger after a ready preview and the user's go. |  |
+| `delete_datev_batch_import` | Germany only. Remove one imported batch with its ledger entries and OSS lines, e.g. to import a corrected file. |  |
 | `get_datev_changes_since_handoff` | Germany only. What a new DATEV file would hold differently from the newest file the tax advisor has. | reads |
+| `list_datev_batch_imports` | Germany only. List the imported DATEV booking batches: id, name, file, period, bookings, ledger entries, payouts matched, revenue, output VAT and OSS revenue. | reads |
+| `preview_datev_batch_import` | Germany only. Check DATEV booking batches before importing them into the GmbH/UG ledger. Writes nothing. | reads |
 | `read_datev_file` | Inspect an uploaded DATEV file without importing it or changing the books. | reads |
+| `set_datev_batch_vat_rates` | Germany only. Save which VAT a revenue account without a tax key includes, for this company's batches. |  |
 | `validate_ledger_datev_export` | Germany only. Preflight a complete GmbH/UG Ledger export before accountant handoff. | reads |
 
 ## Taxes and filings
@@ -424,6 +429,7 @@ This page is generated from the server's tool list at each release.
 | `get_client_overview` | Get an aggregated financial health snapshot for a client company. Combines company details, balance, transaction stats, missing receipts, outstanding invoices, and tax report status into a single over… | reads |
 | `get_client_period_close_changes` | What changed after the advisor closed a client's period: for each closed VAT period in the range, the new, changed and removed bookings and the new documents since its close. | reads |
 | `get_missing_documents_summary` | Check the selected company; select company_id first when switching clients. | reads |
+| `get_period_open_items` | What the tax advisor counts as still open in a period of the company, before the client tells the advisor that the period is ready. | reads |
 | `get_tax_advisor_messages` | Read the conversation with the company's tax advisor (a German Steuerberater, a Polish company's own accountant). | reads |
 | `get_tax_compliance_status` | Check the tax compliance status for a client company. Identifies which tax reports are due, overdue, or unfiled, and flags any validation issues. | reads |
 | `list_clients_for_period` | Each client of the tax advisor in one period, the way the advisor's client list shows it. Per client: open bookings (not finalized; an unpaid booking waits for its payment and is left out), bookings w… | reads |

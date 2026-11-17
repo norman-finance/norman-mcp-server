@@ -138,6 +138,9 @@ and closing postings.
 - `validate_ledger_datev_export`: check structure, source coverage and documents before handoff.
 - `get_datev_changes_since_handoff`: list the bookings added, changed or left out since the advisor's last file of each period.
 - `read_datev_file`: inspect an **EXTF/DTVF** file without importing postings into your books.
+- `preview_datev_batch_import` / `apply_datev_batch_import`: import the booking batches of an online
+  shop or ERP tool (pathway, JTL-Wawi and similar) into the GmbH/UG ledger, **OSS** sales included;
+  `set_datev_batch_vat_rates`, `list_datev_batch_imports` and `delete_datev_batch_import` complete it.
 
 Try: "Check the full GmbH Ledger export before I give it to my accountant."
 

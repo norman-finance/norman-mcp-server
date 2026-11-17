@@ -86,6 +86,16 @@ available linked documents; unreadable attached documents block the package.
   No DATEV connection or chart setup is needed; an authenticated Norman company
   is required. CSV/TXT/EXTF uploads are limited to 20 MB / 100,000 rows; extract
   the booking CSV from a ZIP before uploading.
+- `preview_datev_batch_import` → `apply_datev_batch_import`: import the DATEV EXTF
+  **Buchungsstapel** an online shop, marketplace or ERP tool exports (pathway, JTL-Wawi
+  and similar) into a GmbH/UG ledger on SKR03/SKR04, up to 12 files per call. OSS
+  distance sales (tax key 10 or 240 with the EU country and EU rate columns) stay out of
+  the UStVA and go to the quarterly OSS return. The preview writes nothing; it lists
+  revenue accounts without a tax key (`set_datev_batch_vat_rates` records the user's
+  0/7/19 % choice) and accounts to prepare (`prepare_accounting_cutover_accounts`). The
+  import needs `confirmed=true` after a ready preview; `list_datev_batch_imports` and
+  `delete_datev_batch_import` show and undo it. The batch links no invoice PDFs, and
+  outgoing invoices uploaded as documents would be booked a second time.
 
 The reader preserves tax keys and Generalumkehr markers. Its totals are source-row
 amounts grouped by currency, **not** tax-expanded account balances or open items.

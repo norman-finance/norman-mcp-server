@@ -58,7 +58,13 @@ Guide the user through a complete monthly reconciliation:
 - German companies: a late document keeps its legal date, also in a month whose UStVA is filed; for each filed UStVA of the period, `get_filed_report_changes` shows what changed per Kennzahl and whether a correction is due (§ 153 AO)
 - Polish companies: if the JPK_V7 is due, find its report with `list_tax_reports` and read it with `get_polish_jpk_register` and `get_polish_jpk_filing_status`. There is no Polish submit tool: Norman files the JPK_V7 only after the owner approves and signs it in the Norman app
 
-## Step 7: Summary
+## Step 7: Hand the period to the tax advisor
+- Only if the company works with a tax advisor (`ask_tax_advisor` refuses otherwise)
+- Call `get_period_open_items` with the period's dates: it counts what the advisor still sees as open, the way the advisor's own list does
+- Show the open items and offer to finish them first; the user may also send the period with them open
+- Draft the message: the period is ready, and what is still open. Send it with `ask_tax_advisor` only after the user confirms the text
+
+## Step 8: Summary
 Present a closing summary:
 - Total income and expenses for the month
 - Number of invoices sent vs. paid
