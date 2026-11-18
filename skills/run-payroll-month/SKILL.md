@@ -1,7 +1,7 @@
 ---
 name: run-payroll-month
-description: Run the monthly payroll (Lohnabrechnung) of a German GmbH or UG with Norman — check people and changes, calculate, approve, pay, Beitragsnachweis and Lohnsteuer-Anmeldung. Use when the user asks about payroll, Lohnabrechnung, Gehaltsabrechnung, salaries, payslips, Minijob, Midijob, Sozialversicherung, Beitragsnachweis or Lohnsteuer-Anmeldung. Germany only; Norman has no payroll for Polish companies.
-version: 1.0.1
+description: Run the monthly payroll (Lohnabrechnung) of a German GmbH, UG, partnership or self-employed company on an SKR ledger with Norman — check people and changes, calculate, approve, pay, Beitragsnachweis and Lohnsteuer-Anmeldung. Use when the user asks about payroll, Lohnabrechnung, Gehaltsabrechnung, salaries, payslips, Minijob, Midijob, Sozialversicherung, Beitragsnachweis or Lohnsteuer-Anmeldung. Germany only; Norman has no payroll for Polish companies.
+version: 1.1.0
 disable-model-invocation: true
 argument-hint: "[month, e.g. 2026-12]"
 metadata:
@@ -13,7 +13,7 @@ metadata:
         - norman-finance
 ---
 
-Run one month of payroll with the user. Payroll is part of the Max plan and open to the company's owner and its tax advisor; a 403 means it is not available for this account.
+Run one month of payroll with the user. Payroll runs for a GmbH, UG, partnership, or self-employed company that books on an SKR ledger; single-entry self-employed get none. Company Max includes one managing director (a GmbH/UG's); the payroll add-on covers the other people. Payroll is open to the company's owner and its tax advisor; a 403 says what is missing for this account.
 
 1. **Where things stand**: Call `get_payroll_overview`, then `list_payroll_people`. Ask whether anything changed this month: a raise (`record_salary_change`), new tax data from ELStAM (`record_tax_profile_change`), a leaver (`set_employment_end`), vacation or sickness (`record_absence`). A new person, a Steuer-ID or insurance number is entered in the Norman app, never in chat.
 
@@ -23,7 +23,7 @@ Run one month of payroll with the user. Payroll is part of the Max plan and open
 
 4. **Social insurance**: `get_social_insurance_contributions` shows the amounts per Krankenkasse and the Minijob-Zentrale. Contributions are due on the third-last banking day of the month, and the Beitragsnachweis must reach each fund two working days earlier: save the estimate with `save_contribution_plan` in time (the first plan in Norman needs the user's confirmation). The user sends the Beitragsnachweis through the SV-Meldeportal; Norman does not transmit it.
 
-5. **Pay**: `get_payroll_payments` lists net salaries, contributions and wage tax still due. Paying happens in the app (`payUrl`): one collective transfer the user confirms at the bank.
+5. **Pay**: `get_payroll_payments` lists net salaries, contributions and wage tax still due. Paying happens in the app (`payUrl`): one collective transfer the user confirms at the bank. Norman books its own transfer by itself. A wage the user paid another way belongs on the payroll liability it clears (SKR04 3720 net wages, 3730 wage tax, 3740 social insurance; SKR03 1740, 1741, 1742), never on a wage expense account: the approved month already booked the wages. On single-entry books it goes under Employees.
 
 6. **Lohnsteuer-Anmeldung**: When every month of the filing period is approved, call `prepare_wage_tax_return`, show it with `get_wage_tax_return`, test it with `preview_wage_tax_return`, and only on the user's explicit request file it with `submit_wage_tax_return`. Due on the 10th of the following month. If it was filed elsewhere, use `mark_wage_tax_return_filed`.
 

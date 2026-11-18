@@ -19,7 +19,7 @@ Perform a thorough tax compliance check for the tax advisor:
 
 ## Step 2: Review tax settings
 - Call `list_tax_settings` to verify the reporting frequency and VAT configuration
-- Check if the settings match the company type (DE: VAT subject, Kleinunternehmer (§ 19 UStG) or VAT-exempt sales (§ 4 UStG, e.g. Heilberufe or Versicherungsvermittler: no input VAT deduction, annual VAT return); PL: VAT-exempt vs. VAT payer, monthly JPK_V7M vs. quarterly JPK_V7K)
+- Check if the settings match the company type (DE: VAT subject, Kleinunternehmer (§ 19 UStG) or VAT-exempt sales (§ 4 UStG, e.g. Heilberufe or Versicherungsvermittler: no input VAT deduction, annual VAT return; a company with only some exempt sales stays VAT subject and books those sales at 0 %, which Norman reports in UStVA Kz 48); PL: VAT-exempt vs. VAT payer, monthly JPK_V7M vs. quarterly JPK_V7K)
 
 ## Step 3: Verify registration
 Check the following registration details:
