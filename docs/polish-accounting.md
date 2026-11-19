@@ -149,6 +149,15 @@ non-idempotent write as `propose_tax_setting_change`; each proposal carries its
   PL_FULL and shows how; corrections go in `account_mapping`, assets taken over with
   their umorzenie in `takeover_assets`. Apply needs `confirmed=true` after the owner
   reviewed the preview. See the `pl-opening-balance` skill.
+- `create_polish_manual_posting` posts a manual entry (wpis ręczny) in a PL_FULL
+  journal: `booking_date`, active `debit_code` and `credit_code` from
+  `list_polish_ledger_accounts`, `amount` in PLN with at most two decimals, and a
+  `memo` that says what happened and which document backs it. Norman already posts
+  every operation and document from its category, so categorize those instead of
+  posting them by hand. `reverse_polish_manual_posting` corrects an entry by Storno
+  (debit and credit swapped, on or after the original date) and needs
+  `confirmed=true`; the original is never edited or deleted. The API refuses closed
+  periods and dates before the business started.
 - `get_vat_proportion` and `update_vat_proportion` expose the API's Polish VAT
   proportion settings. Use figures confirmed by the user; explicit clearing is
   different from omitting an input.
