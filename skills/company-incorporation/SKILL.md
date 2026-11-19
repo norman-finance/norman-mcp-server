@@ -36,11 +36,13 @@ stays with the notary and a tax advisor.
 
 ## The Founder Edition
 
-A company formed through Norman that has no plan yet can buy the Founder Edition for 28 days from the
-start of its formation: 12 months of Norman Max for 199 € plus VAT (a Polish sp. z o.o. 449 zł net, a
-JDG 12 months of JDG Pro for 149 zł net). After the first year the plan renews at the full yearly
-price unless the founder cancels before. Home shows the offer with its end date. The formation itself
-stays free; mention the offer once, after the notary hand-off, and never press it.
+German GmbHs and UGs that have never paid for a plan can buy the Founder Edition during formation or
+within three months of their Handelsregister entry: 12 months of Norman Max for 199 € plus VAT. Polish
+companies formed through Norman keep their 28-day window from the start of the formation (a sp. z o.o.
+449 zł net, a JDG 12 months of JDG Pro for 149 zł net). Only the company owner sees and buys it. After
+the first year the plan renews at the full yearly price unless the founder cancels before. Home shows
+the offer, with its end date when it has one. The formation itself stays free; mention the offer once,
+after the notary hand-off, and never press it.
 
 ## Before you start
 
