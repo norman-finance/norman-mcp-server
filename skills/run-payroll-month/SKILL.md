@@ -1,7 +1,7 @@
 ---
 name: run-payroll-month
 description: Run the monthly payroll (Lohnabrechnung) of a German GmbH, UG, partnership or self-employed company on an SKR ledger with Norman — check people and changes, calculate, approve, pay, Beitragsnachweis and Lohnsteuer-Anmeldung. Use when the user asks about payroll, Lohnabrechnung, Gehaltsabrechnung, salaries, payslips, Minijob, Midijob, Sozialversicherung, Beitragsnachweis or Lohnsteuer-Anmeldung. Germany only; Norman has no payroll for Polish companies.
-version: 1.1.0
+version: 1.2.0
 disable-model-invocation: true
 argument-hint: "[month, e.g. 2026-12]"
 metadata:
@@ -15,7 +15,7 @@ metadata:
 
 Run one month of payroll with the user. Payroll runs for a GmbH, UG, partnership, or self-employed company that books on an SKR ledger; single-entry self-employed get none. Company Max includes one managing director (a GmbH/UG's); the payroll add-on covers the other people. Payroll is open to the company's owner and its tax advisor; a 403 says what is missing for this account.
 
-1. **Where things stand**: Call `get_payroll_overview`, then `list_payroll_people`. Ask whether anything changed this month: a raise (`record_salary_change`), new tax data from ELStAM (`record_tax_profile_change`), a leaver (`set_employment_end`), vacation or sickness (`record_absence`). A new person, a Steuer-ID or insurance number is entered in the Norman app, never in chat.
+1. **Where things stand**: Call `get_payroll_overview`, then `list_payroll_people`. Ask whether anything changed this month: a raise (`record_salary_change`), new tax data from ELStAM (`record_tax_profile_change`), a leaver (`set_employment_end`), vacation or sickness (`record_absence`). A new person: `create_payroll_person`, then `record_minijob_details` for a minijob or `record_statutory_insurance` for a statutory employee. An employee needs their Steuer-ID, date of birth and home address; if the user would rather not share these in chat, they add the person in the Norman app. Bank details and the insurance number are entered in the app.
 
 2. **Calculate**: Call `calculate_payroll_month`. If it returns `issues`, explain them in plain words and say what to complete in the app (employer data, social insurance data, work schedule). Show each person's gross, taxes, social insurance and payout, and the employer cost.
 

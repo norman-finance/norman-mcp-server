@@ -5,6 +5,12 @@ The full list of tools is in [docs/tools.md](docs/tools.md).
 
 ## Unreleased
 
+- Payroll: `create_payroll_person` adds a managing director or an employee,
+  a minijob included; its answer withholds the identifiers like every payroll
+  tool. `update_employer_payroll_setup` takes `single_establishment`, `note` and
+  the U1 flat surcharge, and works for a first setup. `record_minijob_details`
+  explains a person without the minijob insurance profile instead of passing on
+  the API's request for health fund data.
 - DATEV booking batches of online shops and ERP tools (pathway, JTL-Wawi and
   similar) into the GmbH/UG ledger, OSS sales included:
   `preview_datev_batch_import`, `apply_datev_batch_import` (after the user

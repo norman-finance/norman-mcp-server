@@ -122,8 +122,9 @@ German invoice workflows also support **ZUGFeRD**, cancellations
 (**Lieferschein**).
 
 Additional workflows include German GmbH/UG payroll and company-formation
-preparation. Payroll tools cover calculation, approval, payslips and supported
-Lohnsteuer-Anmeldung filing; sensitive employee identifiers stay in the app.
+preparation. Payroll tools cover adding people, calculation, approval, payslips and
+supported Lohnsteuer-Anmeldung filing; sensitive employee identifiers are never read
+back into the chat.
 Formation tools prepare draft documents and a notary handoff, not a legal incorporation
 by chat. [Detailed workflows](docs/tool-workflows.md).
 

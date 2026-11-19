@@ -1,6 +1,6 @@
 # Tools
 
-The hosted Norman MCP server offers 323 tools. Your AI client
+The hosted Norman MCP server offers 324 tools. Your AI client
 picks them by itself; you never need to call one by name. Tools marked
 **reads** only read your data.
 
@@ -295,6 +295,7 @@ This page is generated from the server's tool list at each release.
 | `approve_payroll_month` | Germany only. Approve a calculated payroll month: its version is frozen and booked to the ledger. |  |
 | `calculate_payroll_month` | Germany only. Calculate (or recalculate) the draft payroll of one month. |  |
 | `cancel_payroll_correction` | Germany only. Discard a prepared, not yet approved correction. The approved month stays as it was. |  |
+| `create_payroll_person` | Germany only. Add a managing director or an employee to the payroll. |  |
 | `get_aag_claim` | Germany only. Prepared AAG reimbursement (U1 sick pay, U2 maternity) of an approved month. | reads |
 | `get_contribution_plan` | Germany only. The Beitragsnachweis estimate of one month, per Krankenkasse or Minijob-Zentrale. | reads |
 | `get_employer_payroll_setup` | Germany only. The employer data payroll needs, and what is still missing. | reads |
