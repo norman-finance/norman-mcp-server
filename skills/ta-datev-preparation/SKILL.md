@@ -22,7 +22,7 @@ Help the tax advisor prepare and execute a DATEV export:
 - If any are missing, inform the advisor and offer to update via `update_company_details`
 
 ## Step 2: Check categorization completeness
-- Call `search_transactions` with `status=UNVERIFIED` to find uncategorized transactions
+- Call `search_transactions` with `status=UNVERIFIED` to find the bookings still to review, and check them for a missing category
 - Report the count and total amount of uncategorized transactions
 - If there are uncategorized transactions:
   - List the top items by amount
@@ -34,7 +34,7 @@ Help the tax advisor prepare and execute a DATEV export:
 - Focus on expense transactions >250 EUR (required for Vorsteuerabzug)
 - Report the count and recommend collecting missing receipts before export
 - Check `documentsWithoutBooking` for the export months: documents no booking holds are missing from the export, so the client books or deletes them first
-- The file holds every booking of the period, finalized or not; only a bank transaction the bank still marks as pending waits. Name the bookings that are not finalized yet (`notFinalized` of the export count): a later fix to one of them shows as a change, and the next file corrects it
+- The file holds every booking of the period, reviewed or not; only a bank transaction the bank still marks as pending waits. Name the bookings that are not reviewed yet (`notFinalized` of the export count): a later fix to one of them shows as a change, and the next file corrects it
 - Unpaid bookings (issued invoices, received documents, bookings marked Not paid) need no payment either: the file holds them with their documents in the month of their date, so the UStVA gets their input VAT when the invoice comes. A self-employed client's unpaid sales wait for their payment (Ist)
 
 ## Step 4: Check changes since the advisor's last file
@@ -66,7 +66,7 @@ List any blocking issues before export, and the periods that changed since the a
 - Only proceed if the advisor confirms
 - Call `trigger_datev_export` to generate the DATEV EXTF CSV package
 - The export includes:
-  - DATEV EXTF CSV file (booking records): every booking, finalized or not, and every unpaid booking, each line in the month of its date
+  - DATEV EXTF CSV file (booking records): every booking, reviewed or not, and every unpaid booking, each line in the month of its date
   - GmbH/UG: a booking with a document books "Aufwand an Kreditor" on its date and its payment "Kreditor an Bank", also when it was paid on the day of the document. Both lines carry the document number in Belegfeld 1, so DATEV clears the open item. A document that names no vendor or client books on "Diverse Kreditoren" or "Diverse Debitoren". A payment without a document books straight to the bank. The rule holds for every booking with a document, also for earlier months: a new export of an old month shows two lines for a same-day payment and the document number in Belegfeld 1, so the first list of changes for such a month is long
   - Self-employed: an unpaid expense books against 3612 (SKR04) / 1692 (SKR03), "Neutralisierung aufwandswirksamer Sachverhalte für § 4 Abs. 3 EStG", on its date, with its input VAT; its payment clears that account, and the EÜR counts the cost then
   - Transaction statement

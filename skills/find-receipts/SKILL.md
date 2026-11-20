@@ -52,10 +52,10 @@ Once the user has the receipt files:
 - German companies: a receipt that matches no payment books itself as an open booking (payment type `NOT_PAID`, source document) on its own date; its bank payment takes the booking over when it arrives. Linking a receipt to a booking made by hand replaces the booking Norman made from it.
 
 ## Step 4: Verify
-- After attaching, use `change_transaction_verification` to mark transactions as verified
+- When the user asks, use `change_transaction_verification` to mark the bookings reviewed (Geprüft) after attaching
 - Show a summary: how many receipts were found, attached, and how many are still missing
 
 Tips:
-- In Norman the owner works through the same lists one at a time: **Buchhaltung → Prüfen** (Accounting → Review) shows the unfinalized bookings, those without a document first, each with its matching bookings, payments and documents; **Belege → Belege prüfen** (Documents → Review documents) shows the documents no booking holds. Home shows both counts.
+- In Norman the owner works through the same lists one at a time: **Buchhaltung → Prüfen** (Accounting → Review) shows the bookings still to review, those without a document first, each with its matching bookings, payments and documents; **Belege → Belege prüfen** (Documents → Review documents) shows the documents no booking holds. Home shows both counts.
 - DE: Receipts must be kept for 10 years (Aufbewahrungspflicht). Digital copies are legally accepted (GoBD-compliant) when stored properly. Prioritize receipts for expenses over 250 EUR (required for Vorsteuerabzug).
 - PL: Receipts must be kept for 5 years. Documents must comply with JPK requirements. Prioritize receipts for expenses over 450 PLN (required for VAT deduction).

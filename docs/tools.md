@@ -129,7 +129,7 @@ This page is generated from the server's tool list at each release.
 | Tool | What it does | |
 | :-- | :-- | :-- |
 | `categorize_transaction` | Detect category for a transaction using AI. | reads |
-| `change_transaction_verification` | Verify or unverify a transaction (finalize or unfinalize). |  |
+| `change_transaction_verification` | Mark a booking reviewed (Geprüft), or set it back to review (Zu prüfen). |  |
 | `confirm_bank_statement_import` | Import the new rows of a reviewed PDF statement, after the user approved them. |  |
 | `create_transaction` | Create a new manual transaction. |  |
 | `delete_transaction` | Delete a transaction and its regenerable Ledger postings after confirmation. |  |
@@ -436,7 +436,7 @@ This page is generated from the server's tool list at each release.
 | `get_period_open_items` | What the tax advisor counts as still open in a period of the company, before the client tells the advisor that the period is ready. | reads |
 | `get_tax_advisor_messages` | Read the conversation with the company's tax advisor (a German Steuerberater, a Polish company's own accountant). | reads |
 | `get_tax_compliance_status` | Check the tax compliance status for a client company. Identifies which tax reports are due, overdue, or unfiled, and flags any validation issues. | reads |
-| `list_clients_for_period` | Each client of the tax advisor in one period, the way the advisor's client list shows it. Per client: open bookings (not finalized; an unpaid booking waits for its payment and is left out), bookings w… | reads |
+| `list_clients_for_period` | Each client of the tax advisor in one period, the way the advisor's client list shows it. Per client: open bookings (not reviewed; an unpaid booking waits for its payment and is left out), bookings wi… | reads |
 | `list_signature_requests` | For tax advisors of German clients (Germany only): declarations waiting for your signature, or their history. | reads |
 | `list_tax_advisor_clients` | List all client companies managed by the authenticated tax advisor. Each entry includes the company ID, name, account type, transaction count, and number of transactions missing documents. | reads |
 | `ping_client_for_documents` | Send document request reminders to a client for multiple transactions at once. Each transaction triggers an email to the company owner asking them to upload the missing receipt or invoice. |  |

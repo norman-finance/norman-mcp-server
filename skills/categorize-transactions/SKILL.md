@@ -31,7 +31,7 @@ A GmbH or UG can switch a liability account on for transactions in its chart of 
 
 ## Workflow
 
-1. **Fetch uncategorized transactions**: Call `search_transactions` to find transactions that need attention. Look for unverified or uncategorized entries.
+1. **Fetch uncategorized transactions**: Call `search_transactions` to find transactions that need attention. Look for bookings still to review (`status=UNVERIFIED`) or without a category.
 
 2. **Smart categorization**: For each transaction, suggest a category based on:
    - The transaction description / reference text
@@ -43,7 +43,7 @@ A GmbH or UG can switch a liability account on for transactions in its chart of 
    - **Freelance**: Use `categorize_transaction` with the transaction details — it returns the AI-suggested freelance category.
    - **SME, or a JDG on its PL_KPIR chart**: Use `update_transaction` with `company_category_id` to assign the account. For a GmbH/UG, if the needed category isn't in `list_company_categories`, search the full SKR03/SKR04 catalog with `search_skr_by_code` (by number) or `suggest_skr_category` (by description, uses AI). Then `create_company_category` to add it.
 
-4. **Same counterparty**: When the user corrects the category of one booking, call `find_same_counterparty_transactions` with that booking before you save its new category. Offer to change the `suggested` bookings too, and say how many finalized ones stay as they are. Change the ones the user agrees to with `update_transaction`. If the new category asks for details (trip dates, VAT period, business share, asset lifetime), change only the one booking.
+4. **Same counterparty**: When the user corrects the category of one booking, call `find_same_counterparty_transactions` with that booking before you save its new category. Offer to change the `suggested` bookings too, and say how many reviewed ones stay as they are. Change the ones the user agrees to with `update_transaction`. If the new category asks for details (trip dates, VAT period, business share, asset lifetime), change only the one booking.
 
 5. **Invoice matching**: When a transaction looks like an incoming payment:
    - Call `list_invoices` to find matching unpaid invoices (by amount or client)
@@ -54,6 +54,6 @@ A GmbH or UG can switch a liability account on for transactions in its chart of 
    - Use `upload_bulk_attachments` for multiple receipts
    - Use `link_attachment_transaction` to connect receipts to transactions
 
-7. **Verification**: After categorizing, use `change_transaction_verification` to mark transactions as verified.
+7. **Review**: When the user asks, use `change_transaction_verification` to mark the categorized bookings reviewed (Geprüft).
 
 Present transactions in batches of 10-15 for manageable review. Show: Date, Amount, Description, Suggested Category.

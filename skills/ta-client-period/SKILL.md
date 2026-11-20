@@ -21,7 +21,7 @@ Help the tax advisor see all clients for one period:
 - `status` says where the client stands:
   - `changed`: the books changed after the advisor's DATEV file of this period, or after the advisor closed it
   - `missing_documents`: bookings of the period have no document
-  - `in_progress`: bookings not finalized, or documents without a booking (an unpaid booking waits for its payment and does not count)
+  - `in_progress`: bookings still to review, or documents without a booking (an unpaid booking waits for its payment and does not count)
   - `ready`: nothing open, no DATEV file yet
   - `handed_over`: the advisor has the DATEV file, nothing changed since and nothing is open
   - `period_closed`: the advisor closed the period and nothing changed since

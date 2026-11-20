@@ -37,19 +37,19 @@ Guide the user through a complete monthly reconciliation:
 - Bookings that stay open are unpaid bills or receivables: list them in the summary.
 
 ## Step 4: Document Check
-- Search the period with `search_transactions` and `no_receipt=true`, without a status filter: finalizing a booking does not give it a document. Take the unfinalized ones first, as Norman's booking review does
+- Search the period with `search_transactions` and `no_receipt=true`, without a status filter: reviewing a booking does not give it a document. Take the ones still to review first, as Norman's booking review does
 - For a payment without a document, call `find_booking_payments` with its id. Pay a fitting open booking with `pay_booking`, then read back the row `pay_booking` returns (its `publicId`: the payment in German companies, the booking in Polish ones, whose payment then retires) and use that id from then on: a booking made by hand may have no document, so keep searching while it has none. A Norman invoice's booking (its `invoice` field in `get_transaction`) is paid with `link_transaction` (that invoice id, the payment id), never with `pay_booking`.
 - Search `list_attachments` with `has_booking=false` and the supplier, and link a match with `link_attachment_transaction`
 - `list_attachments` with `has_booking=false` and the period's `date_from`/`date_to` lists the documents that still wait for a booking
 - Remind the user to upload missing receipts with `upload_bulk_attachments`
 - In the app, **Buchhaltung → Prüfen** (Accounting → Review) works through these bookings one at a time, and **Belege → Belege prüfen** (Documents → Review documents) through the documents without a booking
 
-## Step 5: Finalize Transactions
-- After the matching steps, verify each transaction using `change_transaction_verification`: `pay_booking` refuses finalized payments
-- Open bookings (payment type `NOT_PAID`) are not finalized: they wait for their payment (Step 3)
-- Mark every transaction for the period as verified so the month can be closed
-- If any transaction has missing information (no receipt, unclear category), flag it for the user before verifying
-- Present a count: "X of Y transactions verified for [month]"
+## Step 5: Review the bookings
+- Marking a booking reviewed (Geprüft) is the user's check. Mark the period's bookings reviewed with `change_transaction_verification` only when the user asked for it, after the matching steps: `pay_booking` refuses reviewed payments
+- A booking that is not paid yet can be reviewed too; a later payment pays it and leaves it reviewed
+- If any booking has missing information (no receipt, unclear category), flag it for the user before you mark it reviewed
+- Never set a reviewed booking back to review on your own: only the user does that, one booking at a time
+- Present a count: "X of Y bookings reviewed for [month]"
 
 ## Step 6: Tax Preparation
 - Call `get_company_tax_statistics` for the period overview

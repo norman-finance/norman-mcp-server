@@ -15,7 +15,7 @@ Help the user get their GoBD Verfahrensdokumentation.
 
 ## What it is
 - Norman creates a PDF with the four GoBD parts: general description, user documentation, technical system documentation and operating documentation.
-- Norman creates it fresh at each download from the company's current data, and asks the user nothing. It shows per year how many documents were captured, in how many months and by which channel, and who finalized how many bookings. It is not a Word file, and it is free on every plan.
+- Norman creates it fresh at each download from the company's current data, and asks the user nothing. It shows per year how many documents were captured, in how many months and by which channel, and who reviewed how many bookings. It is not a Word file, and it is free on every plan.
 - It stays the customer's own document. Nobody at Norman reviews it, and Norman holds no GoBD attestation. Never call Norman or its bookings GoBD-certified or unchangeable.
 
 ## Download

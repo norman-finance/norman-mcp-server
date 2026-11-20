@@ -29,7 +29,7 @@ Help the tax advisor close a client's period:
 - A late document keeps its legal date, also in a closed period
 
 ## Step 4: Changes after the close
-- `close.changes` counts the changes since the close, also in a quarter or year whose months the advisor closed one by one. `get_client_period_close_changes` names them per closed period: new, changed and removed bookings, and new documents. A new booking counts even before it is finalized
+- `close.changes` counts the changes since the close, also in a quarter or year whose months the advisor closed one by one. `get_client_period_close_changes` names them per closed period: new, changed and removed bookings, and new documents. A new booking counts even before it is reviewed
 - The document facts are null while the client's documents are closed to the advisor. Say so instead of reading them as zero
 - To accept them, close the period again with the advisor's yes: it takes a new record
 - Call `reopen_client_period` only when the advisor asks for it

@@ -35,6 +35,6 @@ Help the user keep one vendor per supplier:
 - Ask which vendor to keep before you call `merge_vendors`. A merge cannot be undone. Propose the vendor with the most bookings
 - The kept vendor keeps its own name, VAT number and bank details. It takes the bookings, bills and rules of the others, and their names as aliases
 - The merged vendors leave the list. Their Kreditor numbers are free for new vendors again
-- Finalized bookings and bookings in a closed year never move. If `skipped` is above 0, tell the user: that many bookings were skipped, and their vendor stays in the list with them
+- Reviewed bookings and bookings in a closed year never move. If `skipped` is above 0, tell the user: that many bookings were skipped, and their vendor stays in the list with them
 - If the answer lists `keptNumbers`, tell the user: these bookings stay on the old Kreditor number, because the tax advisor already has them
 - For a `suggestions` row call `merge_vendor_with_suggestion`: the vendor takes the brand's logo and keeps all its own data
