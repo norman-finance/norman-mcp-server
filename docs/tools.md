@@ -160,7 +160,7 @@ This page is generated from the server's tool list at each release.
 
 | Tool | What it does | |
 | :-- | :-- | :-- |
-| `apply_rule_to_existing` | Run an existing rule's supported transaction actions on up to 500 matching uncategorized transactions from the last 90 days. |  |
+| `apply_rule_to_existing` | Run an existing rule's supported transaction actions on every matching transaction across the whole history that is still to review and whose category no invoice or receipt sets: the count preview_rul… |  |
 | `approve_rule_execution` | Approve an awaiting-review execution AFTER the user explicitly confirmed it: the rule's full action chain runs (category, VAT, reminder emails, ...). |  |
 | `create_rule` | Create an automation rule. Preview first with preview_rule. Send at most one of category_id / company_category_id (freelancer vs SME); a rule with mark_document_not_required may leave the category alo… |  |
 | `delete_rule` | Delete an automation rule after the user confirms. Prefer disabling (update_rule with is_active=false) when the user may want it back. |  |
@@ -169,7 +169,7 @@ This page is generated from the server's tool list at each release.
 | `list_pending_approvals` | Everything an agent prepared and is waiting on the user for, in one list: review-first automations, a return the tax autopilot prepared (a German UStVA, a Polish JPK_V7M or JPK_V7K), an active workflo… | reads |
 | `list_rule_executions` | Automation execution log. status=awaiting_review lists the matches a review-first rule parked for the user's approval — show each one (rule name, transaction/invoice, planned actions) and let the user… | reads |
 | `list_rules` | List the company's automation rules together with usage stats and the plan's automation limit. | reads |
-| `preview_rule` | Dry-run rule conditions against recent transactions BEFORE creating the rule. Show the user a few of the returned matches so they can confirm the rule catches the right things. | reads |
+| `preview_rule` | Dry-run rule conditions against the company's whole history BEFORE creating the rule. Show the user both counts and a few sample matches so they can confirm the rule catches the right things. | reads |
 | `toggle_agent` | Turn a prebuilt agent on or off after the user asked for it. |  |
 | `undo_rule_execution` | Put back what an automation changed, newest action first, AFTER the user asked for it. |  |
 | `update_rule` | Update an automation rule. Only the provided fields change. Re-activating a rule counts against the plan's automation limit like creating one. |  |
