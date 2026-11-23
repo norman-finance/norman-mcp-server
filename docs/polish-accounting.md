@@ -29,6 +29,7 @@ Access also depends on the company's setup and API permissions.
 | `preview_polish_accounting_export` | General, Optima or EPP compatibility preview, blockers and warnings. No export submission. |
 | `get_polish_jpk_register` | JPK sales/purchases, totals and exclusions. |
 | `get_polish_jpk_filing_status`, `get_polish_pit_filing_status` | Existing filing state and UPO availability. No signing or submission. |
+| `prepare_polish_jpk_filing`, `submit_polish_jpk_filing`, `refresh_polish_jpk_filing` | A JDG's JPK_V7M/K filed with its authorization data; sending needs `confirmed=true`. See below. |
 | `get_polish_tax_estimates` | API PIT/ZUS or CIT estimates. May synchronize derived books; `readOnlyHint=false`. |
 
 Each new tool captures the selected company once and uses that ID in the company
@@ -83,6 +84,33 @@ excluded operations together. For a filing already started in Norman,
 `get_polish_jpk_filing_status` returns methods, sessions, MF status and UPO
 availability; `get_polish_pit_filing_status` reads the corresponding PIT state.
 Neither tool signs or submits a return.
+
+### File a JDG's JPK_V7
+
+A sole proprietor (JDG) can file the period's JPK_V7M or JPK_V7K from the
+connector, signed with their authorization data:
+
+1. `get_polish_jpk_filing_status`: filing is enabled, `methods` includes
+   `revenue`, `blockReason` is empty (otherwise relay `blockMessage`), and
+   `revenueYear` names the year whose PIT revenue signs the file. Tell the user
+   the `warnings`.
+2. Ask the user for that revenue (przychód from their PIT return, as filed) and
+   call `prepare_polish_jpk_filing` with `authorization_revenue` and
+   `revenue_year`. It signs this file only; Norman does not keep it, and the
+   assistant must not repeat it, summarize it or keep it in memory. The argument
+   name contains "authorization", so error reports mask it. Nothing is sent yet.
+3. Show the user the period, the VAT to pay or carry forward
+   (`get_polish_jpk_register`), the attempt's `environment` and warnings, and
+   get their explicit yes. Then `submit_polish_jpk_filing` with the attempt's
+   `session_id` and `confirmed=true`; without it nothing is sent.
+4. `refresh_polish_jpk_filing` until `accepted` (reference number, UPO) or
+   `rejected` (quote MF's code and reason).
+
+Corrections of a return MF accepted, a company's filing and signing with a
+qualified signature or Profil Zaufany stay in Norman: the connector cannot sign
+on a device, and the API refuses a correction sent without its own confirmation.
+Filing from Norman needs a plan that files (JDG Pro or Max); on the new terms the
+connector itself needs JDG Max. Sending is not paying the VAT.
 
 Call `get_polish_tax_estimates` with `year` and `month` for API-calculated
 PIT/ZUS or CIT figures. Estimates are not filed returns. A missing value or a
@@ -190,9 +218,10 @@ advisor reads therefore do not switch each other's company context.
 ## Scope and verification
 
 Polish MCP support includes bookkeeping reads, diagnostics and export previews,
-plus Polish inputs on shared write tools. It does not expose Polish manual journal writes,
-statement generation/year closing, signatures or tax submission tools. Those
-require a separate workflow using the existing API gates. A prepared/downloaded
+plus Polish inputs on shared write tools, PL_FULL manual postings and a JDG's
+JPK_V7 filing with its authorization data. It does not expose statement
+generation/year closing, qualified signatures, corrections or other tax
+submissions. Those require a separate workflow using the existing API gates. A prepared/downloaded
 XML, closed year or draft statement is not proof of MF/KRS filing. Confirm tax
 acceptance and UPO before reporting a successful filing.
 

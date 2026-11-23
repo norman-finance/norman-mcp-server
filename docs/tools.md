@@ -1,6 +1,6 @@
 # Tools
 
-The hosted Norman MCP server offers 326 tools. Your AI client
+The hosted Norman MCP server offers 329 tools. Your AI client
 picks them by itself; you never need to call one by name. Tools marked
 **reads** only read your data.
 
@@ -271,7 +271,7 @@ This page is generated from the server's tool list at each release.
 | `create_polish_manual_posting` | Post a manual entry (wpis ręczny, like a PK note) in a PL_FULL journal, in PLN. |  |
 | `get_ksef_status` | Poland only. A Polish company's KSeF connection: connected or not, token or delegated access, what KSeF said about the token, the last pull and whether it stalled. Never the token itself. | reads |
 | `get_polish_financial_statement` | Read the workbook, statutory lines, XML issues and notes for a Polish financial statement. | reads |
-| `get_polish_jpk_filing_status` | Read available filing methods, sessions, MF status and UPO availability. Only confirmed acceptance and UPO prove success; XML preparation/download does not. Does not submit or sign. | reads |
+| `get_polish_jpk_filing_status` | Read available filing methods, sessions, MF status and UPO availability. Only confirmed acceptance and UPO prove success; XML preparation/download does not. | reads |
 | `get_polish_jpk_register` | Read sales/purchases, totals and exclusions from the JPK register; not proof of filing. | reads |
 | `get_polish_ledger_account` | Read an account's opening/running balances and paginated entries; balances are not bank balances. | reads |
 | `get_polish_ledger_entry` | Read a Polish posting with its source and reversal information. | reads |
@@ -284,10 +284,13 @@ This page is generated from the server's tool list at each release.
 | `list_polish_ledger_accounts` | Read the complete active PL_FULL chart; use these codes rather than German SKR codes. | reads |
 | `list_polish_ledger_journal` | Read PL_FULL postings. Follow pagination until all pages are read before reporting totals. | reads |
 | `lookup_polish_company` | Poland only. Look the selected sp. z o.o. up in the KRS and on the Ministry of Finance White list (Biała lista) by its NIP or KRS number, and propose each detail Norman lacks; the owner applies them i… |  |
+| `prepare_polish_jpk_filing` | Prepare a sole proprietor's (JDG) JPK_V7M or JPK_V7K for filing, signed with their authorization data. Sends nothing. |  |
 | `preview_polish_accounting_export` | Preview export compatibility, blockers, warnings and snapshot. Does not download, post or file. | reads |
 | `propose_tax_setting_change` | Poland only. Propose a change to a Polish company's tax settings; the owner applies it in Norman. |  |
+| `refresh_polish_jpk_filing` | Ask the Ministry of Finance how a sent JPK_V7 stands. Only "accepted" with a reference number (UPO) proves the return is filed; "processing" means ask again later, "rejected" carries MF's code and rea… |  |
 | `reverse_polish_manual_posting` | Correct a PL_FULL posting by Storno: a new entry with debit and credit swapped, dated on or after the original in an open period. |  |
 | `search_polish_tax_offices` | Poland only. Search the Polish tax offices (urzędy skarbowe) by name, town or code. Each has its 4-digit code (KodUrzedu), which propose_tax_setting_change takes for tax_office. | reads |
+| `submit_polish_jpk_filing` | Send a prepared JPK_V7 to the Ministry of Finance: this files the user's return. |  |
 
 ## Payroll
 
