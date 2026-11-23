@@ -198,7 +198,7 @@ This page is generated from the server's tool list at each release.
 | `create_annual_close` | Germany only. Create a Draft annual-close workspace; this does not lock or submit the year. |  |
 | `create_annual_close_entry` | Germany only. Post a closing adjustment to a Draft annual close; locked years remain server-protected. |  |
 | `create_asset` | Create an active asset, optionally linked to a Norman Transaction or split item. |  |
-| `create_chart_of_accounts_account` | Create a custom Ledger account; a liability takes Transactions once switched on, an asset never. |  |
+| `create_chart_of_accounts_account` | Create a custom Ledger account; a liability or a financial asset takes Transactions once switched on. |  |
 | `create_manual_ledger_entry` | Germany only. Create a balanced manual posting with explicit tax semantics. |  |
 | `deactivate_chart_of_accounts_account` | Soft-delete an account. Existing postings remain in the immutable Ledger. |  |
 | `delete_asset` | Delete an asset only after explicit confirmation; audit/reversal rules remain server-side. |  |
@@ -225,7 +225,7 @@ This page is generated from the server's tool list at each release.
 | `switch_account_framework` | Germany only. Switch SKR framework with the same explicit confirmation used by the Norman UI. |  |
 | `update_annual_close_entry` | Germany only. Set the tax treatment of a closing adjustment posted to a Draft annual close. |  |
 | `update_asset` | Edit an asset through the audited Asset service. |  |
-| `update_chart_of_accounts_account` | Edit a custom account, hide/unhide a built-in account, or switch a liability account on for Transactions. |  |
+| `update_chart_of_accounts_account` | Edit a custom account, hide/unhide a built-in account, or switch a liability or a financial asset on for Transactions. |  |
 
 ## DATEV
 
