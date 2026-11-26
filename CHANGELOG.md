@@ -5,6 +5,10 @@ The full list of tools is in [docs/tools.md](docs/tools.md).
 
 ## Unreleased
 
+- `submit_feedback`: an agent reports where a Norman tool fell short (a wrong
+  result, a missing filter or tool, an error, a misleading description) with a
+  proposed fix, after the user agrees. The Norman team gets the report and
+  fixes the tools from it.
 - Payroll: `create_payroll_person` adds a managing director or an employee,
   a minijob included; its answer withholds the identifiers like every payroll
   tool. `update_employer_payroll_setup` takes `single_establishment`, `note` and

@@ -1,6 +1,6 @@
 # Tools
 
-The hosted Norman MCP server offers 329 tools. Your AI client
+The hosted Norman MCP server offers 335 tools. Your AI client
 picks them by itself; you never need to call one by name. Tools marked
 **reads** only read your data.
 
@@ -428,10 +428,12 @@ This page is generated from the server's tool list at each release.
 
 | Tool | What it does | |
 | :-- | :-- | :-- |
+| `answer_advisor_invitation` | Accept or decline one open invitation from list_advisor_invitations. Accepting adds the client to the advisor's client list and the advisor's office, and tells the owner by email; declining only close… |  |
 | `ask_tax_advisor` | Send a written question or message to the company's tax advisor (a German Steuerberater, a Polish company's own accountant). |  |
 | `close_client_period` | Close one VAT period of a German client: its month, quarter or year, as close.period of list_clients_for_period names it. Norman keeps a record of the bookings and documents the period holds now. |  |
 | `fulfill_document_request` | Answer the tax advisor's request for documents with documents uploaded to Norman. |  |
 | `get_advisor_inbox` | For tax advisors: the clients with unanswered messages or open document requests. | reads |
+| `get_client_details` | Who is behind one client and how to reach them: the company's name, legal form, address, tax number and VAT ID, its contact email and phone, the owner's name and email, the email the office invited to… | reads |
 | `get_client_messages` | For tax advisors: read a client's conversations and open document requests. | reads |
 | `get_client_overview` | Get an aggregated financial health snapshot for a client company. Combines company details, balance, transaction stats, missing receipts, outstanding invoices, and tax report status into a single over… | reads |
 | `get_client_period_close_changes` | What changed after the advisor closed a client's period: for each closed VAT period in the range, the new, changed and removed bookings and the new documents since its close. | reads |
@@ -439,6 +441,8 @@ This page is generated from the server's tool list at each release.
 | `get_period_open_items` | What the tax advisor counts as still open in a period of the company, before the client tells the advisor that the period is ready. | reads |
 | `get_tax_advisor_messages` | Read the conversation with the company's tax advisor (a German Steuerberater, a Polish company's own accountant). | reads |
 | `get_tax_compliance_status` | Check the tax compliance status for a client company. Identifies which tax reports are due, overdue, or unfiled, and flags any validation issues. | reads |
+| `list_advisor_invitations` | The open invitations clients sent this advisor to work on their books: the company, its legal form, who invited and until when the invitation is open. | reads |
+| `list_client_deadlines` | What is due soon across ALL of the advisor's clients: open tax reports (a Polish client's JPK_V7, PIT/CIT advances and ZUS DRA, a German client's UStVA, annual returns) and Polish payroll lists still… | reads |
 | `list_clients_for_period` | Each client of the tax advisor in one period, the way the advisor's client list shows it. Per client: open bookings (not reviewed; an unpaid booking waits for its payment and is left out), bookings wi… | reads |
 | `list_signature_requests` | For tax advisors of German clients (Germany only): declarations waiting for your signature, or their history. | reads |
 | `list_tax_advisor_clients` | List all client companies managed by the authenticated tax advisor. Each entry includes the company ID, name, account type, transaction count, and number of transactions missing documents. | reads |
@@ -448,4 +452,11 @@ This page is generated from the server's tool list at each release.
 | `reply_to_client` | For tax advisors: write to a client in Norman. |  |
 | `request_documents_from_client` | For tax advisors: ask a client for documents. |  |
 | `sign_and_submit_declaration` | For tax advisors of German clients: sign a declaration with your ELSTER certificate and submit it to the Finanzamt (Germany only). |  |
+| `stop_working_with_client` | Stop the office's work on one client: everyone in the office loses access at once, a Polish power of attorney ends with it, and the client leaves the office's bill. |  |
 | `switch_company` | Switch the active company context. All subsequent tool calls will operate on the selected company. Owners and members of several companies switch between them here, and tax advisors between their clie… |  |
+
+## Feedback
+
+| Tool | What it does | |
+| :-- | :-- | :-- |
+| `submit_feedback` | Report a problem with Norman's tools to the Norman team, who fix the tools from these reports. |  |
