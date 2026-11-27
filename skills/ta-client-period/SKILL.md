@@ -1,7 +1,7 @@
 ---
 name: ta-client-period
 description: Show which clients of a tax advisor need work in one month, quarter or year, the way the advisor's client list shows it. Use when a tax advisor asks which clients are open, ready or changed for a period, or what to do first this month.
-version: 1.3.0
+version: 1.4.0
 metadata:
   openclaw:
     emoji: "\U0001F4C5"
@@ -12,6 +12,11 @@ metadata:
 ---
 
 Help the tax advisor see all clients for one period:
+
+## Before you start: your clients
+- The list holds the clients your office has you handle, or all of them if you see every client; `get_firm_team` says who in the office handles which
+- For any call about one client pass its `publicId` as `company_id`, and name the client in your answer (`activeClient`)
+- A part of a client's books closed for you comes back as `closedBlocks` or a 403 `advisor_block_closed`: say which part, never read it as zero
 
 ## Step 1: Pick the period
 - Use the period the advisor names. Without one, take last month

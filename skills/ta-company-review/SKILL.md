@@ -1,7 +1,7 @@
 ---
 name: ta-company-review
 description: Full company review for tax advisors. Generates a structured health report covering financials, document completeness, tax compliance, and action items. Use when a tax advisor asks for an overview, health check, or status of a client company.
-version: 1.0.2
+version: 1.1.0
 metadata:
   openclaw:
     emoji: "\U0001F50D"
@@ -13,8 +13,13 @@ metadata:
 
 Perform a comprehensive company review for the tax advisor:
 
+## Before you start: the client
+- Find the client in `list_tax_advisor_clients`: the clients your office has you handle (the lead first), or all of them if you see every client. Pass its `publicId` as `company_id` on every call: `switch_company` only sets the default for reads, and every write without `company_id` is refused (`client_required`)
+- Each result names its client in `activeClient`: name it in your answer, and stop if it is not the client the advisor means
+- A 403 `advisor_block_closed` means the office or the client keeps that part of the books closed for you: say which part, and that the office's owner or a manager (or the client, for what it granted) opens it
+
 ## Step 1: Gather all company data
-- Call `get_client_overview` with the active company ID to get an aggregated snapshot
+- Call `get_client_overview` with the client's `company_id` to get an aggregated snapshot
 - This returns company details, balance, transaction stats, tax reports, and outstanding invoices in one call
 
 ## Step 2: Check document completeness

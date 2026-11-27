@@ -5,6 +5,42 @@ The full list of tools is in [docs/tools.md](docs/tools.md).
 
 ## Unreleased
 
+- Accounting offices, second step:
+  - A Polish office files a client's JPK_V7 as its attorney with a qualified
+    signature: `prepare_client_jpk_signing` hands out the metadata to sign as a
+    10-minute link (`get_client_jpk_filing_file`, also for the UPO);
+    `request_signed_jpk_upload` takes the signed file back; and
+    `submit_client_jpk_signed` sends it after the accountant's yes.
+  - A client's own people and what they may open: `list_client_people`,
+    `invite_client_person`, `update_client_person_access`,
+    `remove_client_person` and `cancel_client_person_invitation`.
+  - `ask_client_for_plan` asks a client to choose a plan, and
+    `start_client_company` starts a new sp. z o.o. or JDG for a client.
+- Accounting offices run their clients from the chat as from the office portal:
+  the team (`get_firm_team`, `invite_firm_member`, `update_firm_member` with
+  access none/read/write per part of the books, `remove_firm_member` with a
+  hand-over, `set_member_clients`, `assign_clients_to_member`,
+  `set_client_handlers`, `cancel_firm_invitation`); new clients (`add_client`
+  with its tax setup, `look_up_polish_clients` on the White list,
+  `import_clients`, `invite_client_owner` and its 7-day rule,
+  `cancel_client_owner_invitation`); a Polish office's month
+  (`list_polish_clients_jpk`, `prepare_client_jpk` for the owner's approval,
+  `get_client_jpk_runs`, `approve_client_jpk_for_owner` as the client's
+  attorney, `answer_client_power_of_attorney`, `list_client_ksef`,
+  `connect_client_ksef`); and the inbox across clients
+  (`list_client_conversations`, `start_client_conversation`,
+  `archive_client_conversation`, `list_document_requests`,
+  `request_documents_from_clients`, `update_document_request`,
+  `cancel_document_request`). New skills `pl-office-month`, `office-team` and
+  `office-client-onboarding`; the `ta-*` skills work per client of the office.
+- The advisor inbox and client conversations read the API's answers correctly:
+  conversation ids, unread counts and the clients needing attention were empty.
+- Accounting offices (tax advisor accounts) never write into the wrong client:
+  every tool on one company takes `company_id`, an office's write without it is
+  refused (`client_required`), and every result about a client names it in
+  `activeClient`. An office sees its own tools and no longer the tools only a
+  company's own people use; a company's own people no longer see the office
+  tools. The server instructions explain how an office works across clients.
 - `submit_feedback`: an agent reports where a Norman tool fell short (a wrong
   result, a missing filter or tool, an error, a misleading description) with a
   proposed fix, after the user agrees. The Norman team gets the report and

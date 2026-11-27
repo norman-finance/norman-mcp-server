@@ -1,7 +1,7 @@
 ---
 name: ta-tax-compliance
 description: Tax compliance check for a German or Polish client company. Checks all tax periods (UStVA, ZM and EÜR in Germany; JPK_V7, VAT-UE, PIT or CIT advances and ZUS DRA in Poland), identifies unfiled or overdue reports, verifies tax registration, and generates a compliance summary. Use when a tax advisor asks about tax deadlines, compliance status, or filing obligations.
-version: 1.1.0
+version: 1.2.0
 metadata:
   openclaw:
     emoji: "\U00002705"
@@ -13,8 +13,13 @@ metadata:
 
 Perform a thorough tax compliance check for the tax advisor:
 
+## Before you start: the client
+- Find the client in `list_tax_advisor_clients`: the clients your office has you handle (the lead first), or all of them if you see every client. Pass its `publicId` as `company_id` on every call: `switch_company` only sets the default for reads, and every write without `company_id` is refused (`client_required`)
+- Each result names its client in `activeClient`: name it in your answer, and stop if it is not the client the advisor means
+- A 403 `advisor_block_closed` means the office or the client keeps that part of the books closed for you: say which part, and that the office's owner or a manager (or the client, for what it granted) opens it
+
 ## Step 1: Check compliance status
-- Call `get_tax_compliance_status` with the active company ID
+- Call `get_tax_compliance_status` with the client's `company_id`
 - This returns tax reports status, tax settings, and registration info
 
 ## Step 2: Review tax settings

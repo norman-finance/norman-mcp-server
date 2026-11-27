@@ -1,7 +1,7 @@
 ---
 name: ta-missing-receipts
 description: Find and collect missing receipts for a client company. Identify high-priority items, suggest a ping strategy, and bulk-notify the client. Use when a tax advisor asks about missing documents, Belege, or requests receipts from a client.
-version: 1.0.2
+version: 1.1.0
 metadata:
   openclaw:
     emoji: "\U0001F4CE"
@@ -13,8 +13,13 @@ metadata:
 
 Help the tax advisor identify and collect missing receipts from a client:
 
+## Before you start: the client
+- Find the client in `list_tax_advisor_clients`: the clients your office has you handle (the lead first), or all of them if you see every client. Pass its `publicId` as `company_id` on every call: `switch_company` only sets the default for reads, and every write without `company_id` is refused (`client_required`)
+- Each result names its client in `activeClient`: name it in your answer, and stop if it is not the client the advisor means
+- A 403 `advisor_block_closed` means the office or the client keeps that part of the books closed for you: say which part, and that the office's owner or a manager (or the client, for what it granted) opens it
+
 ## Step 1: Get the missing documents summary
-- Call `get_missing_documents_summary` with the active company ID
+- Call `get_missing_documents_summary` with the client's `company_id`
 - This returns all transactions without receipts grouped by month with amounts
 - Its `documentsWithoutBooking` counts the opposite gap by month: receipts and invoices the client uploaded that no booking holds yet, so the books miss them
 

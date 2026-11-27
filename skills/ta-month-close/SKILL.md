@@ -1,7 +1,7 @@
 ---
 name: ta-month-close
 description: Close, reopen or check a German client's VAT period for a tax advisor, and read the state of its year. Use when a tax advisor says a month, quarter or year is done, asks what changed after a close, or asks whether a year is closed.
-version: 1.1.0
+version: 1.2.0
 metadata:
   openclaw:
     emoji: "\U0001F512"
@@ -12,6 +12,11 @@ metadata:
 ---
 
 Help the tax advisor close a client's period:
+
+## Before you start: the client
+- Find the client in `list_tax_advisor_clients`: the clients your office has you handle (the lead first), or all of them if you see every client. Pass its `publicId` as `company_id` on every call: `switch_company` only sets the default for reads, and every write without `company_id` is refused (`client_required`)
+- Each result names its client in `activeClient`: name it in your answer, and stop if it is not the client the advisor means
+- A 403 `advisor_block_closed` means the office or the client keeps that part of the books closed for you: say which part, and that the office's owner or a manager (or the client, for what it granted) opens it
 
 ## Step 1: Find the period
 - Call `list_clients_for_period` with the period the advisor names. Without one, take last month

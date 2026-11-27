@@ -1,6 +1,6 @@
 # Tools
 
-The hosted Norman MCP server offers 335 tools. Your AI client
+The hosted Norman MCP server offers 373 tools. Your AI client
 picks them by itself; you never need to call one by name. Tools marked
 **reads** only read your data.
 
@@ -429,7 +429,9 @@ This page is generated from the server's tool list at each release.
 | Tool | What it does | |
 | :-- | :-- | :-- |
 | `answer_advisor_invitation` | Accept or decline one open invitation from list_advisor_invitations. Accepting adds the client to the advisor's client list and the advisor's office, and tells the owner by email; declining only close… |  |
+| `archive_client_conversation` | For tax advisors: archive a client conversation for this advisor, or bring it back. Only the advisor's own view changes: the client keeps it, and a new message brings it back by itself. |  |
 | `ask_tax_advisor` | Send a written question or message to the company's tax advisor (a German Steuerberater, a Polish company's own accountant). |  |
+| `cancel_document_request` | For tax advisors: withdraw a document request the client no longer needs to answer; the client sees it cancelled. Name the client and the request and wait for the advisor's yes. |  |
 | `close_client_period` | Close one VAT period of a German client: its month, quarter or year, as close.period of list_clients_for_period names it. Norman keeps a record of the bookings and documents the period holds now. |  |
 | `fulfill_document_request` | Answer the tax advisor's request for documents with documents uploaded to Norman. |  |
 | `get_advisor_inbox` | For tax advisors: the clients with unanswered messages or open document requests. | reads |
@@ -442,18 +444,59 @@ This page is generated from the server's tool list at each release.
 | `get_tax_advisor_messages` | Read the conversation with the company's tax advisor (a German Steuerberater, a Polish company's own accountant). | reads |
 | `get_tax_compliance_status` | Check the tax compliance status for a client company. Identifies which tax reports are due, overdue, or unfiled, and flags any validation issues. | reads |
 | `list_advisor_invitations` | The open invitations clients sent this advisor to work on their books: the company, its legal form, who invited and until when the invitation is open. | reads |
+| `list_client_conversations` | For tax advisors: conversations across all clients, newest message first, as the office inbox lists them. | reads |
 | `list_client_deadlines` | What is due soon across ALL of the advisor's clients: open tax reports (a Polish client's JPK_V7, PIT/CIT advances and ZUS DRA, a German client's UStVA, annual returns) and Polish payroll lists still… | reads |
 | `list_clients_for_period` | Each client of the tax advisor in one period, the way the advisor's client list shows it. Per client: open bookings (not reviewed; an unpaid booking waits for its payment and is left out), bookings wi… | reads |
+| `list_document_requests` | For tax advisors: document requests across all clients, open ones first by due date (undated last), then the others newest first. | reads |
 | `list_signature_requests` | For tax advisors of German clients (Germany only): declarations waiting for your signature, or their history. | reads |
-| `list_tax_advisor_clients` | List all client companies managed by the authenticated tax advisor. Each entry includes the company ID, name, account type, transaction count, and number of transactions missing documents. | reads |
+| `list_tax_advisor_clients` | List the client companies the tax advisor works on: those their office handles for them (all of the office's clients for whoever sees every client). | reads |
 | `ping_client_for_documents` | Send document request reminders to a client for multiple transactions at once. Each transaction triggers an email to the company owner asking them to upload the missing receipt or invoice. |  |
 | `reject_signature_request` | For tax advisors of German clients: send a declaration back unsigned, with a reason the client sees. |  |
 | `reopen_client_period` | Reopen a VAT period the advisor closed. Ask the advisor first. A GmbH's or UG's annual close does not reopen here, and a period under it answers code year_closed. |  |
 | `reply_to_client` | For tax advisors: write to a client in Norman. |  |
 | `request_documents_from_client` | For tax advisors: ask a client for documents. |  |
+| `request_documents_from_clients` | For tax advisors: send the same document request to several clients at once (the month's bank statements, say). Each client is notified in Norman and by email. |  |
 | `sign_and_submit_declaration` | For tax advisors of German clients: sign a declaration with your ELSTER certificate and submit it to the Finanzamt (Germany only). |  |
+| `start_client_conversation` | For tax advisors: open a new conversation with a client, with a topic of its own or about one transaction, document, invoice or tax report, and send its first message. |  |
 | `stop_working_with_client` | Stop the office's work on one client: everyone in the office loses access at once, a Polish power of attorney ends with it, and the client leaves the office's bill. |  |
-| `switch_company` | Switch the active company context. All subsequent tool calls will operate on the selected company. Owners and members of several companies switch between them here, and tax advisors between their clie… |  |
+| `switch_company` | Switch the active company context. Later calls without a company_id work on the selected company. Owners and members of several companies switch between them here; list_companies returns the ids. |  |
+| `update_document_request` | For tax advisors: change an open document request's due date or details. To withdraw it use cancel_document_request. |  |
+
+## Accounting offices
+
+| Tool | What it does | |
+| :-- | :-- | :-- |
+| `add_client` | Add a client the accounting office keeps the books of: Norman makes its company, set up with the tax answers given here (VAT status and period, a Polish JDG's tax form and ZUS, an sp. |  |
+| `answer_client_power_of_attorney` | Confirm or decline the power of attorney (UPL-1) a Polish client's owner recorded for this accountant (filing.powerOfAttorney in list_polish_clients_jpk). |  |
+| `approve_client_jpk_for_owner` | Approve a prepared JPK_V7 in the owner's place, as their attorney: allowed only when the owner recorded a UPL-1 naming this accountant, the accountant confirmed it (answer_client_power_of_attorney) an… |  |
+| `ask_client_for_plan` | Ask a client's people to choose a Norman plan: Norman posts the request in a new conversation with the client and sends them a notification and an e-mail with a button to the plans. |  |
+| `assign_clients_to_member` | Give several clients to one person at once, as their lead by default; the others who handle a client keep it. Only the owner or a manager may. Use it for "give all unassigned clients to Anna". |  |
+| `cancel_client_owner_invitation` | Cancel an owner's invitation that was not accepted: its link stops working. A client with no open invitation is not removed after 7 days, so the office may keep it and invite later. |  |
+| `cancel_client_person_invitation` | Cancel an invitation to a client's Norman that was not accepted: its link stops working. Name the address and wait for a yes. |  |
+| `cancel_firm_invitation` | Cancel an invitation to the office that was not accepted yet: its link stops working. Only the owner or a manager may. Name the address and wait for a yes. |  |
+| `connect_client_ksef` | Connect a Polish client's KSeF with a token the office generated in the KSeF taxpayer app in the client's context (with the access the client granted the office there: przeglądanie and wystawianie fak… |  |
+| `get_client_jpk_filing_file` | A new 10-minute link to one file of a client's JPK filing attempt: the metadata to sign with the qualified signature, or MF's UPO once the return is accepted. | reads |
+| `get_client_jpk_runs` | A client's latest JPK_V7 preparations and filings, newest first: status, period, due date, the preview summary (VAT to pay or carry forward), open blockers, whether it can be approved and the next ste… | reads |
+| `get_firm_team` | The accounting office: its people (id, name, e-mail, role owner/manager/staff, whether they see every client, their access per part of a client's books, the clients they handle with the lead marked),… | reads |
+| `import_clients` | Add several clients at once, each as add_client adds one; a refused row leaves the others added. Rows with an owner_email invite their owner. |  |
+| `invite_client_owner` | Invite the real owner of a client the office added to take the company over (send, or send again): they get an e-mail with a one-click link, sign in and find the company set up; the office keeps worki… |  |
+| `invite_client_person` | Invite someone to work in a client's Norman as a member (an employee, a co-founder), with what they may open. |  |
+| `invite_firm_member` | Invite a person to the accounting office by e-mail: they join with the role, access and clients given here once they accept. |  |
+| `list_client_ksef` | Each Polish client's KSeF connection, across the office: connected (Norman reaches the client's KSeF now), mode, the token's status (valid, unverified, invalid, missing_permissions) and when it was ch… | reads |
+| `list_client_people` | A client's own people: its owner and members with what each may open, the invitations not accepted yet, how many seats the client's plan has and whether the caller may manage them (canManage: the owne… | reads |
+| `list_polish_clients_jpk` | Where each Polish client's JPK_V7 stands, across the office: the finished period nobody filed yet (report id, type JPK_V7M or JPK_V7K, dates, due date), the operations of the period still to review, t… | reads |
+| `look_up_polish_clients` | Look a list of Polish NIPs up on the White list (Biała lista VAT) before importing them as clients: per NIP the name, address, REGON, KRS, VAT status and the legal form it suggests (a KRS number: sp. | reads |
+| `prepare_client_jpk` | Prepare a Polish client's JPK_V7 for its owner's approval, as the accountant: Norman builds the file from the books in the background and lists what blocks it. |  |
+| `prepare_client_jpk_signing` | File a Polish client's JPK_V7 as their attorney, step 1 of 3: Norman prepares the file for the Ministry of Finance and its metadata (InitUpload), which the accountant signs with their own qualified si… |  |
+| `remove_client_person` | Take a member's access to a client away. The owner cannot be removed (a partnership's partner who has left can). The person keeps their own Norman account. |  |
+| `remove_firm_member` | Let a person go from the accounting office: they lose access to every client at once. With hand_over_to their clients pass to that colleague first. |  |
+| `request_signed_jpk_upload` | Step 2 of filing a client's JPK_V7 as their attorney: open an in-chat uploader for the one metadata file the accountant signed with their qualified signature (XML, up to 100 KB). |  |
+| `set_client_handlers` | Set who in the office handles one client and who leads it: a hand-over of one client. People left out stop handling it (those who see every client still reach it). Only the owner or a manager may. |  |
+| `set_member_clients` | Set exactly which clients one person handles, as the Team page does from the person. A client they newly get makes them its lead when it has none; a client they leave keeps its other people. |  |
+| `start_client_company` | A Polish office starts a new sp. z o.o. or JDG for its client: Norman adds the client with a stand-in owner and an empty registration draft of its legal form, which the office fills in Norman (the cli… |  |
+| `submit_client_jpk_signed` | Step 3 of filing a client's JPK_V7 as their attorney: send the file to the Ministry of Finance with the metadata the accountant signed. This files the client's return. |  |
+| `update_client_person_access` | Set what one member of a client may open; the owner's own access never changes. A closed part answers the person with member_block_closed from then on. |  |
+| `update_firm_member` | Change one person's role, access per part of a client's books, or whether they see every client. Only the office's owner or a manager may; only an owner changes another owner; the office keeps at leas… |  |
 
 ## Feedback
 

@@ -1,7 +1,7 @@
 ---
 name: tax-report
 description: "Review and manage tax reports. German companies: VAT (UStVA, ZM, Umsatzsteuer), income tax prepayments and Finanzamt submissions via ELSTER. Polish companies: the JPK_V7 and VAT-UE, PIT or CIT advances, ZUS DRA, the annual PIT and the CIT-8, which Norman prepares and the owner files in the Norman app or outside it. Use when the user asks about taxes, Steuern, podatki, VAT, USt, JPK, Finanzamt, urząd skarbowy, or tax filing."
-version: 1.3.0
+version: 1.3.1
 disable-model-invocation: true
 argument-hint: "[period or tax type]"
 metadata:
@@ -47,6 +47,7 @@ Help the user with their tax obligations. Read the company's country first (`com
 7. **Polish companies, check and then file in the app**:
    - Read a JPK_V7's sales, purchases, totals and exclusions with `get_polish_jpk_register`, and its filing state (methods, MF status, UPO) with `get_polish_jpk_filing_status`; a PIT return's with `get_polish_pit_filing_status`. `get_polish_tax_estimates` gives PIT/ZUS or CIT estimates, which are not filed returns.
    - There is no Polish signing or submission tool here. Norman files the JPK_V7 (the monthly JPK_V7M, or each monthly file of a quarterly JPK_V7K) from the Norman app only after the owner approves and signs it, on the JDG Pro and Sp. z o.o. Max plans. Norman prepares the PIT returns, the CIT-8 draft and the VAT-UE and calculates ZUS; the user or their accountant files them.
+   - A refusal on `tax_office_code` (a JPK_V7, VAT-UE or VAT-9M file) means the company has no chosen tax office. Find it with `search_polish_tax_offices` and let the owner choose it. Propose it with `propose_tax_setting_change` and give the owner its `openUrl`. Once they applied it, they make the file again from the report page. The Norman app shows the same list where the file is refused.
    - Give facts and next steps, never an individual tax opinion.
 
 8. **Tax settings**: Call `list_tax_settings` to review VAT registration, filing frequency, and other tax configuration. A German Kleinunternehmer or a company with VAT-exempt sales under § 4 UStG files a UStVA only for a period with VAT it owes as recipient (§ 13b, § 1a UStG), quarterly by default. To file monthly, call `update_tax_setting` with `reporting_frequency` "monthly". A German Kleinunternehmer files no ZM (§ 18a Abs. 4 UStG), also for EU B2B sales. Filed ZMs stay in the reports. For a German Kleinunternehmer, call `get_kleinunternehmer_limit` to say where this year's revenue stands against 100,000 € (25,000 € in the founding year) and next year's 25,000 €; at `near_limit`, `crossed` or `not_eligible`, tell the user the invoice that crosses the limit already needs VAT and suggest updating the VAT status in the tax settings. Never change the VAT status for them.

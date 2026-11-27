@@ -1,7 +1,7 @@
 ---
 name: ta-datev-preparation
 description: Prepare a DATEV export for a German client company (Germany only). Verifies all transactions are categorized, receipts attached, DATEV settings configured, and triggers the export. Use when a tax advisor asks to prepare DATEV, export bookkeeping data, or send data to their tax software.
-version: 1.6.1
+version: 1.7.0
 metadata:
   openclaw:
     emoji: "\U0001F4E6"
@@ -12,6 +12,11 @@ metadata:
 ---
 
 Help the tax advisor prepare and execute a DATEV export:
+
+## Before you start: the client
+- Find the client in `list_tax_advisor_clients`: the clients your office has you handle (the lead first), or all of them if you see every client. Pass its `publicId` as `company_id` on every call: `switch_company` only sets the default for reads, and every write without `company_id` is refused (`client_required`)
+- Each result names its client in `activeClient`: name it in your answer, and stop if it is not the client the advisor means
+- A 403 `advisor_block_closed` means the office or the client keeps that part of the books closed for you: say which part, and that the office's owner or a manager (or the client, for what it granted) opens it
 
 ## Step 1: Verify DATEV settings
 - Call `get_company_details` to check current DATEV configuration
