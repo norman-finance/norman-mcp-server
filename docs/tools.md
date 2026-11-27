@@ -165,7 +165,7 @@ This page is generated from the server's tool list at each release.
 | `create_rule` | Create an automation rule. Preview first with preview_rule. Send at most one of category_id / company_category_id (freelancer vs SME); a rule with mark_document_not_required may leave the category alo… |  |
 | `delete_rule` | Delete an automation rule after the user confirms. Prefer disabling (update_rule with is_active=false) when the user may want it back. |  |
 | `dismiss_rule_execution` | Reject an awaiting-review execution after the user said no. The target goes back through normal categorization, and this rule never re-claims the same target. |  |
-| `list_agents` | The prebuilt agents shelf with each card's state and counters: AI categorization, auto-enrichment, document reconciliation, invoice chasing, bill payments with approval, VAT-return readiness, client d… | reads |
+| `list_agents` | The prebuilt agents shelf with each card's state and counters: AI categorization, auto-enrichment, document reconciliation, invoice chasing, bill payments, VAT-return readiness, client document chasin… | reads |
 | `list_pending_approvals` | Everything an agent prepared and is waiting on the user for, in one list: review-first automations, a return the tax autopilot prepared (a German UStVA, a Polish JPK_V7M or JPK_V7K), an active workflo… | reads |
 | `list_rule_executions` | Automation execution log. status=awaiting_review lists the matches a review-first rule parked for the user's approval — show each one (rule name, transaction/invoice, planned actions) and let the user… | reads |
 | `list_rules` | List the company's automation rules together with usage stats and the plan's automation limit. | reads |
