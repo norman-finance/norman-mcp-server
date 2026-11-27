@@ -1,7 +1,7 @@
 ---
 name: tax-report
 description: "Review and manage tax reports. German companies: VAT (UStVA, ZM, Umsatzsteuer), income tax prepayments and Finanzamt submissions via ELSTER. Polish companies: the JPK_V7 and VAT-UE, PIT or CIT advances, ZUS DRA, the annual PIT and the CIT-8, which Norman prepares and the owner files in the Norman app or outside it. Use when the user asks about taxes, Steuern, podatki, VAT, USt, JPK, Finanzamt, urząd skarbowy, or tax filing."
-version: 1.3.1
+version: 1.3.2
 disable-model-invocation: true
 argument-hint: "[period or tax type]"
 metadata:
@@ -14,6 +14,8 @@ metadata:
 ---
 
 Help the user with their tax obligations. Read the company's country first (`company://current` or `get_company_details`) and use its own terms: a German company has a UStVA and the Finanzamt, a Polish company the JPK_V7 and the urząd skarbowy, never the other one's.
+
+A pure holding (a German GmbH or UG that only holds shares) can take the Holding plan, 299 € a year: bookkeeping, annual accounts, E-Bilanz, KSt and GewSt of one tax year. Account → Plan offers it to every GmbH or UG without another plan that never submitted a UStVA; it makes the company a pure holding and asks for one participation before the checkout.
 
 1. **Overview**: Call `list_tax_reports` to see all tax reports and their statuses (draft, validated, submitted)
 

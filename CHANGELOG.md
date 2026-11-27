@@ -5,6 +5,14 @@ The full list of tools is in [docs/tools.md](docs/tools.md).
 
 ## Unreleased
 
+- Invoice to payment is told who to invoice and what to bill before it starts:
+  `start_workflow` and `schedule_workflow` take `client_id` (from
+  `list_clients`) and `lines`, the user's own words. Without them the run is
+  refused with code `invoice_scope_required`, and the assistant asks the user.
+  A monthly schedule keeps them, so changing only its timing needs neither.
+- Skills: a GmbH or UG that Norman did not form names its Handelsregister date
+  on Account → Plan for the Founder Edition (`company-incorporation`), and a
+  pure holding can take the Holding plan there (`tax-report`).
 - Accounting offices, second step:
   - A Polish office files a client's JPK_V7 as its attorney with a qualified
     signature: `prepare_client_jpk_signing` hands out the metadata to sign as a

@@ -1,7 +1,7 @@
 ---
 name: run-workflow
 description: Run a Norman workflow (month-end close, monthly reconciliation, VAT-return readiness, invoice to payment, client document requests) on Norman's servers, answer the questions it asks, and schedule it to run by itself. Use when the user asks Norman to close a month, reconcile the bank, get ready for the VAT return, or "do it every month".
-version: 1.0.1
+version: 1.0.2
 argument-hint: "[workflow, e.g. 'close August' or 'VAT return']"
 metadata:
   openclaw:
@@ -19,11 +19,14 @@ Norman runs its workflows on its own servers. You start one, relay the user's an
   - "close the month" → `month-end-close`
   - "reconcile" → `monthly-reconciliation`
   - "VAT return", the German "UStVA", the Polish "JPK_V7" → `vat-readiness`
+  - "invoice a client and follow up until it is paid" → `invoice-to-payment`
 - If a run of that workflow is already active, continue with it (Step 3) instead of starting another.
 - Tell the user which steps it will take (the `steps` of the workflow) and for which period (`defaultScope`, or the month they named).
+- Invoice to payment (`scopeType` `invoice`) has no period. Before starting, ask who to invoice and what to bill, and find the client's `publicId` with `list_clients`. Never invent lines or prices.
 
 ## Step 2: Start it
 - Call `start_workflow` with the key. Pass `period_start`/`period_end` only if the user named a different period.
+- For invoice to payment, also pass `client_id` and `lines` (what to bill, in the user's words). A refusal with code `invoice_scope_required` means one of them is missing or the client was not found: ask the user, do not retry without it.
 - Say that Norman is now working on it and will stop only if it needs them.
 
 ## Step 3: Follow the run
@@ -37,7 +40,7 @@ Norman runs its workflows on its own servers. You start one, relay the user's an
 
 ## Step 4: Report and offer the schedule
 - When `state` is `done` or `done_with_warnings`, summarize each step's `summary` in plain words.
-- If the workflow has no `schedule`, offer to run it by itself: month-end close on day 3, reconciliation on day 5, VAT readiness 5 days before the deadline (`before_vat_deadline` follows the German UStVA only: for a Polish company schedule it on a day of the month before the JPK_V7 is due on the 25th). Only after the user agrees, call `schedule_workflow`.
+- If the workflow has no `schedule`, offer to run it by itself: month-end close on day 3, reconciliation on day 5, VAT readiness 5 days before the deadline (`before_vat_deadline` follows the German UStVA only: for a Polish company schedule it on a day of the month before the JPK_V7 is due on the 25th). Only after the user agrees, call `schedule_workflow`. A monthly invoice to payment takes `client_id` and `lines` once; Norman reuses them every month. A schedule with `needsScope` waits for them.
 - A refusal with code `automation_paid_feature` means automatic runs need a paid plan. Say so; running by hand stays free.
 
 Important:

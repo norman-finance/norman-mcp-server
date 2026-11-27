@@ -1,7 +1,7 @@
 ---
 name: company-incorporation
 description: Found a German GmbH or UG (haftungsbeschränkt) through a guided chat. Use when the user wants to open, found or incorporate a company in Germany, start a GmbH/UG, prepare founding documents (Musterprotokoll, Gesellschafterliste) or find a notary for incorporation. Germany only.
-version: 1.2.0
+version: 1.2.1
 disable-model-invocation: true
 metadata:
   openclaw:
@@ -39,9 +39,12 @@ stays with the notary and a tax advisor.
 German GmbHs and UGs that have never paid for a plan can buy the Founder Edition during formation or
 within three months of their Handelsregister entry: 12 months of Norman Max for 199 € plus VAT. Polish
 companies formed through Norman keep their 28-day window from the start of the formation (a sp. z o.o.
-449 zł net, a JDG 12 months of JDG Pro for 149 zł net). Only the company owner sees and buys it. After
+449 zł net, a JDG 12 months of JDG Pro for 149 zł net). Only the company owner sees and buys it. A GmbH or UG
+that Norman did not form and whose Fragebogen holds no register date names its Handelsregister date once
+on Account → Plan; a date older than three months ends the offer for good. After
 the first year the plan renews at the full yearly price unless the founder cancels before. Home shows
-the offer, with its end date when it has one. The formation itself stays free; mention the offer once,
+the offer once Norman can confirm eligibility, with its end date when it has one. If Norman still needs the
+register date, open Account → Plan. The formation itself stays free; mention the offer once,
 after the notary hand-off, and never press it.
 
 ## Before you start
